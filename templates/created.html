@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Questionnaire Created{% endblock %}
+
+{% block content %}
+<h1>Questionnaire Created Successfully!</h1>
+
+<div class="success">
+    <strong>{{ questionnaire.title }}</strong> has been created.
+</div>
+
+<h2>Share this link with your vendor:</h2>
+<div class="link-box">
+    <a href="/vendor/{{ token }}">/vendor/{{ token }}</a>
+</div>
+
+<p>Copy the full URL from your browser and send it to the vendor you want to assess.</p>
+
+<p>
+    <a href="/create">Create another questionnaire</a> |
+    <a href="/responses">View all responses</a>
+</p>
+{% endblock %}

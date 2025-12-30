@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Responses - {{ questionnaire.title }}{% endblock %}
+
+{% block content %}
+<h1>{{ questionnaire.title }}</h1>
+<p><a href="/responses">&larr; Back to all questionnaires</a></p>
+
+<h2>Questions in this questionnaire:</h2>
+<ol>
+    {% for q in questions %}
+    <li>{{ q.question_text }}</li>
+    {% endfor %}
+</ol>
+
+<h2>Submitted Responses ({{ responses|length }})</h2>
+
+{% if responses %}
+    {% for response in responses %}
+    <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 5px;">
+        <h3>{{ response.vendor_name }}</h3>
+        <p><strong>Email:</strong> {{ response.vendor_email }}</p>
+        <p><strong>Submitted:</strong> {{ response.submitted_at.strftime('%Y-%m-%d %H:%M') }}</p>
+        
+        <h4>Answers:</h4>
+        {% for answer in response.answers %}
+        <p>
+            <strong>{{ answer.question.question_text }}</strong><br>
+            {{ answer.answer_text }}
+        </p>
+        {% endfor %}
+    </div>
+    {% endfor %}
+{% else %}
+<p>No responses yet for this questionnaire.</p>
+<p>Share this link with vendors: <a href="/vendor/{{ questionnaire.token }}">/vendor/{{ questionnaire.token }}</a></p>
+{% endif %}
+{% endblock %}

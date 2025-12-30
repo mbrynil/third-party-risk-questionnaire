@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}{{ questionnaire.title }}{% endblock %}
+
+{% block content %}
+<h1>{{ questionnaire.title }}</h1>
+
+<p>Please complete this questionnaire and submit your responses.</p>
+
+<form method="post">
+    <h2>Your Information</h2>
+    
+    <label for="vendor_name">Company Name:</label>
+    <input type="text" id="vendor_name" name="vendor_name" required placeholder="Your company name">
+
+    <label for="vendor_email">Contact Email:</label>
+    <input type="email" id="vendor_email" name="vendor_email" required placeholder="your.email@company.com">
+
+    <h2>Questions</h2>
+    
+    {% for question in questions %}
+    <label for="answer_{{ question.id }}">{{ loop.index }}. {{ question.question_text }}</label>
+    <textarea id="answer_{{ question.id }}" name="answer_{{ question.id }}" required placeholder="Enter your answer..."></textarea>
+    {% endfor %}
+
+    <button type="submit">Submit Responses</button>
+</form>
+{% endblock %}

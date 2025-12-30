@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Risk Questionnaire{% endblock %}
+
+{% block content %}
+<h1>Third-Party Risk Questionnaire System</h1>
+
+<p>Welcome to the Third-Party Risk Questionnaire intake system.</p>
+
+<h2>Admin Actions</h2>
+<ul>
+    <li><a href="/create">Create a new questionnaire</a></li>
+    <li><a href="/responses">View all responses</a></li>
+</ul>
+
+<h2>How it works</h2>
+<ol>
+    <li>Create a questionnaire with a title and list of questions</li>
+    <li>Share the generated unique link with your vendor</li>
+    <li>Vendor fills out the questionnaire with their information</li>
+    <li>View submitted responses in the admin panel</li>
+</ol>
+{% endblock %}

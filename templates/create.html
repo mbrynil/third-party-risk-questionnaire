@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Create Questionnaire{% endblock %}
+
+{% block content %}
+<h1>Create New Questionnaire</h1>
+
+<form method="post" action="/create">
+    <label for="title">Questionnaire Title:</label>
+    <input type="text" id="title" name="title" required placeholder="e.g., Vendor Security Assessment 2024">
+
+    <label for="questions">Questions (one per line):</label>
+    <textarea id="questions" name="questions" required placeholder="Enter each question on a new line...">What is your company's legal name?
+What industry does your company operate in?
+Do you have a formal information security policy?
+How do you handle customer data protection?
+Do you conduct regular security audits?
+What certifications does your company hold (ISO 27001, SOC 2, etc.)?
+Describe your incident response process.
+How do you manage access control for sensitive systems?</textarea>
+
+    <button type="submit">Create Questionnaire</button>
+</form>
+{% endblock %}
