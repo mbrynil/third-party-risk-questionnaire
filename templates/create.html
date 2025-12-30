@@ -8,10 +8,17 @@
     <p>Build a custom risk assessment questionnaire for your vendors</p>
 </div>
 
-<div class="card">
-    <div class="card-body p-4">
-        <form method="post" action="/create">
-            <div class="mb-4">
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<form method="post" action="/create">
+    <div class="card mb-4">
+        <div class="card-body p-4">
+            <div class="mb-3">
                 <label for="title" class="form-label">
                     <i class="bi bi-tag me-1"></i>Questionnaire Title
                 </label>
@@ -19,30 +26,149 @@
                        placeholder="e.g., Vendor Security Assessment 2024">
                 <div class="form-text">Give your questionnaire a clear, descriptive name</div>
             </div>
-
-            <div class="mb-4">
-                <label for="questions" class="form-label">
-                    <i class="bi bi-list-check me-1"></i>Questions
-                </label>
-                <textarea class="form-control" id="questions" name="questions" rows="12" required 
-                          placeholder="Enter each question on a new line...">What is your company's legal name?
-What industry does your company operate in?
-Do you have a formal information security policy?
-How do you handle customer data protection?
-Do you conduct regular security audits?
-What certifications does your company hold (ISO 27001, SOC 2, etc.)?
-Describe your incident response process.
-How do you manage access control for sensitive systems?</textarea>
-                <div class="form-text">Enter one question per line. These will be displayed to the vendor in order.</div>
-            </div>
-
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-check-lg me-1"></i>Create Questionnaire
-                </button>
-                <a href="/" class="btn btn-outline-secondary">Cancel</a>
-            </div>
-        </form>
+        </div>
     </div>
-</div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-collection me-2"></i>Question Bank</span>
+            <div class="d-flex gap-2">
+                <input type="text" class="form-control form-control-sm" id="searchQuestions" 
+                       placeholder="Search questions..." style="width: 250px;">
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAll()">
+                    <i class="bi bi-check-all me-1"></i>Select All
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAll()">
+                    <i class="bi bi-x-lg me-1"></i>Clear All
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-4">
+                <i class="bi bi-info-circle me-1"></i>
+                Select questions from our curated GRC question bank. Questions will be added to your questionnaire in the order shown.
+            </p>
+            
+            {% for category, items in categories.items() %}
+            <div class="category-section mb-4" data-category="{{ category }}">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">
+                        <span class="badge bg-primary me-2">{{ category }}</span>
+                        <small class="text-muted">({{ items|length }} questions)</small>
+                    </h6>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" 
+                            onclick="selectCategory('{{ category }}')">
+                        Select All in {{ category }}
+                    </button>
+                </div>
+                <div class="list-group">
+                    {% for item in items %}
+                    <label class="list-group-item list-group-item-action question-item" data-text="{{ item.text|lower }}">
+                        <div class="d-flex align-items-start">
+                            <input class="form-check-input me-3 mt-1 question-checkbox" 
+                                   type="checkbox" name="question_ids" value="{{ item.id }}"
+                                   data-category="{{ category }}">
+                            <span>{{ item.text }}</span>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-pencil me-2"></i>Custom Questions (Optional)
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="custom_questions" class="form-label">Add your own questions</label>
+                <textarea class="form-control" id="custom_questions" name="custom_questions" rows="4" 
+                          placeholder="Enter each custom question on a new line..."></textarea>
+                <div class="form-text">These will be added after the selected bank questions.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="text-muted">Selected: </span>
+                    <span id="selectedCount" class="badge bg-primary">0</span>
+                    <span class="text-muted"> questions</span>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Create Questionnaire
+                    </button>
+                    <a href="/" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelectedCount();
+    
+    document.querySelectorAll('.question-checkbox').forEach(function(checkbox) {
+        checkbox.addEventListener('change', updateSelectedCount);
+    });
+    
+    document.getElementById('searchQuestions').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        document.querySelectorAll('.question-item').forEach(function(item) {
+            const text = item.dataset.text;
+            if (text.includes(searchTerm)) {
+                item.style.display = '';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        document.querySelectorAll('.category-section').forEach(function(section) {
+            const visibleItems = section.querySelectorAll('.question-item:not([style*="display: none"])');
+            if (visibleItems.length === 0) {
+                section.style.display = 'none';
+            } else {
+                section.style.display = '';
+            }
+        });
+    });
+});
+
+function updateSelectedCount() {
+    const count = document.querySelectorAll('.question-checkbox:checked').length;
+    document.getElementById('selectedCount').textContent = count;
+}
+
+function selectAll() {
+    document.querySelectorAll('.question-checkbox').forEach(function(checkbox) {
+        if (checkbox.closest('.question-item').style.display !== 'none') {
+            checkbox.checked = true;
+        }
+    });
+    updateSelectedCount();
+}
+
+function deselectAll() {
+    document.querySelectorAll('.question-checkbox').forEach(function(checkbox) {
+        checkbox.checked = false;
+    });
+    updateSelectedCount();
+}
+
+function selectCategory(category) {
+    document.querySelectorAll('.question-checkbox[data-category="' + category + '"]').forEach(function(checkbox) {
+        if (checkbox.closest('.question-item').style.display !== 'none') {
+            checkbox.checked = true;
+        }
+    });
+    updateSelectedCount();
+}
+</script>
 {% endblock %}

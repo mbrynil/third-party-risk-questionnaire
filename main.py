@@ -2,14 +2,16 @@ from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from typing import List, Optional
 import uuid
 
-from models import init_db, get_db, Questionnaire, Question, Response, Answer
+from models import init_db, get_db, seed_question_bank, Questionnaire, Question, Response, Answer, QuestionBankItem
 
 app = FastAPI(title="Third-Party Risk Questionnaire System")
 templates = Jinja2Templates(directory="templates")
 
 init_db()
+seed_question_bank()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -18,31 +20,76 @@ async def home(request: Request):
 
 
 @app.get("/create", response_class=HTMLResponse)
-async def create_questionnaire_page(request: Request):
-    return templates.TemplateResponse("create.html", {"request": request})
+async def create_questionnaire_page(request: Request, db: Session = Depends(get_db)):
+    question_bank = db.query(QuestionBankItem).filter(
+        QuestionBankItem.is_active == True
+    ).order_by(QuestionBankItem.category, QuestionBankItem.id).all()
+    
+    categories = {}
+    for item in question_bank:
+        if item.category not in categories:
+            categories[item.category] = []
+        categories[item.category].append(item)
+    
+    return templates.TemplateResponse("create.html", {
+        "request": request,
+        "categories": categories
+    })
 
 
 @app.post("/create")
 async def create_questionnaire(
     request: Request,
     title: str = Form(...),
-    questions: str = Form(...),
+    custom_questions: str = Form(""),
     db: Session = Depends(get_db)
 ):
+    form_data = await request.form()
+    question_ids = form_data.getlist("question_ids")
+    
+    if not question_ids and not custom_questions.strip():
+        question_bank = db.query(QuestionBankItem).filter(
+            QuestionBankItem.is_active == True
+        ).order_by(QuestionBankItem.category, QuestionBankItem.id).all()
+        categories = {}
+        for item in question_bank:
+            if item.category not in categories:
+                categories[item.category] = []
+            categories[item.category].append(item)
+        return templates.TemplateResponse("create.html", {
+            "request": request,
+            "categories": categories,
+            "error": "Please select at least one question from the bank or add custom questions."
+        })
+    
     token = str(uuid.uuid4())[:8]
     
     questionnaire = Questionnaire(title=title, token=token)
     db.add(questionnaire)
     db.flush()
     
-    question_lines = [q.strip() for q in questions.strip().split('\n') if q.strip()]
-    for i, q_text in enumerate(question_lines):
-        question = Question(
-            questionnaire_id=questionnaire.id,
-            question_text=q_text,
-            order=i
-        )
-        db.add(question)
+    order = 0
+    for qid in question_ids:
+        bank_item = db.query(QuestionBankItem).filter(QuestionBankItem.id == int(qid)).first()
+        if bank_item:
+            question = Question(
+                questionnaire_id=questionnaire.id,
+                question_text=bank_item.text,
+                order=order
+            )
+            db.add(question)
+            order += 1
+    
+    if custom_questions.strip():
+        custom_lines = [q.strip() for q in custom_questions.strip().split('\n') if q.strip()]
+        for q_text in custom_lines:
+            question = Question(
+                questionnaire_id=questionnaire.id,
+                question_text=q_text,
+                order=order
+            )
+            db.add(question)
+            order += 1
     
     db.commit()
     
