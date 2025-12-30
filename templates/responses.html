@@ -19,8 +19,8 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
+                    <th>Company</th>
                     <th>Title</th>
-                    <th>Token</th>
                     <th>Created</th>
                     <th>Responses</th>
                     <th>Actions</th>
@@ -30,10 +30,12 @@
                 {% for q in questionnaires %}
                 <tr>
                     <td>
-                        <strong>{{ q.title }}</strong>
+                        <i class="bi bi-building me-1 text-muted"></i>
+                        <strong>{{ q.company_name }}</strong>
                     </td>
                     <td>
-                        <code class="text-muted">{{ q.token }}</code>
+                        {{ q.title }}
+                        <br><code class="text-muted small">{{ q.token }}</code>
                     </td>
                     <td>
                         <span class="text-muted">

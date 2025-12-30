@@ -24,6 +24,7 @@ class Questionnaire(Base):
     __tablename__ = "questionnaires"
 
     id = Column(Integer, primary_key=True, index=True)
+    company_name = Column(String(255), nullable=False)
     title = Column(String(255), nullable=False)
     token = Column(String(64), unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -15,26 +15,42 @@
     <div class="col-md-8">
         <div class="alert alert-success d-flex align-items-center" role="alert">
             <i class="bi bi-check-circle-fill me-2"></i>
-            <div><strong>{{ questionnaire.title }}</strong> has been created successfully.</div>
+            <div><strong>{{ questionnaire.title }}</strong> has been created successfully for <strong>{{ questionnaire.company_name }}</strong>.</div>
         </div>
 
         <div class="card mb-4">
-            <div class="card-header">
-                <i class="bi bi-link-45deg me-2"></i>Share this link with your vendor
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-share me-2"></i>Share this link with the vendor
             </div>
             <div class="card-body">
-                <div class="link-box mb-3">
-                    <div class="d-flex align-items-center">
-                        <code class="flex-grow-1 fs-5" id="vendorLink">/vendor/{{ token }}</code>
-                        <button class="btn btn-sm btn-outline-primary ms-2" onclick="copyLink()">
-                            <i class="bi bi-clipboard"></i>
+                <p class="text-muted mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Send this link to the vendor you want to assess. They will be able to complete the questionnaire online.
+                </p>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Shareable Link:</label>
+                    <div class="input-group">
+                        <a href="{{ vendor_url }}" target="_blank" class="form-control text-decoration-none" 
+                           style="background-color: #f8f9fa; overflow: hidden; text-overflow: ellipsis;">
+                            {{ questionnaire.company_name }} – {{ questionnaire.title }}
+                        </a>
+                        <button class="btn btn-primary" type="button" onclick="copyLink()" id="copyBtn">
+                            <i class="bi bi-clipboard me-1"></i>Copy Link
                         </button>
                     </div>
                 </div>
-                <p class="text-muted mb-0">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Copy the full URL from your browser's address bar and send it to the vendor you want to assess.
-                </p>
+
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Full URL:</label>
+                    <div class="bg-light p-2 rounded border" style="word-break: break-all;">
+                        <code id="vendorUrl">{{ vendor_url }}</code>
+                    </div>
+                </div>
+
+                <div id="copySuccess" class="alert alert-success d-none" role="alert">
+                    <i class="bi bi-check-circle me-2"></i>Link copied to clipboard!
+                </div>
             </div>
         </div>
 
@@ -45,7 +61,7 @@
             <a href="/responses" class="btn btn-outline-primary">
                 <i class="bi bi-inbox me-1"></i>View Responses
             </a>
-            <a href="/vendor/{{ token }}" class="btn btn-outline-secondary" target="_blank">
+            <a href="{{ vendor_url }}" class="btn btn-outline-secondary" target="_blank">
                 <i class="bi bi-eye me-1"></i>Preview Form
             </a>
         </div>
@@ -54,9 +70,24 @@
 
 <script>
 function copyLink() {
-    const link = window.location.origin + '/vendor/{{ token }}';
-    navigator.clipboard.writeText(link).then(() => {
-        alert('Link copied to clipboard!');
+    const url = document.getElementById('vendorUrl').textContent;
+    navigator.clipboard.writeText(url).then(() => {
+        const successAlert = document.getElementById('copySuccess');
+        const copyBtn = document.getElementById('copyBtn');
+        
+        successAlert.classList.remove('d-none');
+        copyBtn.innerHTML = '<i class="bi bi-check me-1"></i>Copied!';
+        copyBtn.classList.remove('btn-primary');
+        copyBtn.classList.add('btn-success');
+        
+        setTimeout(() => {
+            successAlert.classList.add('d-none');
+            copyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy Link';
+            copyBtn.classList.remove('btn-success');
+            copyBtn.classList.add('btn-primary');
+        }, 3000);
+    }).catch(err => {
+        alert('Failed to copy link. Please copy it manually.');
     });
 }
 </script>

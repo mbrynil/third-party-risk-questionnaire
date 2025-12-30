@@ -40,6 +40,7 @@ async def create_questionnaire_page(request: Request, db: Session = Depends(get_
 @app.post("/create")
 async def create_questionnaire(
     request: Request,
+    company_name: str = Form(...),
     title: str = Form(...),
     custom_questions: str = Form(""),
     db: Session = Depends(get_db)
@@ -64,7 +65,7 @@ async def create_questionnaire(
     
     token = str(uuid.uuid4())[:8]
     
-    questionnaire = Questionnaire(title=title, token=token)
+    questionnaire = Questionnaire(company_name=company_name, title=title, token=token)
     db.add(questionnaire)
     db.flush()
     
@@ -93,10 +94,14 @@ async def create_questionnaire(
     
     db.commit()
     
+    base_url = str(request.base_url).rstrip('/')
+    vendor_url = f"{base_url}/vendor/{token}"
+    
     return templates.TemplateResponse("created.html", {
         "request": request,
         "questionnaire": questionnaire,
-        "token": token
+        "token": token,
+        "vendor_url": vendor_url
     })
 
 

@@ -17,14 +17,27 @@
 
 <form method="post" action="/create">
     <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-info-circle me-2"></i>Basic Information
+        </div>
         <div class="card-body p-4">
-            <div class="mb-3">
-                <label for="title" class="form-label">
-                    <i class="bi bi-tag me-1"></i>Questionnaire Title
-                </label>
-                <input type="text" class="form-control" id="title" name="title" required 
-                       placeholder="e.g., Vendor Security Assessment 2024">
-                <div class="form-text">Give your questionnaire a clear, descriptive name</div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="company_name" class="form-label">
+                        <i class="bi bi-building me-1"></i>Your Company Name
+                    </label>
+                    <input type="text" class="form-control" id="company_name" name="company_name" required 
+                           placeholder="e.g., Acme Corporation">
+                    <div class="form-text">Your company name will appear in the vendor link</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="title" class="form-label">
+                        <i class="bi bi-tag me-1"></i>Questionnaire Title
+                    </label>
+                    <input type="text" class="form-control" id="title" name="title" required 
+                           placeholder="e.g., Vendor Security Assessment 2024">
+                    <div class="form-text">Give your questionnaire a clear, descriptive name</div>
+                </div>
             </div>
         </div>
     </div>
