@@ -1,13 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}Response Submitted{% endblock %}
+{% block title %}Response Submitted - RiskQ{% endblock %}
 
 {% block content %}
-<h1>Thank You!</h1>
-
-<div class="success">
-    Your responses have been submitted successfully.
+<div class="text-center py-5">
+    <div class="mb-4">
+        <i class="bi bi-check-circle text-success" style="font-size: 5rem;"></i>
+    </div>
+    <h1 class="display-5 mb-3">Thank You!</h1>
+    
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="alert alert-success" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                Your responses have been submitted successfully.
+            </div>
+            <p class="text-muted">
+                The requesting organization will review your submission and may reach out if they have any follow-up questions.
+            </p>
+        </div>
+    </div>
 </div>
-
-<p>The requesting organization will review your submission.</p>
 {% endblock %}

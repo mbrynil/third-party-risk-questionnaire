@@ -1,38 +1,92 @@
 {% extends "base.html" %}
 
-{% block title %}Responses - {{ questionnaire.title }}{% endblock %}
+{% block title %}{{ questionnaire.title }} - Responses - RiskQ{% endblock %}
 
 {% block content %}
-<h1>{{ questionnaire.title }}</h1>
-<p><a href="/responses">&larr; Back to all questionnaires</a></p>
+<div class="page-header">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/responses">All Questionnaires</a></li>
+            <li class="breadcrumb-item active">{{ questionnaire.title }}</li>
+        </ol>
+    </nav>
+    <h1>{{ questionnaire.title }}</h1>
+    <p>
+        <span class="badge bg-primary me-2">{{ responses|length }} responses</span>
+        <span class="badge bg-secondary">{{ questions|length }} questions</span>
+    </p>
+</div>
 
-<h2>Questions in this questionnaire:</h2>
-<ol>
-    {% for q in questions %}
-    <li>{{ q.question_text }}</li>
-    {% endfor %}
-</ol>
-
-<h2>Submitted Responses ({{ responses|length }})</h2>
-
-{% if responses %}
-    {% for response in responses %}
-    <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 5px;">
-        <h3>{{ response.vendor_name }}</h3>
-        <p><strong>Email:</strong> {{ response.vendor_email }}</p>
-        <p><strong>Submitted:</strong> {{ response.submitted_at.strftime('%Y-%m-%d %H:%M') }}</p>
-        
-        <h4>Answers:</h4>
-        {% for answer in response.answers %}
-        <p>
-            <strong>{{ answer.question.question_text }}</strong><br>
-            {{ answer.answer_text }}
-        </p>
-        {% endfor %}
+<div class="row">
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-list-check me-2"></i>Questions
+            </div>
+            <div class="card-body">
+                <ol class="mb-0">
+                    {% for q in questions %}
+                    <li class="mb-2">{{ q.question_text }}</li>
+                    {% endfor %}
+                </ol>
+            </div>
+            <div class="card-footer bg-transparent">
+                <a href="/vendor/{{ questionnaire.token }}" class="btn btn-sm btn-outline-primary w-100" target="_blank">
+                    <i class="bi bi-link-45deg me-1"></i>Vendor Link
+                </a>
+            </div>
+        </div>
     </div>
-    {% endfor %}
-{% else %}
-<p>No responses yet for this questionnaire.</p>
-<p>Share this link with vendors: <a href="/vendor/{{ questionnaire.token }}">/vendor/{{ questionnaire.token }}</a></p>
-{% endif %}
+
+    <div class="col-lg-8">
+        <h5 class="mb-3">
+            <i class="bi bi-people me-2"></i>Submitted Responses
+        </h5>
+        
+        {% if responses %}
+            {% for response in responses %}
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-building me-2"></i>
+                        <strong>{{ response.vendor_name }}</strong>
+                    </div>
+                    <small class="text-muted">
+                        <i class="bi bi-calendar3 me-1"></i>
+                        {{ response.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                    </small>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">
+                        <i class="bi bi-envelope me-2 text-muted"></i>
+                        <a href="mailto:{{ response.vendor_email }}">{{ response.vendor_email }}</a>
+                    </p>
+                    
+                    <hr>
+                    
+                    {% for answer in response.answers %}
+                    <div class="mb-3 {% if not loop.last %}pb-3 border-bottom{% endif %}">
+                        <p class="fw-bold text-primary mb-1">
+                            <small>Q{{ loop.index }}:</small> {{ answer.question.question_text }}
+                        </p>
+                        <p class="mb-0 ps-3">{{ answer.answer_text }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3">No responses yet</h5>
+                    <p class="text-muted">Share the vendor link to start collecting responses</p>
+                    <div class="link-box d-inline-block px-4 py-2">
+                        <code>/vendor/{{ questionnaire.token }}</code>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

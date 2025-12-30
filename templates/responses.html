@@ -1,37 +1,73 @@
 {% extends "base.html" %}
 
-{% block title %}View Responses{% endblock %}
+{% block title %}Responses - RiskQ{% endblock %}
 
 {% block content %}
-<h1>All Questionnaires</h1>
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1><i class="bi bi-inbox me-2"></i>All Questionnaires</h1>
+        <p>Manage and review your vendor risk assessments</p>
+    </div>
+    <a href="/create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Create New
+    </a>
+</div>
 
 {% if questionnaires %}
-<table>
-    <thead>
-        <tr>
-            <th>Title</th>
-            <th>Token</th>
-            <th>Created</th>
-            <th>Responses</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for q in questionnaires %}
-        <tr>
-            <td>{{ q.title }}</td>
-            <td>{{ q.token }}</td>
-            <td>{{ q.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-            <td>{{ q.responses|length }}</td>
-            <td>
-                <a href="/responses/{{ q.id }}">View Responses</a> |
-                <a href="/vendor/{{ q.token }}">Vendor Link</a>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Token</th>
+                    <th>Created</th>
+                    <th>Responses</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in questionnaires %}
+                <tr>
+                    <td>
+                        <strong>{{ q.title }}</strong>
+                    </td>
+                    <td>
+                        <code class="text-muted">{{ q.token }}</code>
+                    </td>
+                    <td>
+                        <span class="text-muted">
+                            <i class="bi bi-calendar3 me-1"></i>
+                            {{ q.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge-count">{{ q.responses|length }}</span>
+                    </td>
+                    <td>
+                        <a href="/responses/{{ q.id }}" class="btn btn-sm btn-outline-primary me-1">
+                            <i class="bi bi-eye me-1"></i>View
+                        </a>
+                        <a href="/vendor/{{ q.token }}" class="btn btn-sm btn-outline-secondary" target="_blank">
+                            <i class="bi bi-link-45deg me-1"></i>Link
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% else %}
-<p>No questionnaires created yet. <a href="/create">Create your first questionnaire</a>.</p>
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+        <h4 class="mt-3">No questionnaires yet</h4>
+        <p class="text-muted">Create your first questionnaire to get started</p>
+        <a href="/create" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Create Questionnaire
+        </a>
+    </div>
+</div>
 {% endif %}
 {% endblock %}

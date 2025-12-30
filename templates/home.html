@@ -1,23 +1,67 @@
 {% extends "base.html" %}
 
-{% block title %}Home - Risk Questionnaire{% endblock %}
+{% block title %}Home - RiskQ{% endblock %}
 
 {% block content %}
-<h1>Third-Party Risk Questionnaire System</h1>
+<div class="page-header text-center mb-5">
+    <h1 class="display-5">Third-Party Risk Questionnaire System</h1>
+    <p class="lead">Streamline your vendor risk assessments with ease</p>
+</div>
 
-<p>Welcome to the Third-Party Risk Questionnaire intake system.</p>
+<div class="row g-4 mb-5">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center p-4">
+                <div class="mb-3">
+                    <i class="bi bi-plus-circle text-primary" style="font-size: 2.5rem;"></i>
+                </div>
+                <h5 class="card-title">Create Questionnaire</h5>
+                <p class="card-text text-muted">Build custom risk assessment questionnaires for your vendors</p>
+                <a href="/create" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-1"></i>Create New
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body text-center p-4">
+                <div class="mb-3">
+                    <i class="bi bi-inbox text-primary" style="font-size: 2.5rem;"></i>
+                </div>
+                <h5 class="card-title">View Responses</h5>
+                <p class="card-text text-muted">Review and analyze submitted vendor assessments</p>
+                <a href="/responses" class="btn btn-outline-primary">
+                    <i class="bi bi-eye me-1"></i>View All
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
 
-<h2>Admin Actions</h2>
-<ul>
-    <li><a href="/create">Create a new questionnaire</a></li>
-    <li><a href="/responses">View all responses</a></li>
-</ul>
-
-<h2>How it works</h2>
-<ol>
-    <li>Create a questionnaire with a title and list of questions</li>
-    <li>Share the generated unique link with your vendor</li>
-    <li>Vendor fills out the questionnaire with their information</li>
-    <li>View submitted responses in the admin panel</li>
-</ol>
+<div class="card">
+    <div class="card-header">
+        <i class="bi bi-info-circle me-2"></i>How it works
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3 text-center mb-3 mb-md-0">
+                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">1</div>
+                <p class="small mb-0">Create a questionnaire with your questions</p>
+            </div>
+            <div class="col-md-3 text-center mb-3 mb-md-0">
+                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">2</div>
+                <p class="small mb-0">Share the unique link with your vendor</p>
+            </div>
+            <div class="col-md-3 text-center mb-3 mb-md-0">
+                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">3</div>
+                <p class="small mb-0">Vendor completes the assessment</p>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-2" style="width: 40px; height: 40px;">4</div>
+                <p class="small mb-0">Review responses in your dashboard</p>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
