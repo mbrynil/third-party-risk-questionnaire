@@ -8,7 +8,29 @@
     <p>Please complete this questionnaire and submit your responses</p>
 </div>
 
-<form method="post">
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
+<div class="card mb-4 border-primary">
+    <div class="card-body py-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-bold">
+                <i class="bi bi-check-circle me-2"></i>Progress
+            </span>
+            <span id="progress-text" class="badge bg-primary">0 / {{ questions|length }} complete</span>
+        </div>
+        <div class="progress" style="height: 10px;">
+            <div id="progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%;" 
+                 aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+    </div>
+</div>
+
+<form method="post" id="questionnaire-form">
     <div class="card mb-4">
         <div class="card-header">
             <i class="bi bi-building me-2"></i>Your Information
@@ -18,12 +40,12 @@
                 <div class="col-md-6 mb-3">
                     <label for="vendor_name" class="form-label">Company Name</label>
                     <input type="text" class="form-control" id="vendor_name" name="vendor_name" required 
-                           placeholder="Your company name">
+                           placeholder="Your company name" value="{{ form_data.get('vendor_name', '') if form_data else '' }}">
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="vendor_email" class="form-label">Contact Email</label>
                     <input type="email" class="form-control" id="vendor_email" name="vendor_email" required 
-                           placeholder="your.email@company.com">
+                           placeholder="your.email@company.com" value="{{ form_data.get('vendor_email', '') if form_data else '' }}">
                 </div>
             </div>
         </div>
@@ -36,22 +58,87 @@
         </div>
         <div class="card-body">
             {% for question in questions %}
-            <div class="mb-4 {% if not loop.last %}pb-4 border-bottom{% endif %}">
-                <label for="answer_{{ question.id }}" class="form-label">
+            <div class="mb-4 {% if not loop.last %}pb-4 border-bottom{% endif %}" data-question-id="{{ question.id }}">
+                <div class="mb-3">
                     <span class="badge bg-secondary me-2">{{ loop.index }}</span>
-                    {{ question.question_text }}
-                </label>
-                <textarea class="form-control" id="answer_{{ question.id }}" name="answer_{{ question.id }}" 
-                          rows="3" required placeholder="Enter your answer..."></textarea>
+                    <span class="fw-medium">{{ question.question_text }}</span>
+                </div>
+                
+                {% set saved_choice = form_data.get('choice_' ~ question.id, '') if form_data else '' %}
+                <div class="btn-group w-100" role="group" aria-label="Answer choices for question {{ loop.index }}">
+                    <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
+                           id="yes_{{ question.id }}" value="yes" autocomplete="off" {% if saved_choice == 'yes' %}checked{% endif %}>
+                    <label class="btn btn-outline-success" for="yes_{{ question.id }}">
+                        <i class="bi bi-check-circle me-1"></i>Yes
+                    </label>
+
+                    <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
+                           id="no_{{ question.id }}" value="no" autocomplete="off" {% if saved_choice == 'no' %}checked{% endif %}>
+                    <label class="btn btn-outline-danger" for="no_{{ question.id }}">
+                        <i class="bi bi-x-circle me-1"></i>No
+                    </label>
+
+                    <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
+                           id="partial_{{ question.id }}" value="partial" autocomplete="off" {% if saved_choice == 'partial' %}checked{% endif %}>
+                    <label class="btn btn-outline-warning" for="partial_{{ question.id }}">
+                        <i class="bi bi-dash-circle me-1"></i>Partial
+                    </label>
+
+                    <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
+                           id="na_{{ question.id }}" value="na" autocomplete="off" {% if saved_choice == 'na' %}checked{% endif %}>
+                    <label class="btn btn-outline-secondary" for="na_{{ question.id }}">
+                        <i class="bi bi-slash-circle me-1"></i>N/A
+                    </label>
+                </div>
             </div>
             {% endfor %}
         </div>
     </div>
 
     <div class="d-grid gap-2 col-md-6 mx-auto">
-        <button type="submit" class="btn btn-primary btn-lg">
+        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
             <i class="bi bi-send me-2"></i>Submit Responses
         </button>
+        <small class="text-center text-muted" id="submit-hint">Answer all questions to submit</small>
     </div>
 </form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const totalQuestions = {{ questions|length }};
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const submitBtn = document.getElementById('submit-btn');
+    const submitHint = document.getElementById('submit-hint');
+    
+    function updateProgress() {
+        const answered = document.querySelectorAll('.answer-choice:checked').length;
+        const percentage = totalQuestions > 0 ? (answered / totalQuestions) * 100 : 0;
+        
+        progressBar.style.width = percentage + '%';
+        progressBar.setAttribute('aria-valuenow', percentage);
+        progressText.textContent = answered + ' / ' + totalQuestions + ' complete';
+        
+        if (answered === totalQuestions) {
+            progressText.classList.remove('bg-primary');
+            progressText.classList.add('bg-success');
+            submitHint.textContent = 'All questions answered - ready to submit!';
+            submitHint.classList.add('text-success');
+            submitHint.classList.remove('text-muted');
+        } else {
+            progressText.classList.remove('bg-success');
+            progressText.classList.add('bg-primary');
+            submitHint.textContent = 'Answer all questions to submit';
+            submitHint.classList.remove('text-success');
+            submitHint.classList.add('text-muted');
+        }
+    }
+    
+    document.querySelectorAll('.answer-choice').forEach(function(radio) {
+        radio.addEventListener('change', updateProgress);
+    });
+    
+    updateProgress();
+});
+</script>
 {% endblock %}

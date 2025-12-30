@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 
-from models import init_db, get_db, seed_question_bank, Questionnaire, Question, Response, Answer, QuestionBankItem
+from models import init_db, get_db, seed_question_bank, Questionnaire, Question, Response, Answer, QuestionBankItem, VALID_CHOICES
 
 app = FastAPI(title="Third-Party Risk Questionnaire System")
 templates = Jinja2Templates(directory="templates")
@@ -71,7 +71,7 @@ async def create_questionnaire(
     
     order = 0
     for qid in question_ids:
-        bank_item = db.query(QuestionBankItem).filter(QuestionBankItem.id == int(qid)).first()
+        bank_item = db.query(QuestionBankItem).filter(QuestionBankItem.id == int(str(qid))).first()
         if bank_item:
             question = Question(
                 questionnaire_id=questionnaire.id,
@@ -126,13 +126,44 @@ async def vendor_form(request: Request, token: str, db: Session = Depends(get_db
 async def submit_vendor_response(
     request: Request,
     token: str,
-    vendor_name: str = Form(...),
-    vendor_email: str = Form(...),
     db: Session = Depends(get_db)
 ):
     questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
     if not questionnaire:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    form_data = await request.form()
+    vendor_name = str(form_data.get("vendor_name", "")).strip()
+    vendor_email = str(form_data.get("vendor_email", "")).strip()
+    
+    questions = db.query(Question).filter(
+        Question.questionnaire_id == questionnaire.id
+    ).order_by(Question.order).all()
+    
+    errors = []
+    if not vendor_name:
+        errors.append("Company name is required.")
+    if not vendor_email:
+        errors.append("Contact email is required.")
+    
+    missing_answers = []
+    for question in questions:
+        choice_key = f"choice_{question.id}"
+        choice_value = form_data.get(choice_key, "")
+        if not choice_value or choice_value not in VALID_CHOICES:
+            missing_answers.append(question)
+    
+    if missing_answers:
+        errors.append(f"Please answer all questions. {len(missing_answers)} unanswered.")
+    
+    if errors:
+        return templates.TemplateResponse("vendor_form.html", {
+            "request": request,
+            "questionnaire": questionnaire,
+            "questions": questions,
+            "error": " ".join(errors),
+            "form_data": dict(form_data)
+        })
     
     response = Response(
         questionnaire_id=questionnaire.id,
@@ -142,18 +173,15 @@ async def submit_vendor_response(
     db.add(response)
     db.flush()
     
-    form_data = await request.form()
-    questions = db.query(Question).filter(
-        Question.questionnaire_id == questionnaire.id
-    ).all()
-    
     for question in questions:
-        answer_key = f"answer_{question.id}"
-        answer_text = form_data.get(answer_key, "")
+        choice_key = f"choice_{question.id}"
+        choice_value = form_data.get(choice_key, "")
+        
         answer = Answer(
             response_id=response.id,
             question_id=question.id,
-            answer_text=answer_text
+            answer_choice=choice_value,
+            answer_text=None
         )
         db.add(answer)
     

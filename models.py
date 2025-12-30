@@ -63,10 +63,13 @@ class Answer(Base):
     id = Column(Integer, primary_key=True, index=True)
     response_id = Column(Integer, ForeignKey("responses.id"), nullable=False)
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
-    answer_text = Column(Text, nullable=False)
+    answer_choice = Column(String(20), nullable=True)
+    answer_text = Column(Text, nullable=True)
 
     response = relationship("Response", back_populates="answers")
     question = relationship("Question")
+
+VALID_CHOICES = ["yes", "no", "partial", "na"]
 
 
 def init_db():

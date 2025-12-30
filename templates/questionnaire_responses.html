@@ -46,10 +46,24 @@
         {% if responses %}
             {% for response in responses %}
             <div class="card mb-3">
+                {% set answers_dict = {} %}
+                {% for answer in response.answers %}
+                    {% set _ = answers_dict.update({answer.question_id: answer}) %}
+                {% endfor %}
+                {% set answered_count = namespace(count=0) %}
+                {% for q in questions %}
+                    {% set answer = answers_dict.get(q.id) %}
+                    {% if answer and (answer.answer_choice or answer.answer_text) %}
+                        {% set answered_count.count = answered_count.count + 1 %}
+                    {% endif %}
+                {% endfor %}
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
                         <i class="bi bi-building me-2"></i>
                         <strong>{{ response.vendor_name }}</strong>
+                        <span class="badge {% if answered_count.count == questions|length %}bg-success{% else %}bg-warning text-dark{% endif %} ms-2">
+                            {{ answered_count.count }}/{{ questions|length }} complete
+                        </span>
                     </div>
                     <small class="text-muted">
                         <i class="bi bi-calendar3 me-1"></i>
@@ -64,12 +78,31 @@
                     
                     <hr>
                     
-                    {% for answer in response.answers %}
+                    {% for q in questions %}
+                    {% set answer = answers_dict.get(q.id) %}
                     <div class="mb-3 {% if not loop.last %}pb-3 border-bottom{% endif %}">
-                        <p class="fw-bold text-primary mb-1">
-                            <small>Q{{ loop.index }}:</small> {{ answer.question.question_text }}
-                        </p>
-                        <p class="mb-0 ps-3">{{ answer.answer_text }}</p>
+                        <div class="d-flex justify-content-between align-items-start">
+                            <p class="fw-bold text-primary mb-1 flex-grow-1">
+                                <small>Q{{ loop.index }}:</small> {{ q.question_text }}
+                            </p>
+                            {% if answer %}
+                                {% if answer.answer_choice == 'yes' %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Yes</span>
+                                {% elif answer.answer_choice == 'no' %}
+                                <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>No</span>
+                                {% elif answer.answer_choice == 'partial' %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-dash-circle me-1"></i>Partial</span>
+                                {% elif answer.answer_choice == 'na' %}
+                                <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>N/A</span>
+                                {% elif answer.answer_text %}
+                                <span class="badge bg-info">{{ answer.answer_text[:50] }}{% if answer.answer_text|length > 50 %}...{% endif %}</span>
+                                {% else %}
+                                <span class="badge bg-light text-muted">Unanswered</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="badge bg-light text-muted">Unanswered</span>
+                            {% endif %}
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
