@@ -69,7 +69,7 @@
             <form method="post" action="/vendor/{{ questionnaire.token }}/followup/{{ followup.id }}" class="ms-4">
                 <input type="hidden" name="vendor_email" value="{{ existing_response.vendor_email }}">
                 <div class="mb-2">
-                    <textarea class="form-control" name="response_text" rows="3" placeholder="Enter your response..." required></textarea>
+                    <textarea class="form-control" name="response_text" rows="3" placeholder="Enter your response..." required minlength="5"></textarea>
                 </div>
                 <button type="submit" class="btn btn-success btn-sm">
                     <i class="bi bi-send me-1"></i>Submit Response

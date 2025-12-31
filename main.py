@@ -563,7 +563,11 @@ async def respond_to_followup(
     if response.vendor_email != vendor_email:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    followup.response_text = response_text.strip()
+    cleaned_response = response_text.strip()
+    if not cleaned_response:
+        raise HTTPException(status_code=400, detail="Response cannot be empty")
+    
+    followup.response_text = cleaned_response
     followup.responded_at = datetime.utcnow()
     
     open_followups = db.query(FollowUp).filter(
