@@ -586,6 +586,51 @@ async def respond_to_followup(
     )
 
 
+@app.get("/submissions/{submission_id}/export", response_class=HTMLResponse)
+async def export_submission(request: Request, submission_id: int, db: Session = Depends(get_db)):
+    response = db.query(Response).filter(Response.id == submission_id).first()
+    if not response:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.id == response.questionnaire_id).first()
+    
+    questions = db.query(Question).filter(
+        Question.questionnaire_id == questionnaire.id
+    ).order_by(Question.order).all()
+    
+    answers_dict = {}
+    for answer in response.answers:
+        answers_dict[answer.question_id] = answer
+    
+    answered_count = sum(1 for a in response.answers if a.answer_choice)
+    total_questions = len(questions)
+    completion_percent = (answered_count / total_questions * 100) if total_questions > 0 else 0
+    
+    evidence_files = db.query(EvidenceFile).filter(
+        EvidenceFile.response_id == response.id
+    ).order_by(EvidenceFile.uploaded_at.desc()).all()
+    
+    follow_ups = db.query(FollowUp).filter(
+        FollowUp.response_id == response.id
+    ).order_by(FollowUp.created_at.desc()).all()
+    
+    return templates.TemplateResponse("export.html", {
+        "request": request,
+        "response": response,
+        "questionnaire": questionnaire,
+        "questions": questions,
+        "answers_dict": answers_dict,
+        "completion_percent": completion_percent,
+        "answered_count": answered_count,
+        "evidence_files": evidence_files,
+        "follow_ups": follow_ups,
+        "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
+        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
+        "now": datetime.utcnow()
+    })
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)

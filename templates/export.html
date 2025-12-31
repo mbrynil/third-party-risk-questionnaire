@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export - {{ questionnaire.title }} - {{ response.vendor_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #fff;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .export-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .export-header {
+            border-bottom: 3px solid #1e3a5f;
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .export-header h1 {
+            color: #1e3a5f;
+            font-weight: 700;
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+        }
+        .export-header .company-name {
+            color: #6b7280;
+            font-size: 1rem;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .meta-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+        .meta-value {
+            font-size: 0.95rem;
+            color: #111827;
+            font-weight: 500;
+        }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e3a5f;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            margin-top: 2rem;
+        }
+        .question-block {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            page-break-inside: avoid;
+        }
+        .question-number {
+            font-weight: 700;
+            color: #2563eb;
+            font-size: 0.85rem;
+        }
+        .question-text {
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 0.75rem;
+        }
+        .answer-row {
+            display: flex;
+            gap: 2rem;
+            align-items: flex-start;
+        }
+        .answer-choice {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .answer-yes { background: #dcfce7; color: #166534; }
+        .answer-no { background: #fee2e2; color: #991b1b; }
+        .answer-partial { background: #fef3c7; color: #92400e; }
+        .answer-na { background: #f3f4f6; color: #6b7280; }
+        .answer-unanswered { background: #fef2f2; color: #b91c1c; font-style: italic; }
+        .vendor-notes {
+            background: #f9fafb;
+            border-left: 3px solid #2563eb;
+            padding: 0.5rem 0.75rem;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #374151;
+        }
+        .vendor-notes-label {
+            font-weight: 600;
+            font-size: 0.75rem;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+        .evidence-item, .followup-item {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            page-break-inside: avoid;
+        }
+        .followup-message {
+            font-weight: 500;
+            color: #111827;
+        }
+        .followup-response {
+            background: #ecfdf5;
+            border-left: 3px solid #10b981;
+            padding: 0.5rem 0.75rem;
+            margin-top: 0.5rem;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+        .status-submitted { background: #dcfce7; color: #166534; }
+        .status-draft { background: #fef3c7; color: #92400e; }
+        .status-needs-info { background: #dbeafe; color: #1e40af; }
+        .completion-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+        }
+        .completion-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2563eb 0%, #10b981 100%);
+        }
+        .print-btn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+        }
+        .no-data {
+            color: #9ca3af;
+            font-style: italic;
+        }
+        
+        @media print {
+            .print-btn, .no-print {
+                display: none !important;
+            }
+            body {
+                font-size: 12px;
+                background: #fff;
+            }
+            .export-container {
+                max-width: 100%;
+                padding: 0;
+            }
+            .question-block {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .section-title {
+                page-break-after: avoid;
+            }
+            .meta-grid {
+                background: #f9fafb !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .answer-choice, .status-badge {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            a {
+                text-decoration: none;
+                color: inherit;
+            }
+            a::after {
+                content: " (" attr(href) ")";
+                font-size: 0.8em;
+                color: #6b7280;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="btn btn-primary print-btn no-print" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Print / Save PDF
+    </button>
+    
+    <div class="export-container">
+        <div class="export-header">
+            <p class="company-name mb-1">{{ questionnaire.company_name }}</p>
+            <h1>{{ questionnaire.title }}</h1>
+            <p class="text-muted mb-0">Vendor Risk Assessment Report</p>
+        </div>
+        
+        <div class="meta-grid">
+            <div class="meta-item">
+                <span class="meta-label">Vendor Company</span>
+                <span class="meta-value">{{ response.vendor_name }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Contact Email</span>
+                <span class="meta-value">{{ response.vendor_email }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Status</span>
+                <span class="meta-value">
+                    {% if response.status == RESPONSE_STATUS_SUBMITTED %}
+                    <span class="status-badge status-submitted">SUBMITTED</span>
+                    {% elif response.status == RESPONSE_STATUS_NEEDS_INFO %}
+                    <span class="status-badge status-needs-info">NEEDS INFO</span>
+                    {% else %}
+                    <span class="status-badge status-draft">DRAFT</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">{% if response.status == RESPONSE_STATUS_SUBMITTED %}Submitted{% else %}Last Saved{% endif %}</span>
+                <span class="meta-value">
+                    {% if response.status == RESPONSE_STATUS_SUBMITTED and response.submitted_at %}
+                    {{ response.submitted_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                    {% elif response.last_saved_at %}
+                    {{ response.last_saved_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                    {% else %}
+                    N/A
+                    {% endif %}
+                </span>
+            </div>
+            <div class="meta-item" style="grid-column: span 2;">
+                <span class="meta-label">Completion</span>
+                <span class="meta-value">{{ answered_count }} of {{ questions|length }} questions answered ({{ "%.0f"|format(completion_percent) }}%)</span>
+                <div class="completion-bar">
+                    <div class="completion-fill" style="width: {{ completion_percent }}%;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <h2 class="section-title"><i class="bi bi-list-check me-2"></i>Questionnaire Responses</h2>
+        
+        {% for question in questions %}
+        {% set answer = answers_dict.get(question.id) %}
+        <div class="question-block">
+            <span class="question-number">Question {{ loop.index }}</span>
+            <p class="question-text">{{ question.question_text }}</p>
+            <div class="answer-row">
+                <div>
+                    <span class="meta-label">Answer</span><br>
+                    {% if answer and answer.answer_choice %}
+                        {% if answer.answer_choice == 'yes' %}
+                        <span class="answer-choice answer-yes">Yes</span>
+                        {% elif answer.answer_choice == 'no' %}
+                        <span class="answer-choice answer-no">No</span>
+                        {% elif answer.answer_choice == 'partial' %}
+                        <span class="answer-choice answer-partial">Partial</span>
+                        {% elif answer.answer_choice == 'na' %}
+                        <span class="answer-choice answer-na">N/A</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="answer-choice answer-unanswered">Not answered</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% if answer and answer.notes %}
+            <div class="vendor-notes">
+                <span class="vendor-notes-label">Vendor Notes</span>
+                <p class="mb-0">{{ answer.notes }}</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <h2 class="section-title"><i class="bi bi-paperclip me-2"></i>Evidence Files</h2>
+        {% if evidence_files %}
+            {% for file in evidence_files %}
+            <div class="evidence-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-file-earmark me-2"></i>
+                        <strong>{{ file.original_filename }}</strong>
+                    </div>
+                    <small class="text-muted">{{ file.uploaded_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                </div>
+                <small class="text-muted">
+                    <a href="/evidence/{{ file.id }}" class="no-print">Download</a>
+                    <span class="print-only d-none d-print-inline">{{ file.original_filename }}</span>
+                </small>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="no-data">No evidence files uploaded.</p>
+        {% endif %}
+        
+        <h2 class="section-title"><i class="bi bi-chat-left-text me-2"></i>Follow-up Requests</h2>
+        {% if follow_ups %}
+            {% for followup in follow_ups %}
+            <div class="followup-item">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <span class="meta-label">Request</span>
+                        <p class="followup-message mb-0">{{ followup.message }}</p>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-muted d-block">{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                        {% if followup.response_text %}
+                        <span class="status-badge status-submitted">Answered</span>
+                        {% else %}
+                        <span class="status-badge status-draft">Open</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if followup.response_text %}
+                <div class="followup-response">
+                    <span class="vendor-notes-label">Vendor Response</span>
+                    <p class="mb-0">{{ followup.response_text }}</p>
+                    {% if followup.responded_at %}
+                    <small class="text-muted">Responded: {{ followup.responded_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="no-data">No follow-up requests.</p>
+        {% endif %}
+        
+        <div class="text-center text-muted mt-5 pt-3 border-top">
+            <small>Generated by RiskQ on {{ now.strftime('%Y-%m-%d %H:%M UTC') }}</small>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -70,6 +70,7 @@
                                 <th>Status</th>
                                 <th>Progress</th>
                                 <th>Last Updated</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -104,6 +105,11 @@
                                         {{ response.last_saved_at.strftime('%Y-%m-%d %H:%M') if response.last_saved_at else 'N/A' }}
                                         {% endif %}
                                     </small>
+                                </td>
+                                <td>
+                                    <a href="/submissions/{{ response.id }}/export" class="btn btn-sm btn-outline-secondary" target="_blank" title="Export to PDF">
+                                        <i class="bi bi-file-earmark-pdf"></i>
+                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -145,6 +151,9 @@
                             {% if open_followup_count > 0 %}
                             <span class="badge bg-warning text-dark ms-1"><i class="bi bi-chat-left-text me-1"></i>{{ open_followup_count }} open</span>
                             {% endif %}
+                            <a href="/submissions/{{ response.id }}/export" class="btn btn-sm btn-outline-secondary ms-2" target="_blank" title="Export to PDF">
+                                <i class="bi bi-file-earmark-pdf me-1"></i>Export
+                            </a>
                         </div>
                         <small class="text-muted">
                             {% if response.status == RESPONSE_STATUS_SUBMITTED %}
