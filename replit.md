@@ -57,6 +57,7 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - `POST /vendor/{token}/upload-evidence` - Upload evidence file (multipart form)
 - `DELETE /vendor/{token}/evidence/{id}?vendor_email=` - Delete evidence file
 - `GET /evidence/{id}` - Download evidence file
+- `GET /submissions/{submission_id}/export` - Print-friendly export page for PDF generation
 
 ## How to Run
 ```bash
