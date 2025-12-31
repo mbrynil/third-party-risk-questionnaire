@@ -9,8 +9,8 @@ import re
 
 from models import (
     init_db, get_db, seed_question_bank, 
-    Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile,
-    VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED
+    Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile, FollowUp,
+    VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO
 )
 from datetime import datetime
 
@@ -138,7 +138,8 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
         "questionnaire": questionnaire,
         "questions": questions,
         "existing_response": existing_response,
-        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
+        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
     })
 
 
@@ -179,6 +180,7 @@ async def submit_vendor_response(
             "questions": questions,
             "existing_response": existing_response,
             "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+            "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
             "error": "You have already submitted this questionnaire. Editing is no longer allowed."
         })
     
@@ -200,7 +202,8 @@ async def submit_vendor_response(
             "questions": questions,
             "error": " ".join(errors),
             "form_data": dict(form_data),
-            "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
+            "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+            "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
         })
     
     if existing_response:
@@ -247,6 +250,7 @@ async def submit_vendor_response(
             "questions": questions,
             "existing_response": response,
             "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+            "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
             "success": f"Draft saved at {response.last_saved_at.strftime('%Y-%m-%d %H:%M:%S')} UTC"
         })
 
@@ -289,7 +293,8 @@ async def view_responses(request: Request, status_filter: Optional[str] = None, 
         "questionnaires": questionnaires,
         "status_filter": status_filter,
         "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
-        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
+        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
     })
 
 
@@ -305,7 +310,7 @@ async def view_questionnaire_responses(
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     
     query = db.query(Response).filter(Response.questionnaire_id == questionnaire_id)
-    if status_filter and status_filter in [RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED]:
+    if status_filter and status_filter in [RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO]:
         query = query.filter(Response.status == status_filter)
     responses = query.order_by(Response.last_saved_at.desc()).all()
     
@@ -320,7 +325,8 @@ async def view_questionnaire_responses(
         "questions": questions,
         "status_filter": status_filter,
         "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
-        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
+        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
     })
 
 
@@ -498,6 +504,82 @@ async def get_evidence_list(token: str, email: str, db: Session = Depends(get_db
         })
     
     return JSONResponse(content={"files": files})
+
+
+@app.post("/responses/{questionnaire_id}/followup/{response_id}")
+async def create_followup(
+    questionnaire_id: int,
+    response_id: int,
+    message: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.id == questionnaire_id).first()
+    if not questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    response = db.query(Response).filter(
+        Response.id == response_id,
+        Response.questionnaire_id == questionnaire_id
+    ).first()
+    if not response:
+        raise HTTPException(status_code=404, detail="Response not found")
+    
+    followup = FollowUp(
+        response_id=response_id,
+        message=message.strip()
+    )
+    db.add(followup)
+    
+    response.status = RESPONSE_STATUS_NEEDS_INFO
+    
+    db.commit()
+    
+    return RedirectResponse(
+        url=f"/responses/{questionnaire_id}#response-{response_id}",
+        status_code=303
+    )
+
+
+@app.post("/vendor/{token}/followup/{followup_id}")
+async def respond_to_followup(
+    token: str,
+    followup_id: int,
+    response_text: str = Form(...),
+    vendor_email: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+    if not questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    followup = db.query(FollowUp).filter(FollowUp.id == followup_id).first()
+    if not followup:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    
+    response = db.query(Response).filter(Response.id == followup.response_id).first()
+    if not response or response.questionnaire_id != questionnaire.id:
+        raise HTTPException(status_code=404, detail="Response not found")
+    
+    if response.vendor_email != vendor_email:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    followup.response_text = response_text.strip()
+    followup.responded_at = datetime.utcnow()
+    
+    open_followups = db.query(FollowUp).filter(
+        FollowUp.response_id == response.id,
+        FollowUp.response_text == None
+    ).count()
+    
+    if open_followups == 0:
+        response.status = RESPONSE_STATUS_SUBMITTED
+    
+    db.commit()
+    
+    return RedirectResponse(
+        url=f"/vendor/{token}?email={vendor_email}",
+        status_code=303
+    )
 
 
 if __name__ == "__main__":

@@ -23,10 +23,62 @@
 {% endif %}
 
 {% set is_submitted = existing_response and existing_response.status == RESPONSE_STATUS_SUBMITTED %}
+{% set is_needs_info = existing_response and existing_response.status == RESPONSE_STATUS_NEEDS_INFO %}
 
 {% if is_submitted %}
 <div class="alert alert-info">
     <i class="bi bi-lock me-2"></i><strong>Already Submitted</strong> - This questionnaire was submitted on {{ existing_response.submitted_at.strftime('%Y-%m-%d %H:%M') }} UTC. Editing is no longer allowed.
+</div>
+{% endif %}
+
+{% if is_needs_info %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-2"></i><strong>Additional Information Requested</strong> - The reviewing company has requested additional information. Please respond to the follow-up questions below.
+</div>
+
+<div class="card mb-4 border-warning">
+    <div class="card-header bg-warning bg-opacity-25">
+        <i class="bi bi-chat-left-text me-2"></i>Follow-up Requests
+        {% set open_followups = existing_response.follow_ups | selectattr('response_text', 'none') | list %}
+        <span class="badge bg-warning text-dark">{{ open_followups|length }} open</span>
+    </div>
+    <div class="card-body">
+        {% for followup in existing_response.follow_ups %}
+        <div class="mb-4 {% if not loop.last %}pb-4 border-bottom{% endif %}">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <strong><i class="bi bi-question-circle me-1"></i>Request #{{ loop.index }}</strong>
+                    <small class="text-muted ms-2">{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                </div>
+                {% if followup.response_text %}
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Answered</span>
+                {% else %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Pending</span>
+                {% endif %}
+            </div>
+            <div class="p-3 bg-light rounded mb-2">
+                <p class="mb-0">{{ followup.message }}</p>
+            </div>
+            
+            {% if followup.response_text %}
+            <div class="ms-4 p-3 bg-success bg-opacity-10 rounded">
+                <small class="text-muted"><i class="bi bi-reply me-1"></i>Your response ({{ followup.responded_at.strftime('%Y-%m-%d %H:%M') if followup.responded_at else '' }}):</small>
+                <p class="mb-0 mt-1">{{ followup.response_text }}</p>
+            </div>
+            {% else %}
+            <form method="post" action="/vendor/{{ questionnaire.token }}/followup/{{ followup.id }}" class="ms-4">
+                <input type="hidden" name="vendor_email" value="{{ existing_response.vendor_email }}">
+                <div class="mb-2">
+                    <textarea class="form-control" name="response_text" rows="3" placeholder="Enter your response..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-success btn-sm">
+                    <i class="bi bi-send me-1"></i>Submit Response
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
 </div>
 {% endif %}
 

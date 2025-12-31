@@ -51,9 +51,12 @@
                         {% if q.responses|length > 0 %}
                             {% set submitted_count = namespace(count=0) %}
                             {% set draft_count = namespace(count=0) %}
+                            {% set needs_info_count = namespace(count=0) %}
                             {% for resp in q.responses %}
                                 {% if resp.status == 'SUBMITTED' %}
                                     {% set submitted_count.count = submitted_count.count + 1 %}
+                                {% elif resp.status == 'NEEDS_INFO' %}
+                                    {% set needs_info_count.count = needs_info_count.count + 1 %}
                                 {% else %}
                                     {% set draft_count.count = draft_count.count + 1 %}
                                 {% endif %}
@@ -61,6 +64,11 @@
                             <div>
                                 <span class="badge bg-success">SUBMITTED: {{ submitted_count.count }}</span>
                             </div>
+                            {% if needs_info_count.count > 0 %}
+                            <div class="mt-1">
+                                <span class="badge bg-info text-dark">NEEDS INFO: {{ needs_info_count.count }}</span>
+                            </div>
+                            {% endif %}
                             <div class="mt-1">
                                 <span class="badge bg-warning text-dark">DRAFT: {{ draft_count.count }}</span>
                             </div>

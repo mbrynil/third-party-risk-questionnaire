@@ -70,7 +70,8 @@ uvicorn main:app --host 0.0.0.0 --port 5000
 - **Response**: Vendor name, email, status (DRAFT/SUBMITTED), submitted_at, last_saved_at
 - **Answer**: Answer choice (yes/no/partial/na), notes, linked to question and response
 - **EvidenceFile**: original_filename, stored_filename, stored_path, content_type, size_bytes, uploaded_at, linked to questionnaire and response
+- **FollowUp**: message, created_at, response_text, responded_at, linked to response
 
 ## Schema Notes
 - When schema changes, delete questionnaires.db to recreate (dev only)
-- Status values: DRAFT (in progress), SUBMITTED (final, locked)
+- Status values: DRAFT (in progress), SUBMITTED (final, locked), NEEDS_INFO (awaiting vendor follow-up response)

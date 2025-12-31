@@ -46,6 +46,7 @@ class Question(Base):
 
 RESPONSE_STATUS_DRAFT = "DRAFT"
 RESPONSE_STATUS_SUBMITTED = "SUBMITTED"
+RESPONSE_STATUS_NEEDS_INFO = "NEEDS_INFO"
 
 
 class Response(Base):
@@ -62,6 +63,7 @@ class Response(Base):
     questionnaire = relationship("Questionnaire", back_populates="responses")
     answers = relationship("Answer", back_populates="response", cascade="all, delete-orphan")
     evidence_files = relationship("EvidenceFile", back_populates="response", cascade="all, delete-orphan")
+    follow_ups = relationship("FollowUp", back_populates="response", cascade="all, delete-orphan")
 
 
 class Answer(Base):
@@ -93,6 +95,19 @@ class EvidenceFile(Base):
 
     questionnaire = relationship("Questionnaire")
     response = relationship("Response", back_populates="evidence_files")
+
+
+class FollowUp(Base):
+    __tablename__ = "follow_ups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    response_id = Column(Integer, ForeignKey("responses.id"), nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    response_text = Column(Text, nullable=True)
+    responded_at = Column(DateTime, nullable=True)
+
+    response = relationship("Response", back_populates="follow_ups")
 
 
 VALID_CHOICES = ["yes", "no", "partial", "na"]
