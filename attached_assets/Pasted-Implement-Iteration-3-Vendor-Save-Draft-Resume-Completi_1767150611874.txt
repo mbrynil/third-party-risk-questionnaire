@@ -1,0 +1,42 @@
+Implement Iteration 3: Vendor Save Draft + Resume + Completion % + Last Saved + Company A Dashboard Progress/Status.
+
+Context:
+	•	We already have questionnaire creation (question bank checkboxes) and vendor answering with prefixed answers (Yes/No/NA/Partial) and a vendor progress/status bar at the top.
+	•	We need draft/resume and also better visibility on the Company A responses dashboard.
+
+Requirements (Vendor side):
+	1.	Vendor identity + resume decision (explicit):
+	•	Vendors must enter vendor_name and vendor_email at the top of the form.
+	•	Drafts must be tied to (questionnaire_token or questionnaire_id) + vendor_email.
+	•	When a vendor revisits /vendor/{token}, if they enter the same vendor_email, automatically load the latest saved draft answers and prefill the form.
+	•	Do NOT create separate per-vendor magic links in this iteration. Resume is based on vendor_email.
+	2.	Two vendor actions:
+	•	“Save Draft” button: saves partial answers and keeps the vendor on the same page with a success message.
+	•	“Submit Final” button: saves answers as final, sets status to SUBMITTED, and locks editing.
+	3.	Locking behavior:
+	•	If a finalized submission exists for that vendor_email + questionnaire, show a read-only view (answers visible) with a message “Already submitted” and disable Save Draft / Submit Final.
+	4.	Completion indicator:
+	•	Compute completion % based on number of questions with a selected prefixed answer (Yes/No/NA/Partial). (Optional text notes do not count toward completion.)
+	•	Show a progress bar and percent at the top of vendor form.
+	•	Show “Last saved: {timestamp}” when a draft exists (update timestamp each time Save Draft is clicked).
+	5.	Notes/comments per question:
+	•	Each question must have an optional free-text “Notes / Details” field for the vendor.
+	•	Draft save and final submit must store both the prefixed answer and the notes text per question.
+	•	When resuming, both the prefixed answer and notes text must prefill.
+	6.	Submission status values:
+	•	DRAFT (saved but not final)
+	•	SUBMITTED (final)
+
+Requirements (Company A / Responses dashboard):
+7) In the internal responses dashboard/list view:
+	•	Show each submission with a colored status badge (DRAFT or SUBMITTED).
+	•	Show a completion progress bar per submission (based on answered prefixed answers count / total questions).
+	•	Display vendor name, vendor email, submitted/last saved timestamp.
+	•	Allow filtering the list by status (DRAFT vs SUBMITTED) (simple query param or buttons).
+
+Implementation notes:
+	•	Keep it simple and readable.
+	•	It’s OK to recreate the SQLite database for this iteration.
+	•	Keep existing routes working; add new routes only if necessary.
+	•	Ensure vendor form POST handling can distinguish Save Draft vs Submit Final (e.g., different button names).
+	•	Keep Bootstrap styling consistent with the current UI.
