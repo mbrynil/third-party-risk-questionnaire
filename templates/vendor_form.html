@@ -15,13 +15,33 @@
 </div>
 {% endif %}
 
+{% if success %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>{{ success }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
+
+{% set is_submitted = existing_response and existing_response.status == RESPONSE_STATUS_SUBMITTED %}
+
+{% if is_submitted %}
+<div class="alert alert-info">
+    <i class="bi bi-lock me-2"></i><strong>Already Submitted</strong> - This questionnaire was submitted on {{ existing_response.submitted_at.strftime('%Y-%m-%d %H:%M') }} UTC. Editing is no longer allowed.
+</div>
+{% endif %}
+
 <div class="card mb-4 border-primary">
     <div class="card-body py-3">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <span class="fw-bold">
                 <i class="bi bi-check-circle me-2"></i>Progress
             </span>
-            <span id="progress-text" class="badge bg-primary">0 / {{ questions|length }} complete</span>
+            <div>
+                <span id="last-saved" class="text-muted me-3" style="display: {% if existing_response and existing_response.last_saved_at %}inline{% else %}none{% endif %};">
+                    <i class="bi bi-clock me-1"></i>Last saved: <span id="last-saved-time">{{ existing_response.last_saved_at.strftime('%Y-%m-%d %H:%M:%S') if existing_response and existing_response.last_saved_at else '' }}</span> UTC
+                </span>
+                <span id="progress-text" class="badge bg-primary">0 / {{ questions|length }} complete</span>
+            </div>
         </div>
         <div class="progress" style="height: 10px;">
             <div id="progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%;" 
@@ -38,14 +58,26 @@
         <div class="card-body">
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label for="vendor_name" class="form-label">Company Name</label>
+                    <label for="vendor_name" class="form-label">Company Name <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="vendor_name" name="vendor_name" required 
-                           placeholder="Your company name" value="{{ form_data.get('vendor_name', '') if form_data else '' }}">
+                           placeholder="Your company name" 
+                           value="{{ existing_response.vendor_name if existing_response else (form_data.get('vendor_name', '') if form_data else '') }}"
+                           {% if is_submitted %}readonly{% endif %}>
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label for="vendor_email" class="form-label">Contact Email</label>
-                    <input type="email" class="form-control" id="vendor_email" name="vendor_email" required 
-                           placeholder="your.email@company.com" value="{{ form_data.get('vendor_email', '') if form_data else '' }}">
+                    <label for="vendor_email" class="form-label">Contact Email <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="email" class="form-control" id="vendor_email" name="vendor_email" required 
+                               placeholder="your.email@company.com" 
+                               value="{{ existing_response.vendor_email if existing_response else (form_data.get('vendor_email', '') if form_data else '') }}"
+                               {% if is_submitted %}readonly{% endif %}>
+                        {% if not is_submitted %}
+                        <button type="button" class="btn btn-outline-secondary" id="load-draft-btn" title="Load existing draft">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                    <div class="form-text">Enter your email and click <i class="bi bi-arrow-clockwise"></i> to resume a saved draft</div>
                 </div>
             </div>
         </div>
@@ -58,49 +90,82 @@
         </div>
         <div class="card-body">
             {% for question in questions %}
+            {% set saved_answer = none %}
+            {% if existing_response %}
+                {% for ans in existing_response.answers %}
+                    {% if ans.question_id == question.id %}
+                        {% set saved_answer = ans %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+            {% set saved_choice = saved_answer.answer_choice if saved_answer else (form_data.get('choice_' ~ question.id, '') if form_data else '') %}
+            {% set saved_notes = saved_answer.notes if saved_answer else (form_data.get('notes_' ~ question.id, '') if form_data else '') %}
+            
             <div class="mb-4 {% if not loop.last %}pb-4 border-bottom{% endif %}" data-question-id="{{ question.id }}">
                 <div class="mb-3">
                     <span class="badge bg-secondary me-2">{{ loop.index }}</span>
                     <span class="fw-medium">{{ question.question_text }}</span>
                 </div>
                 
-                {% set saved_choice = form_data.get('choice_' ~ question.id, '') if form_data else '' %}
-                <div class="btn-group w-100" role="group" aria-label="Answer choices for question {{ loop.index }}">
+                <div class="btn-group w-100 mb-2" role="group" aria-label="Answer choices for question {{ loop.index }}">
                     <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
-                           id="yes_{{ question.id }}" value="yes" autocomplete="off" {% if saved_choice == 'yes' %}checked{% endif %}>
+                           id="yes_{{ question.id }}" value="yes" autocomplete="off" 
+                           {% if saved_choice == 'yes' %}checked{% endif %}
+                           {% if is_submitted %}disabled{% endif %}>
                     <label class="btn btn-outline-success" for="yes_{{ question.id }}">
                         <i class="bi bi-check-circle me-1"></i>Yes
                     </label>
 
                     <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
-                           id="no_{{ question.id }}" value="no" autocomplete="off" {% if saved_choice == 'no' %}checked{% endif %}>
+                           id="no_{{ question.id }}" value="no" autocomplete="off" 
+                           {% if saved_choice == 'no' %}checked{% endif %}
+                           {% if is_submitted %}disabled{% endif %}>
                     <label class="btn btn-outline-danger" for="no_{{ question.id }}">
                         <i class="bi bi-x-circle me-1"></i>No
                     </label>
 
                     <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
-                           id="partial_{{ question.id }}" value="partial" autocomplete="off" {% if saved_choice == 'partial' %}checked{% endif %}>
+                           id="partial_{{ question.id }}" value="partial" autocomplete="off" 
+                           {% if saved_choice == 'partial' %}checked{% endif %}
+                           {% if is_submitted %}disabled{% endif %}>
                     <label class="btn btn-outline-warning" for="partial_{{ question.id }}">
                         <i class="bi bi-dash-circle me-1"></i>Partial
                     </label>
 
                     <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
-                           id="na_{{ question.id }}" value="na" autocomplete="off" {% if saved_choice == 'na' %}checked{% endif %}>
+                           id="na_{{ question.id }}" value="na" autocomplete="off" 
+                           {% if saved_choice == 'na' %}checked{% endif %}
+                           {% if is_submitted %}disabled{% endif %}>
                     <label class="btn btn-outline-secondary" for="na_{{ question.id }}">
                         <i class="bi bi-slash-circle me-1"></i>N/A
                     </label>
+                </div>
+                
+                <div class="mt-2">
+                    <textarea class="form-control notes-field" name="notes_{{ question.id }}" 
+                              rows="2" placeholder="Optional: Add notes or details..."
+                              {% if is_submitted %}readonly{% endif %}>{{ saved_notes or '' }}</textarea>
                 </div>
             </div>
             {% endfor %}
         </div>
     </div>
 
-    <div class="d-grid gap-2 col-md-6 mx-auto">
-        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
-            <i class="bi bi-send me-2"></i>Submit Responses
-        </button>
-        <small class="text-center text-muted" id="submit-hint">Answer all questions to submit</small>
+    {% if not is_submitted %}
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-4 mb-2">
+            <button type="submit" name="action" value="draft" class="btn btn-outline-primary btn-lg w-100">
+                <i class="bi bi-save me-2"></i>Save Draft
+            </button>
+        </div>
+        <div class="col-md-4 mb-2">
+            <button type="submit" name="action" value="submit" class="btn btn-primary btn-lg w-100" id="submit-btn">
+                <i class="bi bi-send me-2"></i>Submit Final
+            </button>
+        </div>
     </div>
+    <p class="text-center text-muted" id="submit-hint">Answer all questions to submit. You can save a draft at any time.</p>
+    {% endif %}
 </form>
 
 <script>
@@ -110,6 +175,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const progressText = document.getElementById('progress-text');
     const submitBtn = document.getElementById('submit-btn');
     const submitHint = document.getElementById('submit-hint');
+    const loadDraftBtn = document.getElementById('load-draft-btn');
+    const vendorEmailInput = document.getElementById('vendor_email');
+    const vendorNameInput = document.getElementById('vendor_name');
+    const lastSavedSpan = document.getElementById('last-saved');
+    const lastSavedTime = document.getElementById('last-saved-time');
+    const isSubmitted = {{ 'true' if is_submitted else 'false' }};
     
     function updateProgress() {
         const answered = document.querySelectorAll('.answer-choice:checked').length;
@@ -122,23 +193,86 @@ document.addEventListener('DOMContentLoaded', function() {
         if (answered === totalQuestions) {
             progressText.classList.remove('bg-primary');
             progressText.classList.add('bg-success');
-            submitHint.textContent = 'All questions answered - ready to submit!';
-            submitHint.classList.add('text-success');
-            submitHint.classList.remove('text-muted');
+            if (submitHint) {
+                submitHint.textContent = 'All questions answered - ready to submit!';
+                submitHint.classList.add('text-success');
+                submitHint.classList.remove('text-muted');
+            }
         } else {
             progressText.classList.remove('bg-success');
             progressText.classList.add('bg-primary');
-            submitHint.textContent = 'Answer all questions to submit';
-            submitHint.classList.remove('text-success');
-            submitHint.classList.add('text-muted');
+            if (submitHint) {
+                submitHint.textContent = 'Answer all questions to submit. You can save a draft at any time.';
+                submitHint.classList.remove('text-success');
+                submitHint.classList.add('text-muted');
+            }
         }
     }
     
-    document.querySelectorAll('.answer-choice').forEach(function(radio) {
-        radio.addEventListener('change', updateProgress);
-    });
+    if (!isSubmitted) {
+        document.querySelectorAll('.answer-choice').forEach(function(radio) {
+            radio.addEventListener('change', updateProgress);
+        });
+    }
     
     updateProgress();
+    
+    if (loadDraftBtn && !isSubmitted) {
+        loadDraftBtn.addEventListener('click', async function() {
+            const email = vendorEmailInput.value.trim();
+            if (!email) {
+                alert('Please enter your email address first.');
+                return;
+            }
+            
+            loadDraftBtn.disabled = true;
+            loadDraftBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            
+            try {
+                const response = await fetch(`/api/vendor/{{ questionnaire.token }}/check-draft?email=${encodeURIComponent(email)}`);
+                const data = await response.json();
+                
+                if (data.found) {
+                    if (data.status === 'SUBMITTED') {
+                        alert('This questionnaire has already been submitted. Reloading page...');
+                        window.location.reload();
+                        return;
+                    }
+                    
+                    if (data.vendor_name) {
+                        vendorNameInput.value = data.vendor_name;
+                    }
+                    
+                    for (const [questionId, answerData] of Object.entries(data.answers)) {
+                        if (answerData.choice) {
+                            const radio = document.querySelector(`input[name="choice_${questionId}"][value="${answerData.choice}"]`);
+                            if (radio) radio.checked = true;
+                        }
+                        if (answerData.notes) {
+                            const notesField = document.querySelector(`textarea[name="notes_${questionId}"]`);
+                            if (notesField) notesField.value = answerData.notes;
+                        }
+                    }
+                    
+                    if (data.last_saved_at) {
+                        lastSavedTime.textContent = data.last_saved_at;
+                        lastSavedSpan.style.display = 'inline';
+                    }
+                    
+                    updateProgress();
+                    alert('Draft loaded successfully!');
+                } else {
+                    alert('No existing draft found for this email.');
+                }
+            } catch (error) {
+                console.error('Error loading draft:', error);
+                alert('Error loading draft. Please try again.');
+            } finally {
+                loadDraftBtn.disabled = false;
+                loadDraftBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

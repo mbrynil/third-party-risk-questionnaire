@@ -44,6 +44,10 @@ class Question(Base):
     questionnaire = relationship("Questionnaire", back_populates="questions")
 
 
+RESPONSE_STATUS_DRAFT = "DRAFT"
+RESPONSE_STATUS_SUBMITTED = "SUBMITTED"
+
+
 class Response(Base):
     __tablename__ = "responses"
 
@@ -51,7 +55,9 @@ class Response(Base):
     questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
     vendor_name = Column(String(255), nullable=False)
     vendor_email = Column(String(255), nullable=False)
+    status = Column(String(20), default=RESPONSE_STATUS_DRAFT, nullable=False)
     submitted_at = Column(DateTime, default=datetime.utcnow)
+    last_saved_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     questionnaire = relationship("Questionnaire", back_populates="responses")
     answers = relationship("Answer", back_populates="response", cascade="all, delete-orphan")
@@ -65,6 +71,7 @@ class Answer(Base):
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
     answer_choice = Column(String(20), nullable=True)
     answer_text = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
 
     response = relationship("Response", back_populates="answers")
     question = relationship("Question")

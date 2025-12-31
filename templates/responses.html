@@ -49,17 +49,23 @@
                     </td>
                     <td>
                         {% if q.responses|length > 0 %}
-                            {% set total_questions = q.questions|length %}
-                            {% set complete_responses = namespace(count=0) %}
+                            {% set submitted_count = namespace(count=0) %}
+                            {% set draft_count = namespace(count=0) %}
                             {% for resp in q.responses %}
-                                {% set answered = resp.answers | selectattr('answer_choice') | list | length %}
-                                {% if answered == total_questions %}
-                                    {% set complete_responses.count = complete_responses.count + 1 %}
+                                {% if resp.status == 'SUBMITTED' %}
+                                    {% set submitted_count.count = submitted_count.count + 1 %}
+                                {% else %}
+                                    {% set draft_count.count = draft_count.count + 1 %}
                                 {% endif %}
                             {% endfor %}
-                            <span class="badge {% if complete_responses.count == q.responses|length %}bg-success{% else %}bg-warning text-dark{% endif %}">
-                                {{ complete_responses.count }}/{{ q.responses|length }} complete
+                            <span class="badge bg-success me-1" title="Submitted">
+                                <i class="bi bi-check-circle me-1"></i>{{ submitted_count.count }}
                             </span>
+                            {% if draft_count.count > 0 %}
+                            <span class="badge bg-warning text-dark" title="Drafts">
+                                <i class="bi bi-file-earmark me-1"></i>{{ draft_count.count }}
+                            </span>
+                            {% endif %}
                         {% else %}
                             <span class="badge bg-secondary">0 responses</span>
                         {% endif %}

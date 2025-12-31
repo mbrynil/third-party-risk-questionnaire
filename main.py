@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
 
-from models import init_db, get_db, seed_question_bank, Questionnaire, Question, Response, Answer, QuestionBankItem, VALID_CHOICES
+from models import (
+    init_db, get_db, seed_question_bank, 
+    Questionnaire, Question, Response, Answer, QuestionBankItem, 
+    VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED
+)
+from datetime import datetime
 
 app = FastAPI(title="Third-Party Risk Questionnaire System")
 templates = Jinja2Templates(directory="templates")
@@ -106,7 +111,7 @@ async def create_questionnaire(
 
 
 @app.get("/vendor/{token}", response_class=HTMLResponse)
-async def vendor_form(request: Request, token: str, db: Session = Depends(get_db)):
+async def vendor_form(request: Request, token: str, email: Optional[str] = None, db: Session = Depends(get_db)):
     questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
     if not questionnaire:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
@@ -115,10 +120,19 @@ async def vendor_form(request: Request, token: str, db: Session = Depends(get_db
         Question.questionnaire_id == questionnaire.id
     ).order_by(Question.order).all()
     
+    existing_response = None
+    if email:
+        existing_response = db.query(Response).filter(
+            Response.questionnaire_id == questionnaire.id,
+            Response.vendor_email == email
+        ).first()
+    
     return templates.TemplateResponse("vendor_form.html", {
         "request": request,
         "questionnaire": questionnaire,
-        "questions": questions
+        "questions": questions,
+        "existing_response": existing_response,
+        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
     })
 
 
@@ -135,6 +149,7 @@ async def submit_vendor_response(
     form_data = await request.form()
     vendor_name = str(form_data.get("vendor_name", "")).strip()
     vendor_email = str(form_data.get("vendor_email", "")).strip()
+    action = str(form_data.get("action", "submit"))
     
     questions = db.query(Question).filter(
         Question.questionnaire_id == questionnaire.id
@@ -146,15 +161,31 @@ async def submit_vendor_response(
     if not vendor_email:
         errors.append("Contact email is required.")
     
-    missing_answers = []
-    for question in questions:
-        choice_key = f"choice_{question.id}"
-        choice_value = form_data.get(choice_key, "")
-        if not choice_value or choice_value not in VALID_CHOICES:
-            missing_answers.append(question)
+    existing_response = db.query(Response).filter(
+        Response.questionnaire_id == questionnaire.id,
+        Response.vendor_email == vendor_email
+    ).first()
     
-    if missing_answers:
-        errors.append(f"Please answer all questions. {len(missing_answers)} unanswered.")
+    if existing_response and existing_response.status == RESPONSE_STATUS_SUBMITTED:
+        return templates.TemplateResponse("vendor_form.html", {
+            "request": request,
+            "questionnaire": questionnaire,
+            "questions": questions,
+            "existing_response": existing_response,
+            "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+            "error": "You have already submitted this questionnaire. Editing is no longer allowed."
+        })
+    
+    if action == "submit":
+        missing_answers = []
+        for question in questions:
+            choice_key = f"choice_{question.id}"
+            choice_value = form_data.get(choice_key, "")
+            if not choice_value or choice_value not in VALID_CHOICES:
+                missing_answers.append(question)
+        
+        if missing_answers:
+            errors.append(f"Please answer all questions before submitting. {len(missing_answers)} unanswered.")
     
     if errors:
         return templates.TemplateResponse("vendor_form.html", {
@@ -162,40 +193,97 @@ async def submit_vendor_response(
             "questionnaire": questionnaire,
             "questions": questions,
             "error": " ".join(errors),
-            "form_data": dict(form_data)
+            "form_data": dict(form_data),
+            "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
         })
     
-    response = Response(
-        questionnaire_id=questionnaire.id,
-        vendor_name=vendor_name,
-        vendor_email=vendor_email
-    )
-    db.add(response)
-    db.flush()
+    if existing_response:
+        response = existing_response
+        response.vendor_name = vendor_name
+        response.last_saved_at = datetime.utcnow()
+        if action == "submit":
+            response.status = RESPONSE_STATUS_SUBMITTED
+            response.submitted_at = datetime.utcnow()
+        db.query(Answer).filter(Answer.response_id == response.id).delete()
+    else:
+        response = Response(
+            questionnaire_id=questionnaire.id,
+            vendor_name=vendor_name,
+            vendor_email=vendor_email,
+            status=RESPONSE_STATUS_SUBMITTED if action == "submit" else RESPONSE_STATUS_DRAFT
+        )
+        db.add(response)
+        db.flush()
     
     for question in questions:
         choice_key = f"choice_{question.id}"
-        choice_value = form_data.get(choice_key, "")
+        notes_key = f"notes_{question.id}"
+        choice_value = form_data.get(choice_key, "") or None
+        notes_value = str(form_data.get(notes_key, "")).strip() or None
         
         answer = Answer(
             response_id=response.id,
             question_id=question.id,
-            answer_choice=choice_value,
-            answer_text=None
+            answer_choice=choice_value if choice_value in VALID_CHOICES else None,
+            notes=notes_value
         )
         db.add(answer)
     
     db.commit()
     
-    return templates.TemplateResponse("submitted.html", {"request": request})
+    if action == "submit":
+        return templates.TemplateResponse("submitted.html", {"request": request})
+    else:
+        db.refresh(response)
+        return templates.TemplateResponse("vendor_form.html", {
+            "request": request,
+            "questionnaire": questionnaire,
+            "questions": questions,
+            "existing_response": response,
+            "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+            "success": f"Draft saved at {response.last_saved_at.strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        })
+
+
+@app.get("/api/vendor/{token}/check-draft")
+async def check_draft(token: str, email: str, db: Session = Depends(get_db)):
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+    if not questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    response = db.query(Response).filter(
+        Response.questionnaire_id == questionnaire.id,
+        Response.vendor_email == email
+    ).first()
+    
+    if not response:
+        return {"found": False}
+    
+    answers_dict = {}
+    for answer in response.answers:
+        answers_dict[str(answer.question_id)] = {
+            "choice": answer.answer_choice,
+            "notes": answer.notes or ""
+        }
+    
+    return {
+        "found": True,
+        "status": response.status,
+        "vendor_name": response.vendor_name,
+        "last_saved_at": response.last_saved_at.strftime('%Y-%m-%d %H:%M:%S') if response.last_saved_at else None,
+        "answers": answers_dict
+    }
 
 
 @app.get("/responses", response_class=HTMLResponse)
-async def view_responses(request: Request, db: Session = Depends(get_db)):
+async def view_responses(request: Request, status_filter: Optional[str] = None, db: Session = Depends(get_db)):
     questionnaires = db.query(Questionnaire).all()
     return templates.TemplateResponse("responses.html", {
         "request": request,
-        "questionnaires": questionnaires
+        "questionnaires": questionnaires,
+        "status_filter": status_filter,
+        "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
+        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
     })
 
 
@@ -203,15 +291,17 @@ async def view_responses(request: Request, db: Session = Depends(get_db)):
 async def view_questionnaire_responses(
     request: Request,
     questionnaire_id: int,
+    status_filter: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     questionnaire = db.query(Questionnaire).filter(Questionnaire.id == questionnaire_id).first()
     if not questionnaire:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     
-    responses = db.query(Response).filter(
-        Response.questionnaire_id == questionnaire_id
-    ).order_by(Response.submitted_at.desc()).all()
+    query = db.query(Response).filter(Response.questionnaire_id == questionnaire_id)
+    if status_filter and status_filter in [RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED]:
+        query = query.filter(Response.status == status_filter)
+    responses = query.order_by(Response.last_saved_at.desc()).all()
     
     questions = db.query(Question).filter(
         Question.questionnaire_id == questionnaire_id
@@ -221,7 +311,10 @@ async def view_questionnaire_responses(
         "request": request,
         "questionnaire": questionnaire,
         "responses": responses,
-        "questions": questions
+        "questions": questions,
+        "status_filter": status_filter,
+        "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
+        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
     })
 
 
