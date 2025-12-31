@@ -61,6 +61,7 @@ class Response(Base):
 
     questionnaire = relationship("Questionnaire", back_populates="responses")
     answers = relationship("Answer", back_populates="response", cascade="all, delete-orphan")
+    evidence_files = relationship("EvidenceFile", back_populates="response", cascade="all, delete-orphan")
 
 
 class Answer(Base):
@@ -75,6 +76,24 @@ class Answer(Base):
 
     response = relationship("Response", back_populates="answers")
     question = relationship("Question")
+
+
+class EvidenceFile(Base):
+    __tablename__ = "evidence_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    response_id = Column(Integer, ForeignKey("responses.id"), nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    stored_filename = Column(String(255), nullable=False)
+    stored_path = Column(String(512), nullable=False)
+    content_type = Column(String(100), nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    questionnaire = relationship("Questionnaire")
+    response = relationship("Response", back_populates="evidence_files")
+
 
 VALID_CHOICES = ["yes", "no", "partial", "na"]
 

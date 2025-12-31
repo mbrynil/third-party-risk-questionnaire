@@ -151,6 +151,30 @@
         </div>
     </div>
 
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-paperclip me-2"></i>Evidence Uploads
+            <span class="badge bg-secondary ms-2" id="file-count">0 files</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">Upload supporting documents (PDF, Word, Excel, images). Max 10MB per file.</p>
+            
+            <div id="evidence-list" class="mb-3"></div>
+            
+            {% if not is_submitted %}
+            <div class="mb-3">
+                <input type="file" class="form-control" id="evidence-file-input" 
+                       accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
+                       {% if is_submitted %}disabled{% endif %}>
+                <div class="form-text">Allowed: PDF, DOCX, XLSX, PNG, JPG, JPEG</div>
+            </div>
+            <div id="upload-status"></div>
+            {% else %}
+            <p class="text-muted mb-0"><i class="bi bi-lock me-1"></i>Uploads are disabled after submission.</p>
+            {% endif %}
+        </div>
+    </div>
+
     {% if not is_submitted %}
     <div class="row justify-content-center mb-4">
         <div class="col-md-4 mb-2">
@@ -260,6 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     updateProgress();
+                    loadEvidenceFiles();
                     alert('Draft loaded successfully!');
                 } else {
                     alert('No existing draft found for this email.');
@@ -273,6 +298,143 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    const evidenceFileInput = document.getElementById('evidence-file-input');
+    const evidenceList = document.getElementById('evidence-list');
+    const fileCount = document.getElementById('file-count');
+    const uploadStatus = document.getElementById('upload-status');
+    
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+    
+    function renderEvidenceList(files) {
+        fileCount.textContent = files.length + ' file' + (files.length !== 1 ? 's' : '');
+        
+        if (files.length === 0) {
+            evidenceList.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-folder2-open me-2"></i>No files uploaded yet.</p>';
+            return;
+        }
+        
+        let html = '<div class="list-group">';
+        files.forEach(file => {
+            html += `
+                <div class="list-group-item d-flex justify-content-between align-items-center" data-file-id="${file.id}">
+                    <div>
+                        <i class="bi bi-file-earmark me-2"></i>
+                        <a href="/evidence/${file.id}" target="_blank">${file.filename}</a>
+                        <small class="text-muted ms-2">${formatFileSize(file.size)}</small>
+                        <small class="text-muted ms-2">${file.uploaded_at}</small>
+                    </div>
+                    ${!isSubmitted ? `<button type="button" class="btn btn-sm btn-outline-danger delete-evidence-btn" data-id="${file.id}">
+                        <i class="bi bi-trash"></i>
+                    </button>` : ''}
+                </div>
+            `;
+        });
+        html += '</div>';
+        evidenceList.innerHTML = html;
+        
+        if (!isSubmitted) {
+            document.querySelectorAll('.delete-evidence-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const fileId = this.dataset.id;
+                    const email = vendorEmailInput.value.trim();
+                    if (!email) {
+                        alert('Please enter your email first.');
+                        return;
+                    }
+                    if (!confirm('Delete this file?')) return;
+                    
+                    try {
+                        const response = await fetch(`/vendor/{{ questionnaire.token }}/evidence/${fileId}?vendor_email=${encodeURIComponent(email)}`, {
+                            method: 'DELETE'
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                            loadEvidenceFiles();
+                        } else {
+                            alert(data.error || 'Error deleting file.');
+                        }
+                    } catch (error) {
+                        console.error('Delete error:', error);
+                        alert('Error deleting file.');
+                    }
+                });
+            });
+        }
+    }
+    
+    async function loadEvidenceFiles() {
+        const email = vendorEmailInput.value.trim();
+        if (!email) {
+            renderEvidenceList([]);
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/vendor/{{ questionnaire.token }}/evidence?email=${encodeURIComponent(email)}`);
+            const data = await response.json();
+            renderEvidenceList(data.files || []);
+        } catch (error) {
+            console.error('Error loading evidence:', error);
+        }
+    }
+    
+    if (evidenceFileInput && !isSubmitted) {
+        evidenceFileInput.addEventListener('change', async function() {
+            const file = this.files[0];
+            if (!file) return;
+            
+            const email = vendorEmailInput.value.trim();
+            const name = vendorNameInput.value.trim();
+            if (!email) {
+                alert('Please enter your email address before uploading files.');
+                this.value = '';
+                return;
+            }
+            
+            if (file.size > 10 * 1024 * 1024) {
+                alert('File too large. Maximum size is 10MB.');
+                this.value = '';
+                return;
+            }
+            
+            uploadStatus.innerHTML = '<div class="alert alert-info"><span class="spinner-border spinner-border-sm me-2"></span>Uploading...</div>';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('vendor_email', email);
+            formData.append('vendor_name', name);
+            
+            try {
+                const response = await fetch(`/vendor/{{ questionnaire.token }}/upload-evidence`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    uploadStatus.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>File uploaded successfully!</div>';
+                    loadEvidenceFiles();
+                    setTimeout(() => { uploadStatus.innerHTML = ''; }, 3000);
+                } else {
+                    uploadStatus.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${data.error}</div>`;
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                uploadStatus.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error uploading file.</div>';
+            }
+            
+            this.value = '';
+        });
+    }
+    
+    {% if existing_response %}
+    loadEvidenceFiles();
+    {% endif %}
 });
 </script>
 {% endblock %}

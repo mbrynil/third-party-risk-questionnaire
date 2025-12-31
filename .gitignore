@@ -12,3 +12,6 @@ wheels/
 
 # Database
 *.db
+
+# Uploads
+uploads/

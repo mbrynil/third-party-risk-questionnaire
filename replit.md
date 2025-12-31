@@ -23,6 +23,8 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 │   ├── submitted.html   # Submission confirmation
 │   ├── responses.html   # Questionnaire list with status counts
 │   └── questionnaire_responses.html  # Individual response details
+├── uploads/             # Evidence file storage (gitignored)
+│   └── {questionnaire_id}/{response_id}/  # Organized by questionnaire and response
 └── questionnaires.db    # SQLite database (auto-created)
 ```
 
@@ -39,6 +41,8 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Status Filtering**: Filter responses by DRAFT or SUBMITTED
 - **Completion Progress**: Visual progress bars per response
 - **Validation**: Server-side validation requires all answers for final submit
+- **Evidence Uploads**: Vendors can upload supporting documents (PDF, DOCX, XLSX, PNG, JPG, JPEG) up to 10MB per file
+- **Evidence Management**: View/download evidence files on admin dashboard, delete files before submission
 
 ## Pages
 - `/` - Home page with navigation
@@ -49,6 +53,10 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 
 ## API Endpoints
 - `GET /api/vendor/{token}/check-draft?email=` - Check for existing draft
+- `GET /api/vendor/{token}/evidence?email=` - List evidence files for a vendor
+- `POST /vendor/{token}/upload-evidence` - Upload evidence file (multipart form)
+- `DELETE /vendor/{token}/evidence/{id}?vendor_email=` - Delete evidence file
+- `GET /evidence/{id}` - Download evidence file
 
 ## How to Run
 ```bash
@@ -61,6 +69,7 @@ uvicorn main:app --host 0.0.0.0 --port 5000
 - **Question**: Question text, order, linked to questionnaire
 - **Response**: Vendor name, email, status (DRAFT/SUBMITTED), submitted_at, last_saved_at
 - **Answer**: Answer choice (yes/no/partial/na), notes, linked to question and response
+- **EvidenceFile**: original_filename, stored_filename, stored_path, content_type, size_bytes, uploaded_at, linked to questionnaire and response
 
 ## Schema Notes
 - When schema changes, delete questionnaires.db to recreate (dev only)

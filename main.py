@@ -1,16 +1,22 @@
-from fastapi import FastAPI, Request, Form, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
+import os
+import re
 
 from models import (
     init_db, get_db, seed_question_bank, 
-    Questionnaire, Question, Response, Answer, QuestionBankItem, 
+    Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile,
     VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED
 )
 from datetime import datetime
+
+UPLOAD_DIR = "uploads"
+ALLOWED_EXTENSIONS = {"pdf", "docx", "xlsx", "png", "jpg", "jpeg"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 app = FastAPI(title="Third-Party Risk Questionnaire System")
 templates = Jinja2Templates(directory="templates")
@@ -316,6 +322,182 @@ async def view_questionnaire_responses(
         "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
         "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED
     })
+
+
+def sanitize_filename(filename: str) -> str:
+    """Sanitize filename to prevent path traversal and unsafe characters."""
+    filename = os.path.basename(filename)
+    filename = re.sub(r'[^\w\s\-\.]', '', filename)
+    filename = filename.strip()
+    if not filename:
+        filename = "file"
+    return filename
+
+
+def get_file_extension(filename: str) -> str:
+    """Get lowercase file extension without the dot."""
+    if '.' in filename:
+        return filename.rsplit('.', 1)[1].lower()
+    return ""
+
+
+@app.post("/vendor/{token}/upload-evidence")
+async def upload_evidence(
+    token: str,
+    file: UploadFile = File(...),
+    vendor_email: str = Form(...),
+    vendor_name: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+    if not questionnaire:
+        return JSONResponse(status_code=404, content={"error": "Questionnaire not found"})
+    
+    ext = get_file_extension(file.filename or "")
+    if ext not in ALLOWED_EXTENSIONS:
+        return JSONResponse(status_code=400, content={"error": f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"})
+    
+    file_content = await file.read()
+    file_size = len(file_content)
+    if file_size > MAX_FILE_SIZE:
+        return JSONResponse(status_code=400, content={"error": f"File too large. Maximum size is 10MB."})
+    
+    existing_response = db.query(Response).filter(
+        Response.questionnaire_id == questionnaire.id,
+        Response.vendor_email == vendor_email
+    ).first()
+    
+    if existing_response and existing_response.status == RESPONSE_STATUS_SUBMITTED:
+        return JSONResponse(status_code=400, content={"error": "Cannot upload files after submission."})
+    
+    if existing_response:
+        response = existing_response
+    else:
+        response = Response(
+            questionnaire_id=questionnaire.id,
+            vendor_name=vendor_name or "Draft",
+            vendor_email=vendor_email,
+            status=RESPONSE_STATUS_DRAFT
+        )
+        db.add(response)
+        db.flush()
+    
+    upload_path = os.path.join(UPLOAD_DIR, str(questionnaire.id), str(response.id))
+    os.makedirs(upload_path, exist_ok=True)
+    
+    original_filename = sanitize_filename(file.filename or "file")
+    stored_filename = f"{uuid.uuid4().hex[:8]}_{original_filename}"
+    stored_path = os.path.join(upload_path, stored_filename)
+    
+    with open(stored_path, "wb") as f:
+        f.write(file_content)
+    
+    evidence = EvidenceFile(
+        questionnaire_id=questionnaire.id,
+        response_id=response.id,
+        original_filename=original_filename,
+        stored_filename=stored_filename,
+        stored_path=stored_path,
+        content_type=file.content_type or "application/octet-stream",
+        size_bytes=file_size
+    )
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+    
+    return JSONResponse(content={
+        "success": True,
+        "file": {
+            "id": evidence.id,
+            "filename": evidence.original_filename,
+            "size": evidence.size_bytes,
+            "uploaded_at": evidence.uploaded_at.strftime('%Y-%m-%d %H:%M')
+        }
+    })
+
+
+@app.get("/evidence/{evidence_id}")
+async def download_evidence(evidence_id: int, db: Session = Depends(get_db)):
+    evidence = db.query(EvidenceFile).filter(EvidenceFile.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    stored_path = str(evidence.stored_path)
+    if not os.path.exists(stored_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    
+    return FileResponse(
+        path=stored_path,
+        filename=str(evidence.original_filename),
+        media_type=str(evidence.content_type)
+    )
+
+
+@app.delete("/vendor/{token}/evidence/{evidence_id}")
+async def delete_evidence(
+    token: str,
+    evidence_id: int,
+    vendor_email: str,
+    db: Session = Depends(get_db)
+):
+    if not vendor_email or not vendor_email.strip():
+        return JSONResponse(status_code=400, content={"error": "Email is required"})
+    
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+    if not questionnaire:
+        return JSONResponse(status_code=404, content={"error": "Questionnaire not found"})
+    
+    evidence = db.query(EvidenceFile).filter(
+        EvidenceFile.id == evidence_id,
+        EvidenceFile.questionnaire_id == questionnaire.id
+    ).first()
+    if not evidence:
+        return JSONResponse(status_code=404, content={"error": "File not found"})
+    
+    response = db.query(Response).filter(Response.id == evidence.response_id).first()
+    if not response:
+        return JSONResponse(status_code=404, content={"error": "Response not found"})
+    
+    if response.vendor_email != vendor_email.strip():
+        return JSONResponse(status_code=403, content={"error": "Not authorized to delete this file"})
+    
+    if response.status == RESPONSE_STATUS_SUBMITTED:
+        return JSONResponse(status_code=400, content={"error": "Cannot delete files after submission"})
+    
+    stored_path = str(evidence.stored_path)
+    if os.path.exists(stored_path):
+        os.remove(stored_path)
+    
+    db.delete(evidence)
+    db.commit()
+    
+    return JSONResponse(content={"success": True})
+
+
+@app.get("/api/vendor/{token}/evidence")
+async def get_evidence_list(token: str, email: str, db: Session = Depends(get_db)):
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+    if not questionnaire:
+        return JSONResponse(status_code=404, content={"error": "Questionnaire not found"})
+    
+    response = db.query(Response).filter(
+        Response.questionnaire_id == questionnaire.id,
+        Response.vendor_email == email
+    ).first()
+    
+    if not response:
+        return JSONResponse(content={"files": []})
+    
+    files = []
+    for ev in response.evidence_files:
+        files.append({
+            "id": ev.id,
+            "filename": ev.original_filename,
+            "size": ev.size_bytes,
+            "uploaded_at": ev.uploaded_at.strftime('%Y-%m-%d %H:%M')
+        })
+    
+    return JSONResponse(content={"files": files})
 
 
 if __name__ == "__main__":
