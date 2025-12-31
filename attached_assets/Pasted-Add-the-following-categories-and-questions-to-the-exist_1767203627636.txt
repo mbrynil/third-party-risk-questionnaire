@@ -1,0 +1,203 @@
+Add the following categories and questions to the existing Question Bank using the same schema, model, and logic currently used for other questions.
+
+Do NOT modify existing functionality, UI, or database structure.
+Do NOT change how questions are rendered or answered.
+Use the existing default answer type (Yes / No / Partial / N/A).
+Preserve ordering as listed.
+
+Create categories if they do not already exist.
+
+⸻
+
+Category: System Categorization & Impact Assessment
+	1.	Do you classify systems and data based on their criticality, sensitivity, and business impact?
+	2.	What types of data does your organization process, store, or have access to (e.g., personal data, financial data, confidential business information)?
+	3.	Do you conduct regular impact or risk assessments for systems handling critical or sensitive data?
+	4.	Do you maintain a comprehensive and up-to-date inventory of all hardware, software, and digital assets?
+	5.	Do you have processes in place to prioritize and protect critical assets within your inventory?
+	6.	Are sensitive or high-impact systems categorized to ensure enhanced security controls are applied?
+
+⸻
+
+Category: Secure System Design & Architecture
+	1.	Do you incorporate security principles into system and application design and architecture?
+	2.	Are secure development practices embedded throughout your system development lifecycle (SDLC)?
+	3.	Are systems designed to mitigate vulnerabilities through controls such as segmentation, firewalls, or isolation mechanisms?
+	4.	Is phishing-resistant multi-factor authentication (MFA) enforced for privileged access or access to sensitive systems?
+	5.	Can multi-factor authentication (MFA) be enforced for all users, including contractors or third-party users?
+	6.	Does your system support integration with external identity providers (e.g., SSO providers)?
+
+⸻
+
+Category: Access Control
+	1.	Are all users authenticated using unique user accounts (no shared accounts)?
+	2.	Does authentication use currently supported, non-deprecated mechanisms?
+	3.	Does the application support role-based access control (RBAC) to restrict access to systems and data?
+	4.	Does the application support project-, tenant-, or resource-level access controls?
+	5.	Can customer administrators provision and deprovision user accounts without vendor assistance?
+	6.	Can customer administrators assign or revoke administrative privileges?
+	7.	Can customer administrators define and manage RBAC roles without vendor configuration changes?
+	8.	Can password complexity requirements be configured within the application?
+	9.	For users not authenticated via SSO, are password complexity rules enforced (length, character types, reuse, etc.)?
+	10.	Are access permissions reviewed and updated at least annually?
+	11.	Does the system support limits on concurrent user sessions?
+
+⸻
+
+Category: U.S. Citizenship & Legal Residency
+	1.	Can you verify U.S. citizenship or legal residency for personnel with administrative access to systems processing customer data?
+	2.	Can access to systems be restricted based on U.S. citizenship or residency requirements?
+	3.	Do you maintain documentation verifying personnel eligibility and access restrictions upon request?
+
+⸻
+
+Category: Continuous Monitoring
+	1.	Do you monitor systems for cybersecurity threats and vulnerabilities on a continuous basis?
+	2.	Do you maintain a security operations capability to detect and respond to threats?
+	3.	Do you monitor relevant threats, vulnerabilities, and attacker techniques?
+	4.	Are vulnerability scans and penetration tests performed regularly?
+	5.	Are provisioning and access changes logged?
+	6.	Are system, application, and user activities logged for security monitoring?
+	7.	Are data movement and modification events logged?
+	8.	Are logs available for compliance or audit review?
+	9.	Is access to critical systems logged and monitored for anomalies?
+	10.	Are logs analyzed using a SIEM or similar tooling?
+	11.	Are logs structured for ingestion into customer SIEM tools?
+	12.	Does the platform generate application-level audit logs?
+	13.	Are logs exportable via API, file transfer, or scheduled delivery?
+	14.	What user-level activity is logged for provisioning and privilege changes?
+	15.	What is the cadence for log availability (real-time, near-real-time, batch)?
+	16.	What mechanisms are supported for log delivery (API, syslog, file transfer)?
+	17.	Does the system support event-driven or near-real-time log forwarding?
+	18.	Are audit trails maintained for access and data modifications?
+	19.	Are authentication events logged and retained for sensitive systems?
+	20.	Are privileged account authentication events logged and retained?
+
+⸻
+
+Category: Incident Response & Reporting
+	1.	Are documented incident response procedures in place defining roles, escalation paths, and communication channels?
+	2.	Do incident procedures define timelines for notification and escalation?
+	3.	Are incidents involving sensitive or regulated data escalated promptly?
+	4.	Have you experienced a data breach in the past two years, and was it remediated?
+	5.	Are customers notified within a defined timeframe following incidents impacting their data or services?
+
+⸻
+
+Category: Risk & Compliance Assessment
+	1.	Do you conduct cybersecurity risk assessments regularly?
+	2.	Are risk assessments aligned with recognized frameworks (e.g., NIST, ISO)?
+	3.	Are remediation timelines defined based on risk severity?
+	4.	Do you verify remediation completion through testing or validation?
+	5.	Are third-party vulnerability assessments or penetration tests conducted?
+	6.	Are vendors included within your risk assessment process?
+
+⸻
+
+Category: Backup & Recovery
+	1.	Are backups performed for all critical systems storing customer data?
+	2.	Is backup data encrypted using strong encryption?
+	3.	Is backup data stored separately from production systems?
+	4.	What RTO and RPO targets are defined for restoring customer access and data?
+	5.	Are disaster recovery and restoration procedures tested at least annually?
+	6.	Is customer data included in disaster recovery and business continuity plans?
+	7.	Have you experienced major business disruptions, and how were they addressed?
+	8.	Do you use a third-party disaster recovery service provider?
+
+⸻
+
+Category: Configuration Management
+	1.	Do you maintain configuration baselines for critical systems?
+	2.	Are unauthorized configuration changes detected and prevented?
+	3.	Are default credentials removed or updated on deployed systems?
+	4.	Is a formal change management or change control process in place?
+
+⸻
+
+Category: Security Control Lifecycle Management
+	1.	Are security controls regularly reviewed and updated?
+	2.	Are controls tailored to meet customer or regulatory requirements?
+	3.	Are independent audits conducted to validate control effectiveness?
+	4.	Are changes to controls documented for audit purposes?
+	5.	Are controls securely decommissioned when no longer needed?
+
+⸻
+
+Category: Data Protection & Standard Encryption
+	1.	Is sensitive data encrypted at rest and in transit using strong encryption?
+	2.	Are encryption keys securely managed and protected?
+	3.	Are data flows restricted to authorized systems and personnel?
+	4.	Is customer data stored only in approved geographic regions?
+	5.	If stored outside approved regions, are safeguards in place?
+	6.	Is confidential data protected using file- or folder-level encryption?
+	7.	Are logical or physical controls in place to segregate customer data?
+	8.	Who is your primary cloud service provider?
+	9.	Can customers confirm where their data is stored?
+
+⸻
+
+Category: Information Classification
+	1.	Do you classify data based on sensitivity or regulatory requirements?
+	2.	Are classification labels communicated to personnel?
+	3.	Are handling requirements enforced based on classification?
+	4.	Are classifications reviewed and updated periodically?
+
+⸻
+
+Category: Cybersecurity Governance
+	1.	Are cybersecurity leadership roles and responsibilities formally defined?
+	2.	Are security policies documented, published, and enforced?
+	3.	Are policies aligned with recognized frameworks (NIST, ISO, CIS)?
+	4.	Are audits conducted to validate compliance?
+	5.	What password strength requirements are enforced?
+	6.	Is there a documented and enforced password policy?
+	7.	Is password reuse prevented?
+	8.	Is there a patch management policy or process?
+
+⸻
+
+Category: Advanced Encryption
+	1.	Is strong encryption (e.g., AES-256) used for sensitive or regulated data?
+	2.	Are encryption keys rotated according to policy?
+	3.	Do you support customer-managed encryption keys (BYOK / CMK)?
+	4.	Is access to encrypted data logged and monitored?
+
+⸻
+
+Category: Third-Party Risk Management
+	1.	Do you assess cybersecurity risks for third-party vendors?
+	2.	Are vendors required to meet defined security standards?
+	3.	Are subcontractors required to meet equivalent security requirements?
+	4.	Do contracts require vendors to report security incidents within defined timeframes?
+	5.	Are processes in place to manage and remediate third-party security incidents?
+
+⸻
+
+Category: Training & Security Awareness
+	1.	Do employees receive role-based cybersecurity training?
+	2.	Is security awareness training conducted at least annually?
+	3.	Are employees trained on applicable regulatory or compliance requirements?
+	4.	Is security awareness reinforced through ongoing activities such as phishing simulations?
+
+⸻
+
+Category: Physical & Environmental Security
+	1.	Are physical access controls in place to secure facilities and systems?
+	2.	Are physical security measures used to enforce least-privilege access?
+	3.	Is physical access to critical infrastructure monitored and logged?
+	4.	Are environmental controls in place to protect systems (fire suppression, temperature, power)?
+
+⸻
+
+Category: AI Governance & Data Control
+	1.	Is customer data used to train or improve AI models?
+	2.	Do you support masking, redaction, or tokenization of sensitive data prior to AI processing?
+	3.	Can customers restrict the types of data submitted to AI features?
+	4.	Are AI feature usage logs available for audit or SIEM ingestion?
+	5.	Where are AI models hosted and where is customer data processed?
+	6.	What controls protect access to AI models and customer data?
+	7.	Can AI features be disabled or restricted by the customer?
+
+⸻
+
+Ensure all questions are added using the existing question model and displayed under their respective categories. Preserve ordering. Do not modify any existing functionality or UI.
