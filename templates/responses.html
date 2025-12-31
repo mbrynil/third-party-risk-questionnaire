@@ -23,7 +23,7 @@
                     <th>Title</th>
                     <th>Questions</th>
                     <th>Created</th>
-                    <th>Responses</th>
+                    <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -58,16 +58,14 @@
                                     {% set draft_count.count = draft_count.count + 1 %}
                                 {% endif %}
                             {% endfor %}
-                            <span class="badge bg-success me-1" title="Submitted">
-                                <i class="bi bi-check-circle me-1"></i>{{ submitted_count.count }}
-                            </span>
-                            {% if draft_count.count > 0 %}
-                            <span class="badge bg-warning text-dark" title="Drafts">
-                                <i class="bi bi-file-earmark me-1"></i>{{ draft_count.count }}
-                            </span>
-                            {% endif %}
+                            <div>
+                                <span class="badge bg-success">SUBMITTED: {{ submitted_count.count }}</span>
+                            </div>
+                            <div class="mt-1">
+                                <span class="badge bg-warning text-dark">DRAFT: {{ draft_count.count }}</span>
+                            </div>
                         {% else %}
-                            <span class="badge bg-secondary">0 responses</span>
+                            <span class="text-muted">No responses</span>
                         {% endif %}
                     </td>
                     <td>
