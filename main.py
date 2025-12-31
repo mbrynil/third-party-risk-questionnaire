@@ -131,7 +131,7 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
         existing_response = db.query(Response).filter(
             Response.questionnaire_id == questionnaire.id,
             Response.vendor_email == email
-        ).first()
+        ).order_by(Response.last_saved_at.desc()).first()
     
     return templates.TemplateResponse("vendor_form.html", {
         "request": request,
@@ -171,7 +171,7 @@ async def submit_vendor_response(
     existing_response = db.query(Response).filter(
         Response.questionnaire_id == questionnaire.id,
         Response.vendor_email == vendor_email
-    ).first()
+    ).order_by(Response.last_saved_at.desc()).first()
     
     if existing_response and existing_response.status == RESPONSE_STATUS_SUBMITTED:
         return templates.TemplateResponse("vendor_form.html", {
@@ -264,7 +264,7 @@ async def check_draft(token: str, email: str, db: Session = Depends(get_db)):
     response = db.query(Response).filter(
         Response.questionnaire_id == questionnaire.id,
         Response.vendor_email == email
-    ).first()
+    ).order_by(Response.last_saved_at.desc()).first()
     
     if not response:
         return {"found": False}
