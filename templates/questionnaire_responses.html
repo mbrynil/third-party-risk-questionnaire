@@ -57,6 +57,58 @@
         </div>
         
         {% if responses %}
+            <div class="card mb-4">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Vendor</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Progress</th>
+                                <th>Last Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for response in responses %}
+                            {% set answered_count = response.answers | selectattr('answer_choice') | list | length %}
+                            <tr>
+                                <td><strong>{{ response.vendor_name }}</strong></td>
+                                <td><a href="mailto:{{ response.vendor_email }}">{{ response.vendor_email }}</a></td>
+                                <td>
+                                    {% if response.status == RESPONSE_STATUS_SUBMITTED %}
+                                    <span class="badge bg-success">SUBMITTED</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark">DRAFT</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-2" style="height: 6px; width: 80px;">
+                                            <div class="progress-bar {% if answered_count == questions|length %}bg-success{% else %}bg-warning{% endif %}" 
+                                                 style="width: {{ (answered_count / questions|length * 100) if questions|length > 0 else 0 }}%"></div>
+                                        </div>
+                                        <small>{{ answered_count }}/{{ questions|length }}</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        {% if response.status == RESPONSE_STATUS_SUBMITTED %}
+                                        {{ response.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                                        {% else %}
+                                        {{ response.last_saved_at.strftime('%Y-%m-%d %H:%M') if response.last_saved_at else 'N/A' }}
+                                        {% endif %}
+                                    </small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <h6 class="mb-3 text-muted"><i class="bi bi-card-list me-2"></i>Response Details</h6>
+            
             {% for response in responses %}
             <div class="card mb-3">
                 {% set answers_dict = {} %}
