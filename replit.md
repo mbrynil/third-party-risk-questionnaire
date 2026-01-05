@@ -30,6 +30,7 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 
 ## Features
 - **Question Bank**: ~170+ curated GRC questions across 25 categories
+- **Question Weights**: Company A can assign weights (Low/Medium/High/Critical) to each question during questionnaire creation
 - **Answer Choices**: Pre-filled buttons (Yes/No/Partial/N/A) instead of text
 - **Notes Field**: Optional notes/comments per question
 - **Save Draft**: Vendors can save partial progress and resume later
