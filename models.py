@@ -33,6 +33,13 @@ class Questionnaire(Base):
     responses = relationship("Response", back_populates="questionnaire", cascade="all, delete-orphan")
 
 
+WEIGHT_LOW = "LOW"
+WEIGHT_MEDIUM = "MEDIUM"
+WEIGHT_HIGH = "HIGH"
+WEIGHT_CRITICAL = "CRITICAL"
+VALID_WEIGHTS = [WEIGHT_LOW, WEIGHT_MEDIUM, WEIGHT_HIGH, WEIGHT_CRITICAL]
+
+
 class Question(Base):
     __tablename__ = "questions"
 
@@ -40,6 +47,7 @@ class Question(Base):
     questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
     question_text = Column(Text, nullable=False)
     order = Column(Integer, default=0)
+    weight = Column(String(20), default=WEIGHT_MEDIUM, nullable=False)
 
     questionnaire = relationship("Questionnaire", back_populates="questions")
 

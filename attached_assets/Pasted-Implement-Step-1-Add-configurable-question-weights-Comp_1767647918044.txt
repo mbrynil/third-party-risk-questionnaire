@@ -1,0 +1,33 @@
+Implement Step 1: Add configurable question weights (Company A only).
+This iteration is metadata only — do not implement scoring, risk calculations, expected answers, thresholds, or any other logic.
+
+Core requirements
+	1.	Add a weight field to each question instance inside a questionnaire (NOT the global question bank item).
+	•	Weight options: LOW, MEDIUM, HIGH, CRITICAL
+	•	Default: MEDIUM for all questions unless explicitly set by Company A
+	2.	Company A sets/edits weights during questionnaire creation/configuration:
+	•	On the questionnaire builder/selection screen (where Company A chooses questions), show a weight dropdown next to each selected question.
+	•	If it’s easier with the current UI, allow weights to be edited on the “review selected questions” page after selection.
+	•	Keep the UI clean; it’s OK if the dropdown is small.
+	3.	Vendor must NOT see weights:
+	•	Do not display weights on vendor questionnaire pages.
+	•	Vendors cannot modify weights.
+	4.	Persistence:
+	•	Save the selected weight per question in the questionnaire.
+	•	If the questionnaire stores questions in JSON, include weight alongside the question text and any identifiers.
+	•	If the questionnaire stores questions in a table, add a column for weight.
+	5.	Display (Company A only):
+	•	On Company A’s submission review/detail page, display the weight next to the question (e.g., a small badge “Medium”).
+	•	On the responses dashboard list, no change required (optional to show overall counts later).
+
+Constraints / guardrails
+	•	Do NOT change how vendors answer questions.
+	•	Do NOT add scoring, risk rating, category scoring, thresholds, or any calculations.
+	•	Do NOT change the question bank categories/questions.
+	•	Keep all existing routes and functionality intact (drafts, follow-ups, uploads, export, status bar).
+	•	It is OK to recreate SQLite DB during development if needed.
+
+Acceptance criteria
+	•	Company A can set weight per selected question (default Medium).
+	•	Weights save correctly and appear on Company A review/detail view.
+	•	Vendor view is unchanged and does not show weights.

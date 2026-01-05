@@ -77,11 +77,21 @@
                 <div class="list-group">
                     {% for item in items %}
                     <label class="list-group-item list-group-item-action question-item" data-text="{{ item.text|lower }}">
-                        <div class="d-flex align-items-start">
-                            <input class="form-check-input me-3 mt-1 question-checkbox" 
-                                   type="checkbox" name="question_ids" value="{{ item.id }}"
-                                   data-category="{{ category }}">
-                            <span>{{ item.text }}</span>
+                        <div class="d-flex align-items-start justify-content-between">
+                            <div class="d-flex align-items-start flex-grow-1">
+                                <input class="form-check-input me-3 mt-1 question-checkbox" 
+                                       type="checkbox" name="question_ids" value="{{ item.id }}"
+                                       data-category="{{ category }}" data-qid="{{ item.id }}">
+                                <span>{{ item.text }}</span>
+                            </div>
+                            <select class="form-select form-select-sm weight-select ms-2" 
+                                    name="weight_{{ item.id }}" style="width: 100px; display: none;"
+                                    data-qid="{{ item.id }}">
+                                <option value="LOW">Low</option>
+                                <option value="MEDIUM" selected>Medium</option>
+                                <option value="HIGH">High</option>
+                                <option value="CRITICAL">Critical</option>
+                            </select>
                         </div>
                     </label>
                     {% endfor %}
@@ -129,7 +139,10 @@ document.addEventListener('DOMContentLoaded', function() {
     updateSelectedCount();
     
     document.querySelectorAll('.question-checkbox').forEach(function(checkbox) {
-        checkbox.addEventListener('change', updateSelectedCount);
+        checkbox.addEventListener('change', function() {
+            updateSelectedCount();
+            toggleWeightSelect(this);
+        });
     });
     
     document.getElementById('searchQuestions').addEventListener('input', function(e) {
@@ -159,10 +172,29 @@ function updateSelectedCount() {
     document.getElementById('selectedCount').textContent = count;
 }
 
+function selectCategory(category) {
+    document.querySelectorAll('.question-checkbox[data-category="' + category + '"]').forEach(function(checkbox) {
+        if (checkbox.closest('.question-item').style.display !== 'none') {
+            checkbox.checked = true;
+            toggleWeightSelect(checkbox);
+        }
+    });
+    updateSelectedCount();
+}
+
+function toggleWeightSelect(checkbox) {
+    const qid = checkbox.dataset.qid;
+    const weightSelect = document.querySelector('.weight-select[data-qid="' + qid + '"]');
+    if (weightSelect) {
+        weightSelect.style.display = checkbox.checked ? 'block' : 'none';
+    }
+}
+
 function selectAll() {
     document.querySelectorAll('.question-checkbox').forEach(function(checkbox) {
         if (checkbox.closest('.question-item').style.display !== 'none') {
             checkbox.checked = true;
+            toggleWeightSelect(checkbox);
         }
     });
     updateSelectedCount();
@@ -171,15 +203,7 @@ function selectAll() {
 function deselectAll() {
     document.querySelectorAll('.question-checkbox').forEach(function(checkbox) {
         checkbox.checked = false;
-    });
-    updateSelectedCount();
-}
-
-function selectCategory(category) {
-    document.querySelectorAll('.question-checkbox[data-category="' + category + '"]').forEach(function(checkbox) {
-        if (checkbox.closest('.question-item').style.display !== 'none') {
-            checkbox.checked = true;
-        }
+        toggleWeightSelect(checkbox);
     });
     updateSelectedCount();
 }

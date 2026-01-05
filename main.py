@@ -84,10 +84,14 @@ async def create_questionnaire(
     for qid in question_ids:
         bank_item = db.query(QuestionBankItem).filter(QuestionBankItem.id == int(str(qid))).first()
         if bank_item:
+            weight = form_data.get(f"weight_{qid}", "MEDIUM")
+            if weight not in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
+                weight = "MEDIUM"
             question = Question(
                 questionnaire_id=questionnaire.id,
                 question_text=bank_item.text,
-                order=order
+                order=order,
+                weight=weight
             )
             db.add(question)
             order += 1
