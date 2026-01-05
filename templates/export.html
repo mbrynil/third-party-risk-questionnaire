@@ -265,6 +265,15 @@
         {% set answer = answers_dict.get(question.id) %}
         <div class="question-block">
             <span class="question-number">Question {{ loop.index }}</span>
+            {% if question.weight == 'LOW' %}
+            <span class="badge bg-secondary ms-2" style="font-size: 0.7rem;">Low Weight</span>
+            {% elif question.weight == 'HIGH' %}
+            <span class="badge bg-warning text-dark ms-2" style="font-size: 0.7rem;">High Weight</span>
+            {% elif question.weight == 'CRITICAL' %}
+            <span class="badge bg-danger ms-2" style="font-size: 0.7rem;">Critical Weight</span>
+            {% else %}
+            <span class="badge bg-info text-dark ms-2" style="font-size: 0.7rem;">Medium Weight</span>
+            {% endif %}
             <p class="question-text">{{ question.question_text }}</p>
             <div class="answer-row">
                 <div>
