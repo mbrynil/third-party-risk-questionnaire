@@ -1,0 +1,40 @@
+Implement Step 2: Add optional “Expected Answer” configuration for Company A (internal only).
+This iteration is metadata only — do not implement scoring, risk calculations, pass/fail, conditional branching, or thresholds yet.
+
+Core requirements
+	1.	Add optional expected-answer fields to each question instance inside a questionnaire (NOT the global question bank):
+	•	expected_operator (string/enum) with default EQUALS
+	•	expected_value (nullable string)
+	•	(Optional but recommended for future-proofing) expected_value_type with values: CHOICE, NUMBER, TEXT
+	•	Default CHOICE for Yes/No/Partial/N/A questions
+	•	If your app doesn’t track types yet, you can set expected_value_type = TEXT by default and still store the expected value.
+	2.	Company A can set/edit expected answers during questionnaire creation/configuration:
+	•	On the Company A questionnaire builder/config screen, next to each selected question (where weight exists), add an “Expected Answer” input.
+	•	Keep it low-friction: it should be optional and default blank.
+	•	UI behavior:
+	•	For standard Yes/No/Partial/N/A questions: show a dropdown with options Yes, No, Partial, N/A, and blank (no expectation).
+	•	For any other questions or unknown type: show a simple text input (placeholder like “Optional: expected answer / requirement”).
+	•	Keep expected_operator hidden for now (default it to EQUALS), but store it for future conditional logic support.
+	3.	Vendor must NOT see expected answers:
+	•	Do not render expected answers on vendor questionnaire pages.
+	•	Vendors cannot modify expected answers.
+	4.	Persistence:
+	•	Save expected fields per question in the questionnaire.
+	•	If questions are stored in JSON, add expected_operator, expected_value, and optionally expected_value_type alongside weight.
+	•	If questions are stored in a table, add columns for these fields.
+	5.	Display (Company A only):
+	•	On Company A’s submission review/detail page, display expected answer next to the question in a subtle way (e.g., “Expected: Yes”), only if set.
+	•	On exports (PDF/CSV), include expected answer (and weight) for Company A exports, but do not include expected answer on any vendor-facing export/link.
+
+Constraints / guardrails
+	•	Do NOT implement scoring, risk rating, or calculations.
+	•	Do NOT implement conditional branching yet.
+	•	Do NOT change vendor answering UX.
+	•	Do NOT change the question bank categories/questions.
+	•	Keep existing routes intact (drafts, uploads, follow-ups, export, status/progress).
+	•	It’s OK to recreate SQLite DB during development if needed.
+
+Acceptance criteria
+	•	Company A can optionally set an expected answer per question (blank by default).
+	•	Expected answers persist and are visible to Company A on review/export.
+	•	Vendor view remains unchanged and does not show expected answers.

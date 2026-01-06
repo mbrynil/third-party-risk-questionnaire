@@ -92,6 +92,15 @@
                                 <option value="HIGH">High</option>
                                 <option value="CRITICAL">Critical</option>
                             </select>
+                            <select class="form-select form-select-sm expected-select ms-2" 
+                                    name="expected_{{ item.id }}" style="width: 110px; display: none;"
+                                    data-qid="{{ item.id }}">
+                                <option value="">Expected...</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                                <option value="partial">Partial</option>
+                                <option value="na">N/A</option>
+                            </select>
                         </div>
                     </label>
                     {% endfor %}
@@ -185,8 +194,12 @@ function selectCategory(category) {
 function toggleWeightSelect(checkbox) {
     const qid = checkbox.dataset.qid;
     const weightSelect = document.querySelector('.weight-select[data-qid="' + qid + '"]');
+    const expectedSelect = document.querySelector('.expected-select[data-qid="' + qid + '"]');
     if (weightSelect) {
         weightSelect.style.display = checkbox.checked ? 'block' : 'none';
+    }
+    if (expectedSelect) {
+        expectedSelect.style.display = checkbox.checked ? 'block' : 'none';
     }
 }
 

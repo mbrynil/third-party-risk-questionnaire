@@ -39,6 +39,14 @@ WEIGHT_HIGH = "HIGH"
 WEIGHT_CRITICAL = "CRITICAL"
 VALID_WEIGHTS = [WEIGHT_LOW, WEIGHT_MEDIUM, WEIGHT_HIGH, WEIGHT_CRITICAL]
 
+OPERATOR_EQUALS = "EQUALS"
+VALID_OPERATORS = [OPERATOR_EQUALS]
+
+VALUE_TYPE_CHOICE = "CHOICE"
+VALUE_TYPE_NUMBER = "NUMBER"
+VALUE_TYPE_TEXT = "TEXT"
+VALID_VALUE_TYPES = [VALUE_TYPE_CHOICE, VALUE_TYPE_NUMBER, VALUE_TYPE_TEXT]
+
 
 class Question(Base):
     __tablename__ = "questions"
@@ -48,6 +56,9 @@ class Question(Base):
     question_text = Column(Text, nullable=False)
     order = Column(Integer, default=0)
     weight = Column(String(20), default=WEIGHT_MEDIUM, nullable=False)
+    expected_operator = Column(String(20), default=OPERATOR_EQUALS, nullable=False)
+    expected_value = Column(String(50), nullable=True)
+    expected_value_type = Column(String(20), default=VALUE_TYPE_CHOICE, nullable=False)
 
     questionnaire = relationship("Questionnaire", back_populates="questions")
 

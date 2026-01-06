@@ -87,11 +87,17 @@ async def create_questionnaire(
             weight = form_data.get(f"weight_{qid}", "MEDIUM")
             if weight not in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
                 weight = "MEDIUM"
+            expected_value = form_data.get(f"expected_{qid}", "") or None
+            if expected_value == "":
+                expected_value = None
             question = Question(
                 questionnaire_id=questionnaire.id,
                 question_text=bank_item.text,
                 order=order,
-                weight=weight
+                weight=weight,
+                expected_operator="EQUALS",
+                expected_value=expected_value,
+                expected_value_type="CHOICE"
             )
             db.add(question)
             order += 1
@@ -102,7 +108,11 @@ async def create_questionnaire(
             question = Question(
                 questionnaire_id=questionnaire.id,
                 question_text=q_text,
-                order=order
+                order=order,
+                weight="MEDIUM",
+                expected_operator="EQUALS",
+                expected_value=None,
+                expected_value_type="CHOICE"
             )
             db.add(question)
             order += 1
