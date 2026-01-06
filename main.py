@@ -10,7 +10,8 @@ import re
 from models import (
     init_db, get_db, seed_question_bank, 
     Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile, FollowUp,
-    VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO
+    VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO,
+    compute_expectation_status
 )
 from datetime import datetime
 
@@ -332,12 +333,23 @@ async def view_questionnaire_responses(
         Question.questionnaire_id == questionnaire_id
     ).order_by(Question.order).all()
     
+    eval_dicts = {}
+    for resp in responses:
+        answers_dict = {a.question_id: a for a in resp.answers}
+        eval_dict = {}
+        for q in questions:
+            answer = answers_dict.get(q.id)
+            answer_choice = answer.answer_choice if answer else None
+            eval_dict[q.id] = compute_expectation_status(q.expected_value, answer_choice)
+        eval_dicts[resp.id] = eval_dict
+    
     return templates.TemplateResponse("questionnaire_responses.html", {
         "request": request,
         "questionnaire": questionnaire,
         "responses": responses,
         "questions": questions,
         "status_filter": status_filter,
+        "eval_dicts": eval_dicts,
         "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
         "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
         "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
@@ -616,6 +628,12 @@ async def export_submission(request: Request, submission_id: int, db: Session = 
     for answer in response.answers:
         answers_dict[answer.question_id] = answer
     
+    eval_dict = {}
+    for q in questions:
+        answer = answers_dict.get(q.id)
+        answer_choice = answer.answer_choice if answer else None
+        eval_dict[q.id] = compute_expectation_status(q.expected_value, answer_choice)
+    
     answered_count = sum(1 for a in response.answers if a.answer_choice)
     total_questions = len(questions)
     completion_percent = (answered_count / total_questions * 100) if total_questions > 0 else 0
@@ -634,6 +652,7 @@ async def export_submission(request: Request, submission_id: int, db: Session = 
         "questionnaire": questionnaire,
         "questions": questions,
         "answers_dict": answers_dict,
+        "eval_dict": eval_dict,
         "completion_percent": completion_percent,
         "answered_count": answered_count,
         "evidence_files": evidence_files,

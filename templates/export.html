@@ -278,6 +278,16 @@
             {% if question.expected_value %}
             <span class="text-muted ms-2" style="font-size: 0.75rem;"><i class="bi bi-bullseye me-1"></i>Expected: {{ question.expected_value|capitalize }}</span>
             {% endif %}
+            {% set eval_status = eval_dict.get(question.id, 'NO_EXPECTATION_DEFINED') if eval_dict else 'NO_EXPECTATION_DEFINED' %}
+            {% if eval_status == 'MEETS_EXPECTATION' %}
+            <span class="badge bg-success ms-2" style="font-size: 0.7rem;"><i class="bi bi-check-circle me-1"></i>Meets</span>
+            {% elif eval_status == 'PARTIALLY_MEETS_EXPECTATION' %}
+            <span class="badge bg-warning text-dark ms-2" style="font-size: 0.7rem;"><i class="bi bi-dash-circle me-1"></i>Partially Meets</span>
+            {% elif eval_status == 'DOES_NOT_MEET_EXPECTATION' %}
+            <span class="badge bg-danger ms-2" style="font-size: 0.7rem;"><i class="bi bi-x-circle me-1"></i>Does Not Meet</span>
+            {% else %}
+            <span class="badge bg-light text-muted ms-2" style="font-size: 0.7rem;">No Expectation</span>
+            {% endif %}
             <p class="question-text">{{ question.question_text }}</p>
             <div class="answer-row">
                 <div>

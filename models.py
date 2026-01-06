@@ -131,6 +131,34 @@ class FollowUp(Base):
 
 VALID_CHOICES = ["yes", "no", "partial", "na"]
 
+EVAL_MEETS = "MEETS_EXPECTATION"
+EVAL_PARTIAL = "PARTIALLY_MEETS_EXPECTATION"
+EVAL_DOES_NOT_MEET = "DOES_NOT_MEET_EXPECTATION"
+EVAL_NO_EXPECTATION = "NO_EXPECTATION_DEFINED"
+
+
+def compute_expectation_status(expected_value, answer_choice):
+    """
+    Compute evaluation status by comparing vendor answer to expected answer.
+    Returns one of: EVAL_MEETS, EVAL_PARTIAL, EVAL_DOES_NOT_MEET, EVAL_NO_EXPECTATION
+    """
+    if not expected_value:
+        return EVAL_NO_EXPECTATION
+    
+    if not answer_choice:
+        return EVAL_DOES_NOT_MEET
+    
+    expected_lower = expected_value.lower()
+    answer_lower = answer_choice.lower()
+    
+    if answer_lower == expected_lower:
+        return EVAL_MEETS
+    
+    if answer_lower == "partial" and expected_lower == "yes":
+        return EVAL_PARTIAL
+    
+    return EVAL_DOES_NOT_MEET
+
 
 def init_db():
     Base.metadata.create_all(bind=engine)

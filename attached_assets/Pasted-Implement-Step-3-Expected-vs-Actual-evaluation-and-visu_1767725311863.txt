@@ -1,0 +1,80 @@
+Implement Step 3: Expected-vs-Actual evaluation and visual highlighting for Company A.
+This step adds visual evaluation only — do not implement scoring, numeric aggregation, risk totals, or category rollups.
+
+⸻
+
+Core behavior
+
+For each answered question in a submission, compute an evaluation status by comparing the vendor’s answer to the Company A–defined expected answer.
+
+Possible evaluation states:
+	•	MEETS_EXPECTATION
+	•	PARTIALLY_MEETS_EXPECTATION
+	•	DOES_NOT_MEET_EXPECTATION
+	•	NO_EXPECTATION_DEFINED
+
+⸻
+
+Evaluation logic (V1 – keep simple)
+	1.	If expected_value is null or empty:
+	•	Status = NO_EXPECTATION_DEFINED
+	2.	If question uses standard choice answers (Yes / No / Partial / N/A) and expected_operator = EQUALS:
+	•	Vendor answer == expected_value → MEETS_EXPECTATION
+	•	Vendor answer == Partial and expected_value == Yes → PARTIALLY_MEETS_EXPECTATION
+	•	Vendor answer != expected_value → DOES_NOT_MEET_EXPECTATION
+	3.	For non-standard or text answers:
+	•	If expected_value is defined but cannot be reliably compared:
+	•	Status = PARTIALLY_MEETS_EXPECTATION
+	•	(No advanced parsing required in this iteration)
+
+⸻
+
+UI requirements (Company A only)
+	1.	On the submission review/detail page:
+	•	Display a clear visual indicator next to each question:
+	•	Green badge: “Meets”
+	•	Yellow badge: “Partially Meets”
+	•	Red badge: “Does Not Meet”
+	•	Grey badge: “No Expectation”
+	•	Display weight and expected answer alongside this status (Company A only).
+	2.	On the responses dashboard:
+	•	Optionally show counts per submission (e.g., X Meets, Y Partial, Z Does Not Meet).
+	•	Do not change overall submission status yet.
+	3.	On exports (PDF):
+	•	Include the evaluation status badge/text per question.
+	•	Include weight and expected answer.
+	•	Vendor-facing links or exports must NOT show expected answers or evaluation status.
+
+⸻
+
+Vendor visibility
+	•	Vendors must NOT see:
+	•	expected answers
+	•	evaluation status
+	•	weights
+	•	Vendor questionnaire experience remains unchanged.
+
+⸻
+
+Persistence
+	•	Evaluation status may be:
+	•	computed dynamically at render time, OR
+	•	stored per answered question for performance
+	•	Either approach is acceptable.
+
+⸻
+
+Constraints / guardrails
+	•	Do NOT implement scoring, numeric risk values, or aggregation.
+	•	Do NOT implement category risk or overall risk.
+	•	Do NOT implement conditional branching yet.
+	•	Keep all existing functionality intact (drafts, uploads, follow-ups).
+	•	Minimal UI changes; use existing styling patterns.
+
+⸻
+
+Acceptance criteria
+	•	Company A can clearly see which answers meet, partially meet, or do not meet expectations.
+	•	Highlighting is accurate for standard Yes/No/Partial questions.
+	•	Vendor UI is unchanged.
+	•	Export reflects the same evaluation for Company A.
