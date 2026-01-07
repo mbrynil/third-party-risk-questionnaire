@@ -91,6 +91,9 @@ async def create_questionnaire(
             expected_value = form_data.get(f"expected_{qid}", "") or None
             if expected_value == "":
                 expected_value = None
+            answer_mode = form_data.get(f"answer_mode_{qid}", "SINGLE")
+            if answer_mode not in ["SINGLE", "MULTI"]:
+                answer_mode = "SINGLE"
             question = Question(
                 questionnaire_id=questionnaire.id,
                 question_text=bank_item.text,
@@ -98,7 +101,8 @@ async def create_questionnaire(
                 weight=weight,
                 expected_operator="EQUALS",
                 expected_value=expected_value,
-                expected_value_type="CHOICE"
+                expected_value_type="CHOICE",
+                answer_mode=answer_mode
             )
             db.add(question)
             order += 1
@@ -113,7 +117,8 @@ async def create_questionnaire(
                 weight="MEDIUM",
                 expected_operator="EQUALS",
                 expected_value=None,
-                expected_value_type="CHOICE"
+                expected_value_type="CHOICE",
+                answer_mode="SINGLE"
             )
             db.add(question)
             order += 1

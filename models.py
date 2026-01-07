@@ -47,6 +47,10 @@ VALUE_TYPE_NUMBER = "NUMBER"
 VALUE_TYPE_TEXT = "TEXT"
 VALID_VALUE_TYPES = [VALUE_TYPE_CHOICE, VALUE_TYPE_NUMBER, VALUE_TYPE_TEXT]
 
+ANSWER_MODE_SINGLE = "SINGLE"
+ANSWER_MODE_MULTI = "MULTI"
+VALID_ANSWER_MODES = [ANSWER_MODE_SINGLE, ANSWER_MODE_MULTI]
+
 
 class Question(Base):
     __tablename__ = "questions"
@@ -59,6 +63,7 @@ class Question(Base):
     expected_operator = Column(String(20), default=OPERATOR_EQUALS, nullable=False)
     expected_value = Column(String(50), nullable=True)
     expected_value_type = Column(String(20), default=VALUE_TYPE_CHOICE, nullable=False)
+    answer_mode = Column(String(20), default=ANSWER_MODE_SINGLE, nullable=False)
 
     questionnaire = relationship("Questionnaire", back_populates="questions")
 

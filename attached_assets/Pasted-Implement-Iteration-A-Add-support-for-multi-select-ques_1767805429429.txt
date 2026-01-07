@@ -1,0 +1,95 @@
+Implement Iteration A: Add support for multi-select questions so vendors can choose one or more options for certain questions.
+This iteration only adds multi-select behavior. Do not change scoring, expected-answer comparison logic, or conditional rules yet.
+
+⸻
+
+1) Data model changes
+
+For each question instance inside a questionnaire (NOT the global question bank item):
+	•	Add a field answer_mode with possible values:
+	•	SINGLE (default; current behavior)
+	•	MULTI (new; allows multiple selections)
+
+Behavior:
+	•	Existing questions default to SINGLE.
+	•	New questions also default to SINGLE unless Company A changes it.
+
+For vendor answers:
+	•	If answer_mode == SINGLE:
+	•	Keep the existing storage format (string, e.g., “Yes”, “No”, etc.).
+	•	If answer_mode == MULTI:
+	•	Store the vendor’s answer as a list/array of selected option values (e.g., JSON array of strings like ["12h", "24h"]).
+
+⸻
+
+2) Company A configuration (builder side)
+
+On the Company A questionnaire builder / configuration UI, where questions are listed with weight and expected answer:
+	•	Add a control for Answer Type per question:
+	•	Label: Answer type
+	•	Options:
+	•	Single Choice (maps to SINGLE)
+	•	Multi-Select (maps to MULTI)
+	•	Default selection is Single Choice.
+
+This allows Company A to specify whether a question should be answered with:
+	•	a single choice (current behavior), or
+	•	multiple choices (new behavior).
+
+⸻
+
+3) Vendor UI changes
+
+On the vendor questionnaire page:
+	•	If answer_mode == SINGLE:
+	•	Keep the current UI exactly as-is (radio buttons or single-select dropdown).
+	•	If answer_mode == MULTI:
+	•	Render the options as checkboxes so the vendor can select one or more answers.
+	•	Ensure the UX clearly shows they can pick multiple values.
+
+When the vendor submits:
+	•	For MULTI, send and store all selected values (e.g., as an array / JSON list).
+
+⸻
+
+4) Company A review & export UI
+
+On the Company A submission review/detail page:
+	•	If the question is SINGLE:
+	•	Show the answer as it is now (single value).
+	•	If the question is MULTI:
+	•	Display all selected answers in a readable format (e.g., comma-separated or as small badges).
+
+On exports (PDF/CSV):
+	•	If MULTI, export the list of selected answers (e.g., joined as a comma-separated string).
+
+⸻
+
+5) Interaction with expected answers & highlighting (for now)
+	•	Do not change existing expected answer comparison logic in this iteration.
+	•	It is acceptable if multi-select questions temporarily:
+	•	show NO_EXPECTATION_DEFINED, or
+	•	are not fully evaluated yet.
+
+We will extend expected answers and the Meets/Does-Not-Meet logic for multi-select questions in a later iteration (multiple expected answers + ANY_OF matching).
+
+⸻
+
+6) Vendor visibility
+	•	Do not show weight, expected answers, or evaluation status to vendors.
+	•	Vendor view changes ONLY in that some questions now allow multiple selections when answer_mode == MULTI.
+
+⸻
+
+7) Guardrails
+	•	Do NOT implement conditional branching/conditional questions in this iteration.
+	•	Do NOT implement new scoring, risk calculations, or rollups.
+	•	Keep all existing routes and features intact (draft saving, uploads, follow-ups, export, status bar).
+
+⸻
+
+Acceptance criteria
+	•	Company A can set the answer type per question to Single Choice or Multi-Select.
+	•	Vendors see checkboxes and can select multiple answers when answer_mode == MULTI.
+	•	Multi-select answers are stored and visible to Company A on review and export.
+	•	Existing single-select behavior remains unchanged.

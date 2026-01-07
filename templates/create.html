@@ -101,6 +101,12 @@
                                 <option value="partial">Partial</option>
                                 <option value="na">N/A</option>
                             </select>
+                            <select class="form-select form-select-sm answer-mode-select ms-2" 
+                                    name="answer_mode_{{ item.id }}" style="width: 120px; display: none;"
+                                    data-qid="{{ item.id }}">
+                                <option value="SINGLE" selected>Single Choice</option>
+                                <option value="MULTI">Multi-Select</option>
+                            </select>
                         </div>
                     </label>
                     {% endfor %}
@@ -195,11 +201,15 @@ function toggleWeightSelect(checkbox) {
     const qid = checkbox.dataset.qid;
     const weightSelect = document.querySelector('.weight-select[data-qid="' + qid + '"]');
     const expectedSelect = document.querySelector('.expected-select[data-qid="' + qid + '"]');
+    const answerModeSelect = document.querySelector('.answer-mode-select[data-qid="' + qid + '"]');
     if (weightSelect) {
         weightSelect.style.display = checkbox.checked ? 'block' : 'none';
     }
     if (expectedSelect) {
         expectedSelect.style.display = checkbox.checked ? 'block' : 'none';
+    }
+    if (answerModeSelect) {
+        answerModeSelect.style.display = checkbox.checked ? 'block' : 'none';
     }
 }
 
