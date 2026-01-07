@@ -224,14 +224,29 @@
                             <span class="badge bg-light text-muted" style="font-size: 0.65rem;">No Expectation</span>
                             {% endif %}
                             {% if answer and answer.answer_choice %}
-                                {% if answer.answer_choice == 'yes' %}
-                                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Yes</span>
-                                {% elif answer.answer_choice == 'no' %}
-                                <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>No</span>
-                                {% elif answer.answer_choice == 'partial' %}
-                                <span class="badge bg-warning text-dark"><i class="bi bi-dash-circle me-1"></i>Partial</span>
-                                {% elif answer.answer_choice == 'na' %}
-                                <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>N/A</span>
+                                {% set is_multi = q.answer_mode == 'MULTI' %}
+                                {% if is_multi %}
+                                    {% for choice in answer.answer_choice.split(',') %}
+                                        {% if choice == 'yes' %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Yes</span>
+                                        {% elif choice == 'no' %}
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>No</span>
+                                        {% elif choice == 'partial' %}
+                                        <span class="badge bg-warning text-dark"><i class="bi bi-dash-circle me-1"></i>Partial</span>
+                                        {% elif choice == 'na' %}
+                                        <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>N/A</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    {% if answer.answer_choice == 'yes' %}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Yes</span>
+                                    {% elif answer.answer_choice == 'no' %}
+                                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>No</span>
+                                    {% elif answer.answer_choice == 'partial' %}
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-dash-circle me-1"></i>Partial</span>
+                                    {% elif answer.answer_choice == 'na' %}
+                                    <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>N/A</span>
+                                    {% endif %}
                                 {% endif %}
                             {% else %}
                             <span class="badge bg-light text-muted">Unanswered</span>

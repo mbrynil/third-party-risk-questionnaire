@@ -33,7 +33,9 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Question Weights**: Company A can assign weights (Low/Medium/High/Critical) to each question during questionnaire creation
 - **Expected Answers**: Company A can optionally set expected answers per question (Yes/No/Partial/N/A); displayed on admin views only, not visible to vendors
 - **Evaluation Badges**: Visual indicators showing if vendor answers meet expectations (Meets/Partially Meets/Does Not Meet/No Expectation)
-- **Answer Choices**: Pre-filled buttons (Yes/No/Partial/N/A) instead of text
+- **Answer Types**: Company A can configure questions as Single Choice (default) or Multi-Select per question
+- **Multi-Select**: Vendors see checkboxes and can select multiple answers for multi-select questions; answers stored as comma-separated values
+- **Answer Choices**: Pre-filled buttons (Yes/No/Partial/N/A) for single choice, checkboxes for multi-select
 - **Notes Field**: Optional notes/comments per question
 - **Save Draft**: Vendors can save partial progress and resume later
 - **Resume by Email**: Enter email to load previous draft answers

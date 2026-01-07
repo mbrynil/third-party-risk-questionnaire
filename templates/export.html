@@ -293,14 +293,29 @@
                 <div>
                     <span class="meta-label">Answer</span><br>
                     {% if answer and answer.answer_choice %}
-                        {% if answer.answer_choice == 'yes' %}
-                        <span class="answer-choice answer-yes">Yes</span>
-                        {% elif answer.answer_choice == 'no' %}
-                        <span class="answer-choice answer-no">No</span>
-                        {% elif answer.answer_choice == 'partial' %}
-                        <span class="answer-choice answer-partial">Partial</span>
-                        {% elif answer.answer_choice == 'na' %}
-                        <span class="answer-choice answer-na">N/A</span>
+                        {% set is_multi = question.answer_mode == 'MULTI' %}
+                        {% if is_multi %}
+                            {% for choice in answer.answer_choice.split(',') %}
+                                {% if choice == 'yes' %}
+                                <span class="answer-choice answer-yes">Yes</span>
+                                {% elif choice == 'no' %}
+                                <span class="answer-choice answer-no">No</span>
+                                {% elif choice == 'partial' %}
+                                <span class="answer-choice answer-partial">Partial</span>
+                                {% elif choice == 'na' %}
+                                <span class="answer-choice answer-na">N/A</span>
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            {% if answer.answer_choice == 'yes' %}
+                            <span class="answer-choice answer-yes">Yes</span>
+                            {% elif answer.answer_choice == 'no' %}
+                            <span class="answer-choice answer-no">No</span>
+                            {% elif answer.answer_choice == 'partial' %}
+                            <span class="answer-choice answer-partial">Partial</span>
+                            {% elif answer.answer_choice == 'na' %}
+                            <span class="answer-choice answer-na">N/A</span>
+                            {% endif %}
                         {% endif %}
                     {% else %}
                         <span class="answer-choice answer-unanswered">Not answered</span>

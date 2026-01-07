@@ -207,10 +207,16 @@ async def submit_vendor_response(
     if action == "submit":
         missing_answers = []
         for question in questions:
-            choice_key = f"choice_{question.id}"
-            choice_value = form_data.get(choice_key, "")
-            if not choice_value or choice_value not in VALID_CHOICES:
-                missing_answers.append(question)
+            if question.answer_mode == "MULTI":
+                multi_key = f"multi_{question.id}"
+                multi_values = form_data.getlist(multi_key)
+                if not multi_values:
+                    missing_answers.append(question)
+            else:
+                choice_key = f"choice_{question.id}"
+                choice_value = form_data.get(choice_key, "")
+                if not choice_value or choice_value not in VALID_CHOICES:
+                    missing_answers.append(question)
         
         if missing_answers:
             errors.append(f"Please answer all questions before submitting. {len(missing_answers)} unanswered.")
@@ -245,15 +251,23 @@ async def submit_vendor_response(
         db.flush()
     
     for question in questions:
-        choice_key = f"choice_{question.id}"
         notes_key = f"notes_{question.id}"
-        choice_value = form_data.get(choice_key, "") or None
         notes_value = str(form_data.get(notes_key, "")).strip() or None
+        
+        if question.answer_mode == "MULTI":
+            multi_key = f"multi_{question.id}"
+            multi_values = form_data.getlist(multi_key)
+            valid_multi = [v for v in multi_values if v in VALID_CHOICES]
+            choice_value = ",".join(valid_multi) if valid_multi else None
+        else:
+            choice_key = f"choice_{question.id}"
+            choice_value = form_data.get(choice_key, "") or None
+            choice_value = choice_value if choice_value in VALID_CHOICES else None
         
         answer = Answer(
             response_id=response.id,
             question_id=question.id,
-            answer_choice=choice_value if choice_value in VALID_CHOICES else None,
+            answer_choice=choice_value,
             notes=notes_value
         )
         db.add(answer)
