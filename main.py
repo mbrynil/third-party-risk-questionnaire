@@ -208,7 +208,7 @@ async def submit_vendor_response(
         missing_answers = []
         for question in questions:
             if question.answer_mode == "MULTI":
-                multi_key = f"multi_{question.id}"
+                multi_key = f"multi_{question.id}[]"
                 multi_values = form_data.getlist(multi_key)
                 if not multi_values:
                     missing_answers.append(question)
@@ -255,7 +255,7 @@ async def submit_vendor_response(
         notes_value = str(form_data.get(notes_key, "")).strip() or None
         
         if question.answer_mode == "MULTI":
-            multi_key = f"multi_{question.id}"
+            multi_key = f"multi_{question.id}[]"
             multi_values = form_data.getlist(multi_key)
             valid_multi = [v for v in multi_values if v in VALID_CHOICES]
             choice_value = ",".join(valid_multi) if valid_multi else None
