@@ -31,8 +31,8 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 ## Features
 - **Question Bank**: ~170+ curated GRC questions across 25 categories
 - **Question Weights**: Company A can assign weights (Low/Medium/High/Critical) to each question during questionnaire creation
-- **Expected Answers**: Company A can optionally set expected answers per question (Yes/No/Partial/N/A); displayed on admin views only, not visible to vendors
-- **Evaluation Badges**: Visual indicators showing if vendor answers meet expectations (Meets/Partially Meets/Does Not Meet/No Expectation)
+- **Expected Answers**: Company A can optionally set one or more acceptable expected answers per question using checkboxes (Yes/No/Partial/N/A); displayed on admin views only, not visible to vendors; stored as JSON array
+- **Evaluation Badges**: Visual indicators showing if vendor answers meet expectations (Meets/Partially Meets/Does Not Meet/No Expectation); supports both single and multi-select evaluation logic
 - **Answer Types**: Company A can configure questions as Single Choice (default) or Multi-Select per question
 - **Multi-Select**: Vendors see checkboxes and can select multiple answers for multi-select questions; answers stored as comma-separated values
 - **Answer Choices**: Pre-filled buttons (Yes/No/Partial/N/A) for single choice, checkboxes for multi-select

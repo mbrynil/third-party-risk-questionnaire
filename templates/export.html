@@ -275,7 +275,10 @@
             {% else %}
             <span class="badge bg-info text-dark ms-2" style="font-size: 0.7rem;">Medium Weight</span>
             {% endif %}
-            {% if question.expected_value %}
+            {% if question.expected_values %}
+            {% set exp_list = question.expected_values|replace('[', '')|replace(']', '')|replace('"', '') %}
+            <span class="text-muted ms-2" style="font-size: 0.75rem;"><i class="bi bi-bullseye me-1"></i>Expected: {% for exp in exp_list.split(',') %}{{ exp|trim|capitalize }}{% if not loop.last %} or {% endif %}{% endfor %}</span>
+            {% elif question.expected_value %}
             <span class="text-muted ms-2" style="font-size: 0.75rem;"><i class="bi bi-bullseye me-1"></i>Expected: {{ question.expected_value|capitalize }}</span>
             {% endif %}
             {% set eval_status = eval_dict.get(question.id, 'NO_EXPECTATION_DEFINED') if eval_dict else 'NO_EXPECTATION_DEFINED' %}

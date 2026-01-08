@@ -207,7 +207,10 @@
                                 {% else %}
                                 <span class="badge bg-info text-dark ms-1" style="font-size: 0.65rem;">Medium</span>
                                 {% endif %}
-                                {% if q.expected_value %}
+                                {% if q.expected_values %}
+                                {% set exp_list = q.expected_values|replace('[', '')|replace(']', '')|replace('"', '') %}
+                                <span class="text-muted ms-2" style="font-size: 0.75rem;"><i class="bi bi-bullseye me-1"></i>Expected: {% for exp in exp_list.split(',') %}{{ exp|trim|capitalize }}{% if not loop.last %} or {% endif %}{% endfor %}</span>
+                                {% elif q.expected_value %}
                                 <span class="text-muted ms-2" style="font-size: 0.75rem;"><i class="bi bi-bullseye me-1"></i>Expected: {{ q.expected_value|capitalize }}</span>
                                 {% endif %}
                             </p>

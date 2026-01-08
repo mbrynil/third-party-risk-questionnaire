@@ -62,6 +62,7 @@ class Question(Base):
     weight = Column(String(20), default=WEIGHT_MEDIUM, nullable=False)
     expected_operator = Column(String(20), default=OPERATOR_EQUALS, nullable=False)
     expected_value = Column(String(50), nullable=True)
+    expected_values = Column(Text, nullable=True)  # JSON array of acceptable answers e.g. '["yes","partial"]'
     expected_value_type = Column(String(20), default=VALUE_TYPE_CHOICE, nullable=False)
     answer_mode = Column(String(20), default=ANSWER_MODE_SINGLE, nullable=False)
 
@@ -142,27 +143,67 @@ EVAL_DOES_NOT_MEET = "DOES_NOT_MEET_EXPECTATION"
 EVAL_NO_EXPECTATION = "NO_EXPECTATION_DEFINED"
 
 
-def compute_expectation_status(expected_value, answer_choice):
+def compute_expectation_status(expected_value, answer_choice, expected_values=None, answer_mode="SINGLE"):
     """
-    Compute evaluation status by comparing vendor answer to expected answer.
+    Compute evaluation status by comparing vendor answer to expected answer(s).
     Returns one of: EVAL_MEETS, EVAL_PARTIAL, EVAL_DOES_NOT_MEET, EVAL_NO_EXPECTATION
+    
+    For SINGLE mode: vendor answer must be in expected_set
+    For MULTI mode: uses set intersection logic
     """
-    if not expected_value:
+    import json
+    
+    # Build expected_set from expected_values (JSON) or fallback to single expected_value
+    expected_set = set()
+    if expected_values:
+        try:
+            parsed = json.loads(expected_values)
+            if isinstance(parsed, list):
+                expected_set = set(v.lower() for v in parsed if v)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    
+    # Fallback to single expected_value if expected_values is empty
+    if not expected_set and expected_value:
+        expected_set = {expected_value.lower()}
+    
+    # No expectation defined
+    if not expected_set:
         return EVAL_NO_EXPECTATION
     
+    # No answer provided
     if not answer_choice:
         return EVAL_DOES_NOT_MEET
     
-    expected_lower = expected_value.lower()
-    answer_lower = answer_choice.lower()
-    
-    if answer_lower == expected_lower:
-        return EVAL_MEETS
-    
-    if answer_lower == "partial" and expected_lower == "yes":
-        return EVAL_PARTIAL
-    
-    return EVAL_DOES_NOT_MEET
+    if answer_mode == "MULTI":
+        # Multi-select: answer_choice is comma-separated
+        answers = set(a.strip().lower() for a in answer_choice.split(',') if a.strip())
+        if not answers:
+            return EVAL_DOES_NOT_MEET
+        
+        intersection = answers & expected_set
+        
+        if intersection and answers <= expected_set:
+            # All selected answers are acceptable
+            return EVAL_MEETS
+        elif intersection:
+            # Some acceptable, some not
+            return EVAL_PARTIAL
+        else:
+            # No intersection - none of the selected answers are acceptable
+            return EVAL_DOES_NOT_MEET
+    else:
+        # Single-select mode
+        answer_lower = answer_choice.lower()
+        
+        if answer_lower in expected_set:
+            return EVAL_MEETS
+        
+        # Partial meets if answer is "partial" and "yes" is expected
+        if answer_lower == "partial" and "yes" in expected_set:
+            return EVAL_PARTIAL
+        
+        return EVAL_DOES_NOT_MEET
 
 
 def init_db():

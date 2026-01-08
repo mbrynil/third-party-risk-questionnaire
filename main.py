@@ -88,9 +88,14 @@ async def create_questionnaire(
             weight = form_data.get(f"weight_{qid}", "MEDIUM")
             if weight not in ["LOW", "MEDIUM", "HIGH", "CRITICAL"]:
                 weight = "MEDIUM"
-            expected_value = form_data.get(f"expected_{qid}", "") or None
-            if expected_value == "":
-                expected_value = None
+            expected_list = form_data.getlist(f"expected_{qid}[]")
+            expected_values_json = None
+            expected_value_single = None
+            if expected_list:
+                valid_expected = [v for v in expected_list if v in VALID_CHOICES]
+                if valid_expected:
+                    expected_values_json = json.dumps(valid_expected)
+                    expected_value_single = valid_expected[0]
             answer_mode = form_data.get(f"answer_mode_{qid}", "SINGLE")
             if answer_mode not in ["SINGLE", "MULTI"]:
                 answer_mode = "SINGLE"
@@ -100,7 +105,8 @@ async def create_questionnaire(
                 order=order,
                 weight=weight,
                 expected_operator="EQUALS",
-                expected_value=expected_value,
+                expected_value=expected_value_single,
+                expected_values=expected_values_json,
                 expected_value_type="CHOICE",
                 answer_mode=answer_mode
             )
@@ -117,6 +123,7 @@ async def create_questionnaire(
                 weight="MEDIUM",
                 expected_operator="EQUALS",
                 expected_value=None,
+                expected_values=None,
                 expected_value_type="CHOICE",
                 answer_mode="SINGLE"
             )
@@ -359,7 +366,7 @@ async def view_questionnaire_responses(
         for q in questions:
             answer = answers_dict.get(q.id)
             answer_choice = answer.answer_choice if answer else None
-            eval_dict[q.id] = compute_expectation_status(q.expected_value, answer_choice)
+            eval_dict[q.id] = compute_expectation_status(q.expected_value, answer_choice, q.expected_values, q.answer_mode)
         eval_dicts[resp.id] = eval_dict
     
     return templates.TemplateResponse("questionnaire_responses.html", {

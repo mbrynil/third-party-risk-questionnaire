@@ -1,0 +1,139 @@
+Implement Iteration B: Support multiple acceptable expected answers per question and extend evaluation logic to work with both SINGLE and MULTI answer modes.
+
+This builds on the existing:
+	•	weight
+	•	expected_value / expected fields
+	•	answer_mode (SINGLE / MULTI)
+	•	evaluation statuses (MEETS_EXPECTATION, PARTIALLY_MEETS_EXPECTATION, DOES_NOT_MEET_EXPECTATION, NO_EXPECTATION_DEFINED)
+
+Do not add scoring, overall risk scores, or conditional branching yet.
+
+⸻
+
+1) Data model changes — expected values
+
+Extend expected answer storage to support multiple acceptable answers:
+	•	Add a field like expected_values to each question instance in a questionnaire:
+	•	Type: list/array of strings (e.g., stored as JSON)
+	•	Represents a set of acceptable answers.
+
+Behavior:
+	•	If expected_values is non-empty, treat it as the canonical source of expected answers.
+	•	If expected_values is empty but expected_value (existing field) is populated, treat expected_value as a single expected answer and internally treat it as a one-element set.
+	•	If both are empty → NO_EXPECTATION_DEFINED.
+
+This allows backward compatibility with existing questionnaires that only have a single expected value.
+
+⸻
+
+2) Company A configuration UI — choosing multiple acceptable answers
+
+On the Company A questionnaire builder/config screen, where you already show:
+	•	Question text
+	•	Weight
+	•	Expected Answer
+	•	Answer type (Single Choice / Multi-Select)
+
+Update the Expected Answer section to support multiple acceptable answers for choice-based questions:
+	•	For questions that have a defined set of options (e.g., Yes/No/Partial/N/A, or other discrete options if your app supports them):
+	•	Replace the single expected answer dropdown with:
+	•	A multi-select UI (e.g., checkboxes or a multi-select control) that lets Company A choose one or more acceptable options from that same set of options.
+	•	Store the selected options in expected_values as a list of strings.
+	•	If a question does not have a known option list (e.g., free-text or numeric):
+	•	Keep the existing single expected_value input (text) for now.
+	•	It is OK if those questions only support one expected value for this iteration.
+	•	Backward compatibility:
+	•	For existing questions that already have a single expected_value set:
+	•	When editing, pre-populate expected_values with that one value if it matches one of the allowed options.
+	•	If it doesn’t match a known option, leave expected_values empty and keep showing the single text field.
+
+⸻
+
+3) Evaluation logic — single vs multiple expected answers
+
+Update the evaluation logic to use a set of expected values (expected_values) instead of just a single expected_value.
+
+Define:
+	•	expected_set:
+	•	If expected_values is non-empty → set of those values.
+	•	Else if expected_value is non-empty → set with that single value.
+	•	Else → no expectation defined.
+	•	If expected_set is empty:
+	•	Status = NO_EXPECTATION_DEFINED.
+
+Now handle by answer_mode:
+
+a) For answer_mode == SINGLE:
+	•	Let answer be the vendor’s single selected value (string).
+	•	If answer is in expected_set:
+	•	Status = MEETS_EXPECTATION.
+	•	Else if answer == "Partial" and "Yes" is in expected_set:
+	•	Status = PARTIALLY_MEETS_EXPECTATION.
+	•	Else:
+	•	Status = DOES_NOT_MEET_EXPECTATION.
+
+(This should preserve your existing behavior but extended to multiple acceptable values.)
+
+b) For answer_mode == MULTI:
+	•	Let answers be the vendor’s selected values (list of strings).
+	•	Compute:
+	•	intersection = answers ∩ expected_set.
+
+Logic:
+	•	If expected_set is empty:
+	•	Status = NO_EXPECTATION_DEFINED.
+	•	Else if intersection is non-empty AND all selected answers are in expected_set:
+	•	(i.e., every selected answer is acceptable)
+	•	Status = MEETS_EXPECTATION.
+	•	Else if intersection is non-empty AND there is at least one selected answer not in expected_set:
+	•	(some acceptable, some not)
+	•	Status = PARTIALLY_MEETS_EXPECTATION.
+	•	Else if intersection is empty:
+	•	Status = DOES_NOT_MEET_EXPECTATION.
+
+This supports cases like:
+	•	Expected values: [“12h”, “24h”]
+	•	Vendor: [“24h”] -> MEETS
+	•	Vendor: [“12h”, “24h”] -> MEETS
+	•	Vendor: [“24h”, “48h”] -> PARTIALLY_MEETS
+	•	Vendor: [“48h”] -> DOES_NOT_MEET
+
+⸻
+
+4) UI impact for Company A (review / export)
+
+On the Company A submission review/detail page:
+	•	Continue showing:
+	•	Evaluation status (Meets, Partially Meets, Does Not Meet, No Expectation)
+	•	Weight
+	•	Vendor answer(s)
+	•	For questions with multiple expected values:
+	•	Display expected values clearly (e.g., “Expected: 12h or 24h”).
+
+On exports (PDF/CSV):
+	•	Include expected values (one or many) and the evaluation status, as you do now.
+	•	Format multiple expected values in a readable way (e.g., comma-separated or “12h / 24h”).
+
+⸻
+
+5) Vendor visibility
+	•	Do NOT show expected values or evaluation status to vendors.
+	•	Vendor UI:
+	•	SINGLE questions still show a single-select input.
+	•	MULTI questions still show checkboxes.
+
+⸻
+
+6) Guardrails
+	•	Do NOT implement conditional branching/conditional questions in this iteration.
+	•	Do NOT implement scoring, numeric risk values, or overall risk aggregation.
+	•	Keep all existing features working (drafts, uploads, follow-ups, status, exports).
+
+⸻
+
+Acceptance criteria
+	•	Company A can configure multiple acceptable answers for choice-based questions.
+	•	Single-select questions are considered “Meets” if the single answer is in the expected set.
+	•	Multi-select questions are evaluated using ANY_OF matching as described above.
+	•	Evaluation badges (Meets / Partially / Does Not Meet / No Expectation) reflect the new logic accurately.
+	•	Vendor view is unchanged apart from the existing SINGLE vs MULTI behavior.
