@@ -6,6 +6,7 @@ from typing import List, Optional
 import uuid
 import os
 import re
+import json
 
 from models import (
     init_db, get_db, seed_question_bank, 
