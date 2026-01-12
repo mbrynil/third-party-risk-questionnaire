@@ -10,7 +10,7 @@ import json
 
 from models import (
     init_db, get_db, seed_question_bank, 
-    Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile, FollowUp,
+    Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile, FollowUp, ConditionalRule,
     VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO,
     compute_expectation_status
 )
@@ -131,6 +131,50 @@ async def create_questionnaire(
             db.add(question)
             order += 1
     
+    db.flush()
+    
+    # Build mapping from bank question ID to actual question ID
+    question_id_map = {}
+    for q in questionnaire.questions:
+        # Map by order to find corresponding bank question ID
+        pass
+    # Re-query questions to get their IDs
+    created_questions = db.query(Question).filter(
+        Question.questionnaire_id == questionnaire.id
+    ).order_by(Question.order).all()
+    
+    # Map bank IDs to created question IDs based on order
+    for idx, qid in enumerate(question_ids):
+        if idx < len(created_questions):
+            question_id_map[str(qid)] = created_questions[idx].id
+    
+    # Process conditional rules
+    conditional_rules_json = form_data.get("conditional_rules", "[]")
+    try:
+        rules_data = json.loads(conditional_rules_json)
+        if isinstance(rules_data, list):
+            for rule in rules_data:
+                trigger_bank_id = str(rule.get("trigger_question_id", ""))
+                target_bank_id = str(rule.get("target_question_id", ""))
+                trigger_values = rule.get("trigger_values", [])
+                make_required = rule.get("make_required", False)
+                
+                trigger_q_id = question_id_map.get(trigger_bank_id)
+                target_q_id = question_id_map.get(target_bank_id)
+                
+                if trigger_q_id and target_q_id and trigger_values:
+                    cond_rule = ConditionalRule(
+                        questionnaire_id=questionnaire.id,
+                        trigger_question_id=trigger_q_id,
+                        operator="IN",
+                        trigger_values=json.dumps(trigger_values),
+                        target_question_id=target_q_id,
+                        make_required=make_required
+                    )
+                    db.add(cond_rule)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    
     db.commit()
     
     base_url = str(request.base_url).rstrip('/')
@@ -154,6 +198,24 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
         Question.questionnaire_id == questionnaire.id
     ).order_by(Question.order).all()
     
+    conditional_rules = db.query(ConditionalRule).filter(
+        ConditionalRule.questionnaire_id == questionnaire.id
+    ).all()
+    
+    # Format rules for JavaScript
+    rules_for_js = []
+    for rule in conditional_rules:
+        try:
+            trigger_vals = json.loads(rule.trigger_values)
+        except:
+            trigger_vals = []
+        rules_for_js.append({
+            "trigger_question_id": rule.trigger_question_id,
+            "trigger_values": trigger_vals,
+            "target_question_id": rule.target_question_id,
+            "make_required": rule.make_required
+        })
+    
     existing_response = None
     if email:
         existing_response = db.query(Response).filter(
@@ -166,6 +228,7 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
         "questionnaire": questionnaire,
         "questions": questions,
         "existing_response": existing_response,
+        "conditional_rules": json.dumps(rules_for_js),
         "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
         "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
     })

@@ -292,7 +292,6 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const totalQuestions = {{ questions|length }};
     const progressBar = document.getElementById('progress-bar');
     const progressText = document.getElementById('progress-text');
     const submitBtn = document.getElementById('submit-btn');
@@ -304,10 +303,107 @@ document.addEventListener('DOMContentLoaded', function() {
     const lastSavedTime = document.getElementById('last-saved-time');
     const isSubmitted = {{ 'true' if is_submitted else 'false' }};
     
+    // Conditional Rules
+    const conditionalRules = {{ conditional_rules|safe }};
+    
+    function getQuestionAnswer(questionId) {
+        const qDiv = document.querySelector(`[data-question-id="${questionId}"]`);
+        if (!qDiv) return [];
+        const answerMode = qDiv.dataset.answerMode;
+        const answers = [];
+        if (answerMode === 'MULTI') {
+            qDiv.querySelectorAll('.answer-multi:checked').forEach(cb => answers.push(cb.value));
+        } else {
+            const checked = qDiv.querySelector('.answer-choice:checked');
+            if (checked) answers.push(checked.value);
+        }
+        return answers;
+    }
+    
+    function evaluateRule(rule) {
+        const answers = getQuestionAnswer(rule.trigger_question_id);
+        if (answers.length === 0) return false;
+        // Check if ANY selected answer is in trigger_values
+        for (const ans of answers) {
+            if (rule.trigger_values.includes(ans)) return true;
+        }
+        return false;
+    }
+    
+    function applyConditionalRules() {
+        // Build map of target questions to their rules
+        const targetRulesMap = {};
+        conditionalRules.forEach(rule => {
+            const targetId = rule.target_question_id;
+            if (!targetRulesMap[targetId]) targetRulesMap[targetId] = [];
+            targetRulesMap[targetId].push(rule);
+        });
+        
+        // For each target, check if ANY of its rules are triggered
+        for (const [targetId, rules] of Object.entries(targetRulesMap)) {
+            const targetDiv = document.querySelector(`[data-question-id="${targetId}"]`);
+            if (!targetDiv) continue;
+            
+            let shouldShow = false;
+            let makeRequired = false;
+            
+            for (const rule of rules) {
+                if (evaluateRule(rule)) {
+                    shouldShow = true;
+                    if (rule.make_required) makeRequired = true;
+                }
+            }
+            
+            if (shouldShow) {
+                targetDiv.style.display = '';
+                targetDiv.dataset.hidden = 'false';
+                if (makeRequired) {
+                    targetDiv.dataset.conditionalRequired = 'true';
+                } else {
+                    targetDiv.dataset.conditionalRequired = 'false';
+                }
+            } else {
+                targetDiv.style.display = 'none';
+                targetDiv.dataset.hidden = 'true';
+                targetDiv.dataset.conditionalRequired = 'false';
+                // Clear answers when hiding
+                targetDiv.querySelectorAll('.answer-choice:checked, .answer-multi:checked').forEach(input => {
+                    input.checked = false;
+                });
+                targetDiv.querySelectorAll('textarea.notes-field').forEach(ta => {
+                    ta.value = '';
+                });
+            }
+        }
+        updateProgress();
+    }
+    
+    // Initial evaluation
+    if (conditionalRules.length > 0) {
+        // Mark all target questions as initially hidden
+        conditionalRules.forEach(rule => {
+            const targetDiv = document.querySelector(`[data-question-id="${rule.target_question_id}"]`);
+            if (targetDiv) {
+                targetDiv.dataset.isConditional = 'true';
+            }
+        });
+        applyConditionalRules();
+    }
+    
+    function getVisibleQuestionCount() {
+        let count = 0;
+        document.querySelectorAll('[data-question-id]').forEach(qDiv => {
+            if (qDiv.dataset.hidden !== 'true') count++;
+        });
+        return count;
+    }
+    
     function updateProgress() {
         let answered = 0;
+        let visibleTotal = 0;
         document.querySelectorAll('[data-question-id]').forEach(function(qDiv) {
-            const qid = qDiv.dataset.questionId;
+            if (qDiv.dataset.hidden === 'true') return;
+            visibleTotal++;
             const answerMode = qDiv.dataset.answerMode;
             if (answerMode === 'MULTI') {
                 const checked = qDiv.querySelectorAll('.answer-multi:checked');
@@ -317,13 +413,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (checked) answered++;
             }
         });
-        const percentage = totalQuestions > 0 ? (answered / totalQuestions) * 100 : 0;
+        const percentage = visibleTotal > 0 ? (answered / visibleTotal) * 100 : 0;
         
         progressBar.style.width = percentage + '%';
         progressBar.setAttribute('aria-valuenow', percentage);
-        progressText.textContent = answered + ' / ' + totalQuestions + ' complete';
+        progressText.textContent = answered + ' / ' + visibleTotal + ' complete';
         
-        if (answered === totalQuestions) {
+        if (answered === visibleTotal && visibleTotal > 0) {
             progressText.classList.remove('bg-primary');
             progressText.classList.add('bg-success');
             if (submitHint) {
@@ -342,12 +438,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    function onAnswerChange() {
+        if (conditionalRules.length > 0) {
+            applyConditionalRules();
+        } else {
+            updateProgress();
+        }
+    }
+    
     if (!isSubmitted) {
         document.querySelectorAll('.answer-choice').forEach(function(radio) {
-            radio.addEventListener('change', updateProgress);
+            radio.addEventListener('change', onAnswerChange);
         });
         document.querySelectorAll('.answer-multi').forEach(function(checkbox) {
-            checkbox.addEventListener('change', updateProgress);
+            checkbox.addEventListener('change', onAnswerChange);
         });
     }
     
@@ -405,7 +509,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         lastSavedSpan.style.display = 'inline';
                     }
                     
-                    updateProgress();
+                    if (conditionalRules.length > 0) {
+                        applyConditionalRules();
+                    } else {
+                        updateProgress();
+                    }
                     loadEvidenceFiles();
                     alert('Draft loaded successfully!');
                 } else {

@@ -31,6 +31,7 @@ class Questionnaire(Base):
 
     questions = relationship("Question", back_populates="questionnaire", cascade="all, delete-orphan")
     responses = relationship("Response", back_populates="questionnaire", cascade="all, delete-orphan")
+    conditional_rules = relationship("ConditionalRule", back_populates="questionnaire", cascade="all, delete-orphan")
 
 
 WEIGHT_LOW = "LOW"
@@ -133,6 +134,22 @@ class FollowUp(Base):
     responded_at = Column(DateTime, nullable=True)
 
     response = relationship("Response", back_populates="follow_ups")
+
+
+class ConditionalRule(Base):
+    __tablename__ = "conditional_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    trigger_question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
+    operator = Column(String(20), default="IN", nullable=False)
+    trigger_values = Column(Text, nullable=False)  # JSON array e.g. '["no","partial"]'
+    target_question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
+    make_required = Column(Boolean, default=False, nullable=False)
+
+    questionnaire = relationship("Questionnaire", back_populates="conditional_rules")
+    trigger_question = relationship("Question", foreign_keys=[trigger_question_id])
+    target_question = relationship("Question", foreign_keys=[target_question_id])
 
 
 VALID_CHOICES = ["yes", "no", "partial", "na"]

@@ -48,6 +48,7 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Validation**: Server-side validation requires all answers for final submit
 - **Evidence Uploads**: Vendors can upload supporting documents (PDF, DOCX, XLSX, PNG, JPG, JPEG) up to 10MB per file
 - **Evidence Management**: View/download evidence files on admin dashboard, delete files before submission
+- **Conditional Rules**: Company A can define show/hide rules for follow-up questions based on vendor answers (e.g., "If No to Q1, show Q2"); rules support make_required flag; hidden questions are excluded from validation and progress
 
 ## Pages
 - `/` - Home page with navigation

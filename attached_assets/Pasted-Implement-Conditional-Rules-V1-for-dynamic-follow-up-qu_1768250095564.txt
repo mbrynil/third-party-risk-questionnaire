@@ -1,0 +1,106 @@
+Implement Conditional Rules (V1) for dynamic follow-up questions.
+
+Goal:
+Allow Company A to configure simple conditional logic such that:
+“If the vendor answers X on Question A, then show Question B (a follow-up).”
+
+This iteration:
+- Uses actual vendor answers only
+- Only supports choice-based questions
+- Only supports a single action type: SHOW target question
+- Does NOT implement scoring, risk totals, or rules based on expectation yet
+
+-------------------------------------------------
+1) Data model
+
+Create a ConditionalRule model or table tied to a questionnaire:
+
+Fields (conceptually):
+- id
+- questionnaire_id
+- trigger_question_id      (the parent question within this questionnaire)
+- operator                 (string, default "IN")
+- trigger_values           (list/array of strings, e.g., JSON array)
+- target_question_id       (the follow-up question within this questionnaire)
+- make_required            (boolean, default false)
+
+Notes:
+- Rules are defined per questionnaire, not globally in the question bank.
+- trigger_values should store the answer option values that should trigger the rule (e.g., ["No"] or ["No","Partial"]).
+
+-------------------------------------------------
+2) Company A configuration UI
+
+On the questionnaire builder/configuration screen (where Company A sees the list of selected questions with weights and expected answers), add a new section called “Conditional Logic (Optional)”.
+
+Provide a simple UI to create rules:
+- For each rule:
+  - Dropdown for “Trigger Question” populated with the questions in this questionnaire that have discrete answer options.
+  - Multi-select control or checkboxes for “Trigger Answers”, populated with that question’s valid options (e.g., Yes/No/Partial/N/A or other choice options).
+  - Dropdown for “Target Question” populated with the other questions in this questionnaire.
+  - Checkbox: “Make follow-up required when shown” (optional).
+
+Basic guardrails:
+- Prevent selection of the same question as both trigger_question_id and target_question_id for a single rule.
+- It is OK if we don’t fully prevent more complex circular rule scenarios in this iteration.
+
+Provide an “Add Rule” button and list out existing rules with a simple description, e.g.:
+“If [Trigger Question] is [No, Partial] then show [Target Question].”
+
+Allow deletion of rules.
+
+-------------------------------------------------
+3) Vendor-side behavior
+
+On the vendor questionnaire page:
+
+- When rendering the questionnaire:
+  - Load all conditional rules for this questionnaire.
+  - Initially evaluate all rules based on any existing answers (or treat as unanswered).
+  - Hide any target questions whose rule conditions are not met.
+  - Show target questions whose conditions are met.
+
+- Add client-side JavaScript (or equivalent) to listen for changes to trigger questions:
+  - When a trigger question’s answer changes:
+    - Re-evaluate all rules for that trigger question.
+    - If a rule condition is true:
+      - Show the target question.
+      - If make_required is true, mark the target question as required.
+    - If a rule condition is false:
+      - Hide the target question.
+      - Clear any existing answer value(s) for that target question.
+      - Remove “required” enforcement for that target question.
+
+Condition evaluation logic:
+
+- For answer_mode == SINGLE:
+  - Let answer be the selected option value (string).
+  - Condition is true if answer is contained in trigger_values.
+
+- For answer_mode == MULTI:
+  - Let answers be the list of selected option values.
+  - Condition is true if ANY of the selected answers is contained in trigger_values.
+
+It is acceptable in this iteration to only support rules for questions that have discrete choice options; free-text-only questions can be excluded from the trigger list.
+
+-------------------------------------------------
+4) Company A review and export
+
+- On the Company A submission review page, do NOT change existing functionality in this iteration.
+- Conditional rules are only about how the questionnaire is presented and which questions vendors see.
+
+-------------------------------------------------
+5) Guardrails
+
+- Do NOT implement any new scoring, risk aggregation, or risk labels in this iteration.
+- Do NOT implement rules based on evaluation status (Meets / Does Not Meet) yet.
+- Keep all existing features working (weights, expected answers, highlighting, uploads, exports, follow-ups, etc.).
+
+-------------------------------------------------
+Acceptance criteria
+
+- Company A can define one or more conditional rules per questionnaire.
+- Vendor questionnaire dynamically shows/hides target questions based on the configured rules and the vendor’s answers.
+- Multi-select questions work as triggers by checking if any selected answer is in trigger_values.
+- Hidden follow-up questions are not required and have their answers cleared when hidden.
+- Vendor UX remains stable and predictable.

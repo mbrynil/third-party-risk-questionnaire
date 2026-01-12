@@ -141,6 +141,59 @@
     </div>
 
     <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-diagram-3 me-2"></i>Conditional Logic (Optional)
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                Add rules to show follow-up questions based on vendor answers. For example: "If vendor answers No to Question A, show Question B."
+            </p>
+            
+            <div id="rulesContainer">
+            </div>
+            
+            <div id="addRuleSection" class="border rounded p-3 bg-light mb-3" style="display: none;">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small">If answer to:</label>
+                        <select class="form-select form-select-sm" id="newRuleTrigger">
+                            <option value="">Select trigger question...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Is any of:</label>
+                        <div id="newRuleTriggerValues" class="d-flex flex-wrap gap-1">
+                            <span class="text-muted small">Select trigger first</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Then show:</label>
+                        <select class="form-select form-select-sm" id="newRuleTarget">
+                            <option value="">Select target question...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="newRuleRequired">
+                            <label class="form-check-label small" for="newRuleRequired">Required</label>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success w-100" onclick="saveRule()">
+                            <i class="bi bi-plus me-1"></i>Add
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="button" class="btn btn-outline-primary btn-sm" id="showAddRuleBtn" onclick="showAddRuleForm()">
+                <i class="bi bi-plus-circle me-1"></i>Add Conditional Rule
+            </button>
+            
+            <input type="hidden" id="conditionalRulesData" name="conditional_rules" value="[]">
+        </div>
+    </div>
+
+    <div class="card mb-4">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
@@ -239,6 +292,148 @@ function deselectAll() {
         toggleWeightSelect(checkbox);
     });
     updateSelectedCount();
+}
+
+// Conditional Rules Logic
+let conditionalRules = [];
+
+function getSelectedQuestions() {
+    const selected = [];
+    document.querySelectorAll('.question-checkbox:checked').forEach(function(checkbox) {
+        const qid = checkbox.dataset.qid;
+        const label = checkbox.closest('.question-item');
+        const text = label ? label.querySelector('span').textContent.trim() : 'Question ' + qid;
+        selected.push({ id: qid, text: text.substring(0, 60) + (text.length > 60 ? '...' : '') });
+    });
+    return selected;
+}
+
+function showAddRuleForm() {
+    const questions = getSelectedQuestions();
+    if (questions.length < 2) {
+        alert('Please select at least 2 questions before adding conditional rules.');
+        return;
+    }
+    
+    const triggerSelect = document.getElementById('newRuleTrigger');
+    const targetSelect = document.getElementById('newRuleTarget');
+    
+    triggerSelect.innerHTML = '<option value="">Select trigger question...</option>';
+    targetSelect.innerHTML = '<option value="">Select target question...</option>';
+    
+    questions.forEach(function(q, idx) {
+        triggerSelect.innerHTML += `<option value="${q.id}" data-text="${q.text}">Q${idx+1}: ${q.text}</option>`;
+        targetSelect.innerHTML += `<option value="${q.id}" data-text="${q.text}">Q${idx+1}: ${q.text}</option>`;
+    });
+    
+    document.getElementById('newRuleTriggerValues').innerHTML = '<span class="text-muted small">Select trigger first</span>';
+    document.getElementById('newRuleRequired').checked = false;
+    
+    document.getElementById('addRuleSection').style.display = 'block';
+    document.getElementById('showAddRuleBtn').style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('newRuleTrigger').addEventListener('change', function() {
+        const container = document.getElementById('newRuleTriggerValues');
+        if (!this.value) {
+            container.innerHTML = '<span class="text-muted small">Select trigger first</span>';
+            return;
+        }
+        container.innerHTML = `
+            <div class="form-check form-check-inline">
+                <input class="form-check-input trigger-value-cb" type="checkbox" value="yes" id="tv_yes">
+                <label class="form-check-label small" for="tv_yes">Yes</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input trigger-value-cb" type="checkbox" value="no" id="tv_no">
+                <label class="form-check-label small" for="tv_no">No</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input trigger-value-cb" type="checkbox" value="partial" id="tv_partial">
+                <label class="form-check-label small" for="tv_partial">Partial</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input trigger-value-cb" type="checkbox" value="na" id="tv_na">
+                <label class="form-check-label small" for="tv_na">N/A</label>
+            </div>
+        `;
+    });
+});
+
+function saveRule() {
+    const triggerSelect = document.getElementById('newRuleTrigger');
+    const targetSelect = document.getElementById('newRuleTarget');
+    const triggerQid = triggerSelect.value;
+    const targetQid = targetSelect.value;
+    const makeRequired = document.getElementById('newRuleRequired').checked;
+    
+    if (!triggerQid || !targetQid) {
+        alert('Please select both trigger and target questions.');
+        return;
+    }
+    
+    if (triggerQid === targetQid) {
+        alert('Trigger and target questions cannot be the same.');
+        return;
+    }
+    
+    const triggerValues = [];
+    document.querySelectorAll('.trigger-value-cb:checked').forEach(function(cb) {
+        triggerValues.push(cb.value);
+    });
+    
+    if (triggerValues.length === 0) {
+        alert('Please select at least one trigger answer.');
+        return;
+    }
+    
+    const triggerText = triggerSelect.options[triggerSelect.selectedIndex].dataset.text;
+    const targetText = targetSelect.options[targetSelect.selectedIndex].dataset.text;
+    
+    const rule = {
+        trigger_question_id: triggerQid,
+        trigger_values: triggerValues,
+        target_question_id: targetQid,
+        make_required: makeRequired,
+        trigger_text: triggerText,
+        target_text: targetText
+    };
+    
+    conditionalRules.push(rule);
+    updateRulesDisplay();
+    
+    document.getElementById('addRuleSection').style.display = 'none';
+    document.getElementById('showAddRuleBtn').style.display = 'inline-block';
+}
+
+function updateRulesDisplay() {
+    const container = document.getElementById('rulesContainer');
+    container.innerHTML = '';
+    
+    conditionalRules.forEach(function(rule, idx) {
+        const valuesText = rule.trigger_values.map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(' or ');
+        const reqText = rule.make_required ? ' (required)' : '';
+        container.innerHTML += `
+            <div class="alert alert-secondary py-2 d-flex justify-content-between align-items-center mb-2">
+                <span>
+                    <i class="bi bi-arrow-right-circle me-2"></i>
+                    If <strong>"${rule.trigger_text}"</strong> is <span class="badge bg-warning text-dark">${valuesText}</span>, 
+                    then show <strong>"${rule.target_text}"</strong>${reqText}
+                </span>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteRule(${idx})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+    });
+    
+    document.getElementById('conditionalRulesData').value = JSON.stringify(conditionalRules);
+}
+
+function deleteRule(idx) {
+    conditionalRules.splice(idx, 1);
+    updateRulesDisplay();
 }
 </script>
 {% endblock %}
