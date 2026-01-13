@@ -1,0 +1,62 @@
+Adjust the “Create Questionnaire From Template” flow so Company A can review and edit the cloned questionnaire before seeing the vendor link.
+
+Right now, when a user clicks “Use Template / Create Questionnaire” on a template:
+	•	A new questionnaire is created from the template
+	•	The app immediately redirects to the vendor link / send to vendor page
+
+Change this behavior as follows:
+
+⸻
+
+1) After creating from template, redirect to the builder/config page
+When a user is on the Templates page and chooses “Use Template” (or similar) and then clicks Create Questionnaire:
+	1.	Still create the new questionnaire from the template as you do now:
+	•	is_template = false
+	•	all question instances cloned (weights, expected answers, answer_mode, etc.)
+	•	all conditional rules cloned and remapped
+	2.	Do NOT immediately show the vendor link/share view.
+	3.	Instead, redirect to the same builder/config page that is used when:
+	•	creating a questionnaire manually, or
+	•	editing an existing questionnaire’s questions, weights, expected answers, and rules.
+
+This builder page should:
+	•	Show the vendor company name and questionnaire title fields at the top (pre-filled from the “Create from template” form)
+	•	Show the full list of questions, weights, expected answers, and any conditional logic
+	•	Allow Company A to add/remove questions, tweak config, etc.
+
+⸻
+
+2) Add a clear “Continue to Vendor Link” action from the builder
+On the builder/config page for a non-template questionnaire:
+	•	Add a primary button such as:
+	•	“Get Vendor Link” or “Continue to Share Link”
+
+Behavior:
+	•	Clicking that button should take the user to the existing vendor link/share page where they can:
+	•	copy the link
+	•	send to the vendor
+	•	see any existing submission status
+
+⸻
+
+3) Guardrails
+	•	Do not change how templates are stored or cloned.
+	•	Do not change any logic for:
+	•	weights
+	•	expected answers
+	•	conditional rules
+	•	vendor answering
+	•	Only change:
+	•	the redirect after creating a questionnaire from a template
+	•	the presence of the “Get Vendor Link” button on the builder page (if needed)
+
+⸻
+
+4) Acceptance criteria
+	•	When Company A clicks “Use Template / Create Questionnaire” on a template:
+	•	A questionnaire is created from the template as before.
+	•	The app redirects to the builder/config page for that new questionnaire (not the vendor link page).
+	•	On that builder/config page, Company A can:
+	•	edit questions, weights, expected answers, and rules
+	•	then click a button (e.g., “Get Vendor Link”) to go to the vendor link/share page.
+	•	Vendor behavior is unchanged.

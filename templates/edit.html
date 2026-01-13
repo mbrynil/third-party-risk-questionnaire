@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Questionnaire - RiskQ{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-pencil-square me-2"></i>Edit Questionnaire</h1>
+    <p>Review and customize your questionnaire before sharing with the vendor</p>
+</div>
+
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if request.query_params.get('from_template') %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>Questionnaire created from template! Review the questions below and click <strong>Get Vendor Link</strong> when ready.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>Changes saved successfully!
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<form method="post" action="/questionnaire/{{ questionnaire.id }}/edit">
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-info-circle me-2"></i>Basic Information
+        </div>
+        <div class="card-body p-4">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="company_name" class="form-label">
+                        <i class="bi bi-building me-1"></i>Vendor Company Name
+                    </label>
+                    <input type="text" class="form-control" id="company_name" name="company_name" required 
+                           value="{{ questionnaire.company_name }}" placeholder="e.g., Acme Corporation">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="title" class="form-label">
+                        <i class="bi bi-tag me-1"></i>Questionnaire Title
+                    </label>
+                    <input type="text" class="form-control" id="title" name="title" required 
+                           value="{{ questionnaire.title }}" placeholder="e.g., Vendor Security Assessment 2024">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-check me-2"></i>Questions ({{ questions|length }})</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addQuestionModal">
+                <i class="bi bi-plus-lg me-1"></i>Add Question
+            </button>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-4">
+                <i class="bi bi-info-circle me-1"></i>
+                Configure weights, expected answers, and answer modes for each question. Drag to reorder.
+            </p>
+            
+            <div id="questionsList">
+                {% for q in questions %}
+                <div class="card mb-2 question-card" data-question-id="{{ q.id }}">
+                    <div class="card-body py-2">
+                        <div class="d-flex align-items-start">
+                            <span class="me-2 text-muted" style="cursor: move;">
+                                <i class="bi bi-grip-vertical"></i>
+                            </span>
+                            <span class="badge bg-secondary me-2">Q{{ loop.index }}</span>
+                            <div class="flex-grow-1">
+                                <div class="mb-2">{{ q.question_text }}</div>
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <div class="d-flex align-items-center">
+                                        <label class="form-label small mb-0 me-1">Weight:</label>
+                                        <select class="form-select form-select-sm" name="weight_{{ q.id }}" style="width: 100px;">
+                                            <option value="LOW" {% if q.weight == 'LOW' %}selected{% endif %}>Low</option>
+                                            <option value="MEDIUM" {% if q.weight == 'MEDIUM' %}selected{% endif %}>Medium</option>
+                                            <option value="HIGH" {% if q.weight == 'HIGH' %}selected{% endif %}>High</option>
+                                            <option value="CRITICAL" {% if q.weight == 'CRITICAL' %}selected{% endif %}>Critical</option>
+                                        </select>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <label class="form-label small mb-0 me-1">Mode:</label>
+                                        <select class="form-select form-select-sm" name="answer_mode_{{ q.id }}" style="width: 120px;">
+                                            <option value="SINGLE" {% if q.answer_mode == 'SINGLE' %}selected{% endif %}>Single Choice</option>
+                                            <option value="MULTI" {% if q.answer_mode == 'MULTI' %}selected{% endif %}>Multi-Select</option>
+                                        </select>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="small text-muted">Expected:</span>
+                                        {% set expected_list = q.expected_values | default('[]', true) | safe %}
+                                        <div class="form-check form-check-inline mb-0">
+                                            <input class="form-check-input" type="checkbox" name="expected_{{ q.id }}[]" value="yes" 
+                                                   id="exp_yes_{{ q.id }}" {% if 'yes' in expected_list %}checked{% endif %}>
+                                            <label class="form-check-label small" for="exp_yes_{{ q.id }}">Yes</label>
+                                        </div>
+                                        <div class="form-check form-check-inline mb-0">
+                                            <input class="form-check-input" type="checkbox" name="expected_{{ q.id }}[]" value="no" 
+                                                   id="exp_no_{{ q.id }}" {% if 'no' in expected_list %}checked{% endif %}>
+                                            <label class="form-check-label small" for="exp_no_{{ q.id }}">No</label>
+                                        </div>
+                                        <div class="form-check form-check-inline mb-0">
+                                            <input class="form-check-input" type="checkbox" name="expected_{{ q.id }}[]" value="partial" 
+                                                   id="exp_partial_{{ q.id }}" {% if 'partial' in expected_list %}checked{% endif %}>
+                                            <label class="form-check-label small" for="exp_partial_{{ q.id }}">Partial</label>
+                                        </div>
+                                        <div class="form-check form-check-inline mb-0">
+                                            <input class="form-check-input" type="checkbox" name="expected_{{ q.id }}[]" value="na" 
+                                                   id="exp_na_{{ q.id }}" {% if 'na' in expected_list %}checked{% endif %}>
+                                            <label class="form-check-label small" for="exp_na_{{ q.id }}">N/A</label>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="removeQuestion({{ q.id }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <input type="hidden" name="question_ids[]" value="{{ q.id }}">
+                {% endfor %}
+            </div>
+            
+            {% if not questions %}
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                <p class="mt-2">No questions yet. Add questions to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-diagram-3 me-2"></i>Conditional Logic</span>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="showAddRuleForm()">
+                <i class="bi bi-plus-lg me-1"></i>Add Rule
+            </button>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                Show follow-up questions based on vendor answers.
+            </p>
+            
+            <div id="rulesDisplay">
+                {% for rule in rules %}
+                <div class="alert alert-secondary py-2 d-flex justify-content-between align-items-center mb-2" data-rule-id="{{ rule.id }}">
+                    <span>
+                        <i class="bi bi-arrow-right-circle me-2"></i>
+                        If <strong>"{{ rule.trigger_question.question_text[:50] }}{% if rule.trigger_question.question_text|length > 50 %}...{% endif %}"</strong> 
+                        is <span class="badge bg-warning text-dark">{{ rule.trigger_values | replace('[', '') | replace(']', '') | replace('"', '') }}</span>, 
+                        then show <strong>"{{ rule.target_question.question_text[:50] }}{% if rule.target_question.question_text|length > 50 %}...{% endif %}"</strong>
+                        {% if rule.make_required %}<span class="badge bg-info">Required</span>{% endif %}
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteRule({{ rule.id }})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+            
+            {% if not rules %}
+            <div id="noRulesMessage" class="text-muted small">No conditional rules defined.</div>
+            {% endif %}
+            
+            <div id="addRuleSection" class="border rounded p-3 bg-light mt-3" style="display: none;">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small">If answer to:</label>
+                        <select class="form-select form-select-sm" id="newRuleTrigger">
+                            <option value="">Select trigger question...</option>
+                            {% for q in questions %}
+                            <option value="{{ q.id }}">Q{{ loop.index }}: {{ q.question_text[:40] }}{% if q.question_text|length > 40 %}...{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Is any of:</label>
+                        <div id="newRuleTriggerValues" class="d-flex flex-wrap gap-1">
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input trigger-value-cb" type="checkbox" value="yes" id="tv_yes">
+                                <label class="form-check-label small" for="tv_yes">Yes</label>
+                            </div>
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input trigger-value-cb" type="checkbox" value="no" id="tv_no">
+                                <label class="form-check-label small" for="tv_no">No</label>
+                            </div>
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input trigger-value-cb" type="checkbox" value="partial" id="tv_partial">
+                                <label class="form-check-label small" for="tv_partial">Partial</label>
+                            </div>
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input trigger-value-cb" type="checkbox" value="na" id="tv_na">
+                                <label class="form-check-label small" for="tv_na">N/A</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Then show:</label>
+                        <select class="form-select form-select-sm" id="newRuleTarget">
+                            <option value="">Select target question...</option>
+                            {% for q in questions %}
+                            <option value="{{ q.id }}">Q{{ loop.index }}: {{ q.question_text[:40] }}{% if q.question_text|length > 40 %}...{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="newRuleRequired">
+                            <label class="form-check-label small" for="newRuleRequired">Required</label>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-success flex-grow-1" onclick="saveNewRule()">
+                                <i class="bi bi-check"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="hideAddRuleForm()">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <span class="text-muted">Questions: </span>
+                    <span class="badge bg-primary">{{ questions|length }}</span>
+                    <span class="text-muted ms-3">Rules: </span>
+                    <span class="badge bg-secondary">{{ rules|length }}</span>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="submit" class="btn btn-outline-primary" name="action" value="save">
+                        <i class="bi bi-save me-1"></i>Save Changes
+                    </button>
+                    <a href="/questionnaire/{{ questionnaire.id }}/share" class="btn btn-primary">
+                        <i class="bi bi-share me-1"></i>Get Vendor Link
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="modal fade" id="addQuestionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add Questions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bankTab">Question Bank</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#customTab">Custom Question</button>
+                    </li>
+                </ul>
+                <div class="tab-content pt-3">
+                    <div class="tab-pane fade show active" id="bankTab">
+                        <input type="text" class="form-control mb-3" id="bankSearch" placeholder="Search questions...">
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            {% for category, items in categories.items() %}
+                            <div class="mb-3">
+                                <h6 class="mb-2"><span class="badge bg-primary">{{ category }}</span></h6>
+                                {% for item in items %}
+                                <div class="form-check bank-question-item" data-text="{{ item.text|lower }}">
+                                    <input class="form-check-input bank-question-cb" type="checkbox" value="{{ item.id }}" 
+                                           id="bank_{{ item.id }}" data-text="{{ item.text }}">
+                                    <label class="form-check-label" for="bank_{{ item.id }}">{{ item.text }}</label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="customTab">
+                        <textarea class="form-control" id="customQuestionText" rows="3" 
+                                  placeholder="Enter your custom question..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addSelectedQuestions()">
+                    <i class="bi bi-plus-lg me-1"></i>Add Questions
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="deleteQuestionForm" method="post" action="/questionnaire/{{ questionnaire.id }}/remove-question" style="display:none;">
+    <input type="hidden" name="question_id" id="deleteQuestionId">
+</form>
+
+<form id="addQuestionsForm" method="post" action="/questionnaire/{{ questionnaire.id }}/add-questions" style="display:none;">
+    <input type="hidden" name="bank_ids" id="addBankIds">
+    <input type="hidden" name="custom_text" id="addCustomText">
+</form>
+
+<form id="deleteRuleForm" method="post" action="/questionnaire/{{ questionnaire.id }}/delete-rule" style="display:none;">
+    <input type="hidden" name="rule_id" id="deleteRuleId">
+</form>
+
+<form id="addRuleForm" method="post" action="/questionnaire/{{ questionnaire.id }}/add-rule" style="display:none;">
+    <input type="hidden" name="trigger_id" id="addRuleTrigger">
+    <input type="hidden" name="target_id" id="addRuleTarget">
+    <input type="hidden" name="trigger_values" id="addRuleTriggerValues">
+    <input type="hidden" name="make_required" id="addRuleMakeRequired">
+</form>
+
+<script>
+document.getElementById('bankSearch').addEventListener('input', function(e) {
+    const term = e.target.value.toLowerCase();
+    document.querySelectorAll('.bank-question-item').forEach(function(item) {
+        item.style.display = item.dataset.text.includes(term) ? '' : 'none';
+    });
+});
+
+function removeQuestion(qid) {
+    if (confirm('Remove this question from the questionnaire?')) {
+        document.getElementById('deleteQuestionId').value = qid;
+        document.getElementById('deleteQuestionForm').submit();
+    }
+}
+
+function addSelectedQuestions() {
+    const bankIds = [];
+    document.querySelectorAll('.bank-question-cb:checked').forEach(function(cb) {
+        bankIds.push(cb.value);
+    });
+    const customText = document.getElementById('customQuestionText').value.trim();
+    
+    if (bankIds.length === 0 && !customText) {
+        alert('Please select at least one question or enter a custom question.');
+        return;
+    }
+    
+    document.getElementById('addBankIds').value = bankIds.join(',');
+    document.getElementById('addCustomText').value = customText;
+    document.getElementById('addQuestionsForm').submit();
+}
+
+function showAddRuleForm() {
+    document.getElementById('addRuleSection').style.display = 'block';
+}
+
+function hideAddRuleForm() {
+    document.getElementById('addRuleSection').style.display = 'none';
+    document.querySelectorAll('.trigger-value-cb').forEach(cb => cb.checked = false);
+    document.getElementById('newRuleTrigger').value = '';
+    document.getElementById('newRuleTarget').value = '';
+    document.getElementById('newRuleRequired').checked = false;
+}
+
+function saveNewRule() {
+    const trigger = document.getElementById('newRuleTrigger').value;
+    const target = document.getElementById('newRuleTarget').value;
+    const values = [];
+    document.querySelectorAll('.trigger-value-cb:checked').forEach(cb => values.push(cb.value));
+    const required = document.getElementById('newRuleRequired').checked;
+    
+    if (!trigger || !target) {
+        alert('Please select both trigger and target questions.');
+        return;
+    }
+    if (trigger === target) {
+        alert('Trigger and target cannot be the same question.');
+        return;
+    }
+    if (values.length === 0) {
+        alert('Please select at least one trigger value.');
+        return;
+    }
+    
+    document.getElementById('addRuleTrigger').value = trigger;
+    document.getElementById('addRuleTarget').value = target;
+    document.getElementById('addRuleTriggerValues').value = JSON.stringify(values);
+    document.getElementById('addRuleMakeRequired').value = required ? '1' : '0';
+    document.getElementById('addRuleForm').submit();
+}
+
+function deleteRule(ruleId) {
+    if (confirm('Delete this conditional rule?')) {
+        document.getElementById('deleteRuleId').value = ruleId;
+        document.getElementById('deleteRuleForm').submit();
+    }
+}
+</script>
+{% endblock %}
