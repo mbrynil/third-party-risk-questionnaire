@@ -19,6 +19,7 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 │   ├── home.html        # Landing page
 │   ├── create.html      # Question bank selection
 │   ├── created.html     # Success page with shareable link
+│   ├── edit.html        # Questionnaire edit/configuration page
 │   ├── templates_list.html  # Templates management page
 │   ├── vendor_form.html # Vendor intake form with draft support
 │   ├── submitted.html   # Submission confirmation
@@ -51,10 +52,13 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Evidence Management**: View/download evidence files on admin dashboard, delete files before submission
 - **Conditional Rules**: Company A can define show/hide rules for follow-up questions based on vendor answers (e.g., "If No to Q1, show Q2"); rules support make_required flag; hidden questions are excluded from validation and progress
 - **Templates**: Reusable questionnaire blueprints; save any questionnaire as a template, then create new questionnaires from templates; templates include all questions, weights, expected answers, and conditional rules; vendors cannot see or access templates
+- **Template to Edit Flow**: When creating from a template, admins are redirected to the edit page to review/customize questions before getting the vendor link
 
 ## Pages
 - `/` - Home page with navigation
 - `/create` - Create questionnaire from question bank
+- `/questionnaire/{id}/edit` - Edit/configure questionnaire (weights, expected answers, rules)
+- `/questionnaire/{id}/share` - Vendor link sharing page
 - `/templates` - Templates list with actions (use template, delete)
 - `/vendor/{token}` - Vendor form with save draft/submit
 - `/responses` - Questionnaire list with DRAFT/SUBMITTED counts (excludes templates)
