@@ -833,6 +833,8 @@ async def save_as_template(
 async def create_from_template(
     request: Request,
     template_id: int,
+    company_name: str = Form(...),
+    title: str = Form(...),
     db: Session = Depends(get_db)
 ):
     source = db.query(Questionnaire).filter(
@@ -845,8 +847,8 @@ async def create_from_template(
     token = str(uuid.uuid4())[:8]
     
     new_questionnaire = Questionnaire(
-        company_name=source.company_name,
-        title=source.title,
+        company_name=company_name.strip(),
+        title=title.strip(),
         token=token,
         is_template=False,
         template_name=None,
