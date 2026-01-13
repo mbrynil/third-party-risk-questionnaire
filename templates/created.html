@@ -54,7 +54,7 @@
             </div>
         </div>
 
-        <div class="d-flex gap-2 justify-content-center">
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
             <a href="/create" class="btn btn-primary">
                 <i class="bi bi-plus-lg me-1"></i>Create Another
             </a>
@@ -64,6 +64,43 @@
             <a href="{{ vendor_url }}" class="btn btn-outline-secondary" target="_blank">
                 <i class="bi bi-eye me-1"></i>Preview Form
             </a>
+            <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#saveTemplateModal">
+                <i class="bi bi-bookmark-plus me-1"></i>Save as Template
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="saveTemplateModal" tabindex="-1" aria-labelledby="saveTemplateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="/questionnaires/{{ questionnaire.id }}/save-as-template" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="saveTemplateModalLabel">
+                        <i class="bi bi-bookmark-plus me-2"></i>Save as Template
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Create a reusable template from this questionnaire. The template will include all questions, weights, expected answers, and conditional rules.</p>
+                    <div class="mb-3">
+                        <label for="templateName" class="form-label">Template Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="templateName" name="template_name" 
+                               value="{{ questionnaire.title }} Template" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="templateDescription" class="form-label">Description (optional)</label>
+                        <textarea class="form-control" id="templateDescription" name="template_description" rows="3"
+                                  placeholder="Describe when to use this template..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-bookmark-check me-1"></i>Save Template
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

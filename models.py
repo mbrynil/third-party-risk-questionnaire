@@ -28,6 +28,9 @@ class Questionnaire(Base):
     title = Column(String(255), nullable=False)
     token = Column(String(64), unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    is_template = Column(Boolean, default=False, nullable=False)
+    template_name = Column(String(255), nullable=True)
+    template_description = Column(Text, nullable=True)
 
     questions = relationship("Question", back_populates="questionnaire", cascade="all, delete-orphan")
     responses = relationship("Response", back_populates="questionnaire", cascade="all, delete-orphan")

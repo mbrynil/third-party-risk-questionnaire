@@ -1,0 +1,128 @@
+Implement Templates V1 — reusable questionnaire blueprints.
+This feature does not change weights, expected answers, conditional rules, or vendor UI.
+
+⸻
+
+1) Data model changes
+
+Update the Questionnaire model/table to add:
+	•	is_template (boolean, default false)
+	•	template_name (string, nullable)
+	•	template_description (string, nullable)
+
+Behavior:
+	•	is_template = true → this record is a template
+	•	is_template = false → normal live questionnaire
+	•	Keep existing ownership fields (e.g., company/owner) so templates are scoped correctly.
+
+⸻
+
+2) “Save as Template”
+
+On the Company A questionnaire builder/config page:
+
+Add a Save as Template button.
+
+Click behavior:
+	1.	Prompt user for:
+	•	Template Name (required)
+	•	Template Description (optional)
+	2.	Create a new questionnaire record with:
+	•	is_template = true
+	•	template_name + template_description populated
+	•	same owner/company as the original
+	3.	Deep-clone all questionnaire configuration into the new template:
+	•	Clone each question instance:
+	•	question bank reference
+	•	text
+	•	category/section
+	•	weight
+	•	answer_mode (SINGLE/MULTI)
+	•	expected_value(s)
+	•	any other per-question metadata already used
+	•	Clone conditional rules:
+	•	trigger_question_id → mapped to cloned question instance
+	•	target_question_id → mapped to cloned question instance
+	•	trigger_values, operator, make_required preserved
+	4.	Do not copy:
+	•	vendor answers
+	•	submission statuses
+	•	uploads
+	•	follow-ups
+
+The original questionnaire remains unchanged.
+
+⸻
+
+3) Templates list (Company A View)
+
+Create a Templates page or tab that lists all questionnaires where:
+	•	is_template = true
+	•	owned by the current user/company
+
+For each template show:
+	•	template_name
+	•	template_description
+	•	created/updated dates
+
+Actions per template:
+	•	Edit Template → open builder/config (editing template only)
+	•	Create Questionnaire From Template
+	•	(Optional) Delete Template
+
+Editing a template:
+	•	Modify only that template
+	•	Does NOT alter live questionnaires cloned from it
+
+⸻
+
+4) Create Questionnaire From Template
+
+On a template record, provide:
+
+Create Questionnaire From Template
+
+Behavior:
+	1.	Create a new questionnaire with:
+	•	is_template = false
+	•	same owner/company
+	•	optional: copy name/description as the new title
+	2.	Deep-clone:
+	•	All question instances (same config fields)
+	•	All conditional rules, remapping IDs to cloned questions
+	3.	Redirect Company A to the builder/config screen for the new questionnaire
+	4.	Company A may modify it before sending to vendor
+
+⸻
+
+5) Vendor behavior (unchanged)
+	•	Vendors never see templates
+	•	Vendors only answer questionnaires where is_template = false
+
+⸻
+
+6) Guardrails
+	•	Do NOT alter:
+	•	weight logic
+	•	expected answers logic (single/multi)
+	•	conditional rules behavior
+	•	upload behavior
+	•	exports
+	•	Do NOT introduce scoring or dashboards
+	•	Templates must not appear in vendor-facing lists or links
+
+⸻
+
+7) Acceptance Criteria
+	•	Company A can save a questionnaire as a template
+	•	Templates appear in a separate list
+	•	Templates can be edited safely
+	•	Company A can create a live questionnaire from a template
+	•	Cloning preserves:
+	•	questions
+	•	weights
+	•	answer_mode
+	•	expected values
+	•	conditional rules
+	•	Modifying a live questionnaire does not change the template
+	•	Vendors never see or answer template questionnaires

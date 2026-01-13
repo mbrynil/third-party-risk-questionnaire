@@ -190,7 +190,10 @@ async def create_questionnaire(
 
 @app.get("/vendor/{token}", response_class=HTMLResponse)
 async def vendor_form(request: Request, token: str, email: Optional[str] = None, db: Session = Depends(get_db)):
-    questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+    questionnaire = db.query(Questionnaire).filter(
+        Questionnaire.token == token,
+        Questionnaire.is_template == False
+    ).first()
     if not questionnaire:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     
@@ -392,7 +395,7 @@ async def check_draft(token: str, email: str, db: Session = Depends(get_db)):
 
 @app.get("/responses", response_class=HTMLResponse)
 async def view_responses(request: Request, status_filter: Optional[str] = None, db: Session = Depends(get_db)):
-    questionnaires = db.query(Questionnaire).all()
+    questionnaires = db.query(Questionnaire).filter(Questionnaire.is_template == False).all()
     return templates.TemplateResponse("responses.html", {
         "request": request,
         "questionnaires": questionnaires,
@@ -752,6 +755,165 @@ async def export_submission(request: Request, submission_id: int, db: Session = 
         "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
         "now": datetime.utcnow()
     })
+
+
+@app.get("/templates", response_class=HTMLResponse)
+async def view_templates(request: Request, db: Session = Depends(get_db)):
+    templates_list = db.query(Questionnaire).filter(Questionnaire.is_template == True).order_by(Questionnaire.created_at.desc()).all()
+    return templates.TemplateResponse("templates_list.html", {
+        "request": request,
+        "templates": templates_list
+    })
+
+
+@app.post("/questionnaires/{questionnaire_id}/save-as-template")
+async def save_as_template(
+    request: Request,
+    questionnaire_id: int,
+    template_name: str = Form(...),
+    template_description: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    source = db.query(Questionnaire).filter(Questionnaire.id == questionnaire_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    token = str(uuid.uuid4())[:8]
+    
+    new_template = Questionnaire(
+        company_name=source.company_name,
+        title=source.title,
+        token=token,
+        is_template=True,
+        template_name=template_name.strip(),
+        template_description=template_description.strip() if template_description else None
+    )
+    db.add(new_template)
+    db.flush()
+    
+    question_id_map = {}
+    source_questions = db.query(Question).filter(Question.questionnaire_id == source.id).order_by(Question.order).all()
+    for sq in source_questions:
+        new_q = Question(
+            questionnaire_id=new_template.id,
+            question_text=sq.question_text,
+            order=sq.order,
+            weight=sq.weight,
+            expected_operator=sq.expected_operator,
+            expected_value=sq.expected_value,
+            expected_values=sq.expected_values,
+            expected_value_type=sq.expected_value_type,
+            answer_mode=sq.answer_mode
+        )
+        db.add(new_q)
+        db.flush()
+        question_id_map[sq.id] = new_q.id
+    
+    source_rules = db.query(ConditionalRule).filter(ConditionalRule.questionnaire_id == source.id).all()
+    for rule in source_rules:
+        new_trigger = question_id_map.get(rule.trigger_question_id)
+        new_target = question_id_map.get(rule.target_question_id)
+        if new_trigger and new_target:
+            new_rule = ConditionalRule(
+                questionnaire_id=new_template.id,
+                trigger_question_id=new_trigger,
+                operator=rule.operator,
+                trigger_values=rule.trigger_values,
+                target_question_id=new_target,
+                make_required=rule.make_required
+            )
+            db.add(new_rule)
+    
+    db.commit()
+    
+    return RedirectResponse(url="/templates?saved=1", status_code=303)
+
+
+@app.post("/templates/{template_id}/create-questionnaire")
+async def create_from_template(
+    request: Request,
+    template_id: int,
+    db: Session = Depends(get_db)
+):
+    source = db.query(Questionnaire).filter(
+        Questionnaire.id == template_id,
+        Questionnaire.is_template == True
+    ).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    token = str(uuid.uuid4())[:8]
+    
+    new_questionnaire = Questionnaire(
+        company_name=source.company_name,
+        title=source.title,
+        token=token,
+        is_template=False,
+        template_name=None,
+        template_description=None
+    )
+    db.add(new_questionnaire)
+    db.flush()
+    
+    question_id_map = {}
+    source_questions = db.query(Question).filter(Question.questionnaire_id == source.id).order_by(Question.order).all()
+    for sq in source_questions:
+        new_q = Question(
+            questionnaire_id=new_questionnaire.id,
+            question_text=sq.question_text,
+            order=sq.order,
+            weight=sq.weight,
+            expected_operator=sq.expected_operator,
+            expected_value=sq.expected_value,
+            expected_values=sq.expected_values,
+            expected_value_type=sq.expected_value_type,
+            answer_mode=sq.answer_mode
+        )
+        db.add(new_q)
+        db.flush()
+        question_id_map[sq.id] = new_q.id
+    
+    source_rules = db.query(ConditionalRule).filter(ConditionalRule.questionnaire_id == source.id).all()
+    for rule in source_rules:
+        new_trigger = question_id_map.get(rule.trigger_question_id)
+        new_target = question_id_map.get(rule.target_question_id)
+        if new_trigger and new_target:
+            new_rule = ConditionalRule(
+                questionnaire_id=new_questionnaire.id,
+                trigger_question_id=new_trigger,
+                operator=rule.operator,
+                trigger_values=rule.trigger_values,
+                target_question_id=new_target,
+                make_required=rule.make_required
+            )
+            db.add(new_rule)
+    
+    db.commit()
+    
+    base_url = str(request.base_url).rstrip('/')
+    vendor_url = f"{base_url}/vendor/{token}"
+    
+    return templates.TemplateResponse("created.html", {
+        "request": request,
+        "questionnaire": new_questionnaire,
+        "token": token,
+        "vendor_url": vendor_url
+    })
+
+
+@app.post("/templates/{template_id}/delete")
+async def delete_template(template_id: int, db: Session = Depends(get_db)):
+    template = db.query(Questionnaire).filter(
+        Questionnaire.id == template_id,
+        Questionnaire.is_template == True
+    ).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    db.delete(template)
+    db.commit()
+    
+    return RedirectResponse(url="/templates?deleted=1", status_code=303)
 
 
 if __name__ == "__main__":

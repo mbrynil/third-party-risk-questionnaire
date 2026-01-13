@@ -19,6 +19,7 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 │   ├── home.html        # Landing page
 │   ├── create.html      # Question bank selection
 │   ├── created.html     # Success page with shareable link
+│   ├── templates_list.html  # Templates management page
 │   ├── vendor_form.html # Vendor intake form with draft support
 │   ├── submitted.html   # Submission confirmation
 │   ├── responses.html   # Questionnaire list with status counts
@@ -49,12 +50,14 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Evidence Uploads**: Vendors can upload supporting documents (PDF, DOCX, XLSX, PNG, JPG, JPEG) up to 10MB per file
 - **Evidence Management**: View/download evidence files on admin dashboard, delete files before submission
 - **Conditional Rules**: Company A can define show/hide rules for follow-up questions based on vendor answers (e.g., "If No to Q1, show Q2"); rules support make_required flag; hidden questions are excluded from validation and progress
+- **Templates**: Reusable questionnaire blueprints; save any questionnaire as a template, then create new questionnaires from templates; templates include all questions, weights, expected answers, and conditional rules; vendors cannot see or access templates
 
 ## Pages
 - `/` - Home page with navigation
 - `/create` - Create questionnaire from question bank
+- `/templates` - Templates list with actions (use template, delete)
 - `/vendor/{token}` - Vendor form with save draft/submit
-- `/responses` - Questionnaire list with DRAFT/SUBMITTED counts
+- `/responses` - Questionnaire list with DRAFT/SUBMITTED counts (excludes templates)
 - `/responses/{id}` - View responses with status filter and progress bars
 
 ## API Endpoints
@@ -72,7 +75,7 @@ uvicorn main:app --host 0.0.0.0 --port 5000
 
 ## Database Models
 - **QuestionBankItem**: Category, text, active status
-- **Questionnaire**: Company name, title, unique token
+- **Questionnaire**: Company name, title, unique token, is_template, template_name, template_description
 - **Question**: Question text, order, linked to questionnaire
 - **Response**: Vendor name, email, status (DRAFT/SUBMITTED), submitted_at, last_saved_at
 - **Answer**: Answer choice (yes/no/partial/na), notes, linked to question and response
