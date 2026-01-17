@@ -3,77 +3,67 @@
 {% block title %}Vendors - RiskQ{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-        <div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">Vendors</h1>
-            <p class="mt-1 text-slate-600">Manage your third-party vendors and their assessments</p>
-        </div>
-        <div class="mt-4 sm:mt-0">
-            <a href="/vendors/new" class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
-                <i class="bi bi-plus-lg me-2"></i>Add Vendor
-            </a>
-        </div>
+<div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center">
+    <div>
+        <h1>Vendors</h1>
+        <p>Manage your third-party vendors and their assessments</p>
     </div>
-
-    {% if request.query_params.get('created') %}
-    <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4">
-        <div class="flex">
-            <i class="bi bi-check-circle text-emerald-600 me-2"></i>
-            <span class="text-emerald-800">Vendor created successfully!</span>
-        </div>
+    <div class="mt-3 mt-sm-0">
+        <a href="/vendors/new" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-2"></i>Add Vendor
+        </a>
     </div>
-    {% endif %}
+</div>
 
-    {% if request.query_params.get('updated') %}
-    <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4">
-        <div class="flex">
-            <i class="bi bi-check-circle text-emerald-600 me-2"></i>
-            <span class="text-emerald-800">Vendor updated successfully!</span>
-        </div>
-    </div>
-    {% endif %}
+{% if request.query_params.get('created') %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>Vendor created successfully!
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
 
-    {% if vendors %}
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <table class="min-w-full divide-y divide-slate-200">
-            <thead class="bg-slate-50">
+{% if request.query_params.get('updated') %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>Vendor updated successfully!
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if vendors %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Vendor</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Status</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Assessments</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Last Assessed</th>
-                    <th class="px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">Actions</th>
+                    <th>Vendor</th>
+                    <th>Status</th>
+                    <th>Assessments</th>
+                    <th>Last Assessed</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-200">
+            <tbody>
                 {% for vendor in vendors %}
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="px-6 py-4">
-                        <div class="font-semibold text-slate-900">{{ vendor.name }}</div>
+                <tr>
+                    <td>
+                        <div class="fw-semibold">{{ vendor.name }}</div>
                         {% if vendor.primary_contact_name or vendor.primary_contact_email %}
-                        <div class="text-sm text-slate-500">
+                        <small class="text-muted">
                             {% if vendor.primary_contact_name %}{{ vendor.primary_contact_name }}{% endif %}
-                            {% if vendor.primary_contact_name and vendor.primary_contact_email %} · {% endif %}
+                            {% if vendor.primary_contact_name and vendor.primary_contact_email %} &middot; {% endif %}
                             {% if vendor.primary_contact_email %}{{ vendor.primary_contact_email }}{% endif %}
-                        </div>
+                        </small>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4">
+                    <td>
                         {% if vendor.status == 'ACTIVE' %}
-                        <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-1 text-xs font-medium border border-emerald-200">
-                            Active
-                        </span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
                         {% else %}
-                        <span class="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs font-medium border border-slate-200">
-                            Archived
-                        </span>
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Archived</span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-slate-600">
-                        {{ vendor.questionnaires|length }}
-                    </td>
-                    <td class="px-6 py-4 text-slate-600">
+                    <td>{{ vendor.questionnaires|length }}</td>
+                    <td>
                         {% set last_submitted = namespace(date=None) %}
                         {% for q in vendor.questionnaires %}
                             {% for r in q.responses %}
@@ -87,30 +77,28 @@
                         {% if last_submitted.date %}
                             {{ last_submitted.date.strftime('%Y-%m-%d') }}
                         {% else %}
-                            —
+                            <span class="text-muted">&mdash;</span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-right">
-                        <a href="/vendors/{{ vendor.id }}" class="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-slate-700 border border-slate-200 hover:bg-slate-50">
-                            View
-                        </a>
+                    <td class="text-end">
+                        <a href="/vendors/{{ vendor.id }}" class="btn btn-sm btn-outline-secondary">View</a>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-    {% else %}
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-12 text-center">
-        <i class="bi bi-building text-slate-300" style="font-size: 3rem;"></i>
-        <h3 class="mt-4 text-lg font-semibold text-slate-900">No vendors yet</h3>
-        <p class="mt-2 text-slate-600">Get started by adding your first vendor.</p>
-        <div class="mt-6">
-            <a href="/vendors/new" class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
-                <i class="bi bi-plus-lg me-2"></i>Add Vendor
-            </a>
-        </div>
-    </div>
-    {% endif %}
 </div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-building text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-4">No vendors yet</h5>
+        <p class="text-muted">Get started by adding your first vendor.</p>
+        <a href="/vendors/new" class="btn btn-primary mt-2">
+            <i class="bi bi-plus-lg me-2"></i>Add Vendor
+        </a>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

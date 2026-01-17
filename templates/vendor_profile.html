@@ -3,186 +3,163 @@
 {% block title %}{{ vendor.name }} - RiskQ{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-    <div class="mb-2">
-        <a href="/vendors" class="inline-flex items-center text-sm text-slate-600 hover:text-slate-900">
-            <i class="bi bi-arrow-left me-1"></i>Back to Vendors
+<div class="mb-3">
+    <a href="/vendors" class="text-decoration-none text-muted">
+        <i class="bi bi-arrow-left me-1"></i>Back to Vendors
+    </a>
+</div>
+
+{% if request.query_params.get('assessment_created') %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>Assessment created! Configure it below and click "Get Vendor Link" when ready.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4">
+    <div>
+        <h1>{{ vendor.name }}</h1>
+        {% if vendor.primary_contact_name or vendor.primary_contact_email %}
+        <p class="text-muted mb-0">
+            {% if vendor.primary_contact_name %}{{ vendor.primary_contact_name }}{% endif %}
+            {% if vendor.primary_contact_name and vendor.primary_contact_email %} &middot; {% endif %}
+            {% if vendor.primary_contact_email %}{{ vendor.primary_contact_email }}{% endif %}
+        </p>
+        {% endif %}
+    </div>
+    <div class="mt-3 mt-sm-0 d-flex gap-2">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newAssessmentModal">
+            <i class="bi bi-plus-lg me-2"></i>New Assessment
+        </button>
+        <a href="/vendors/{{ vendor.id }}/edit" class="btn btn-outline-secondary">
+            <i class="bi bi-pencil me-2"></i>Edit Vendor
         </a>
     </div>
+</div>
 
-    {% if request.query_params.get('assessment_created') %}
-    <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
-        <div class="flex">
-            <i class="bi bi-check-circle text-emerald-600 me-2"></i>
-            <span class="text-emerald-800">Assessment created! Configure it below and click "Get Vendor Link" when ready.</span>
-        </div>
+<div class="card mb-4">
+    <div class="card-header">
+        <h6 class="mb-0">Vendor Overview</h6>
     </div>
-    {% endif %}
-
-    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between">
-        <div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">{{ vendor.name }}</h1>
-            {% if vendor.primary_contact_name or vendor.primary_contact_email %}
-            <p class="mt-1 text-slate-600">
-                {% if vendor.primary_contact_name %}{{ vendor.primary_contact_name }}{% endif %}
-                {% if vendor.primary_contact_name and vendor.primary_contact_email %} · {% endif %}
-                {% if vendor.primary_contact_email %}{{ vendor.primary_contact_email }}{% endif %}
-            </p>
-            {% endif %}
-        </div>
-        <div class="mt-4 sm:mt-0 flex gap-2">
-            <button type="button" data-bs-toggle="modal" data-bs-target="#newAssessmentModal"
-                    class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
-                <i class="bi bi-plus-lg me-2"></i>New Assessment
-            </button>
-            <a href="/vendors/{{ vendor.id }}/edit" 
-               class="inline-flex items-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-900 border border-slate-200 hover:bg-slate-50">
-                <i class="bi bi-pencil me-2"></i>Edit Vendor
-            </a>
-        </div>
-    </div>
-
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
-        <h2 class="text-sm font-semibold text-slate-900 mb-4">Vendor Overview</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Status</div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Status</div>
                 {% if vendor.status == 'ACTIVE' %}
-                <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-1 text-xs font-medium border border-emerald-200">
-                    Active
-                </span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
                 {% else %}
-                <span class="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs font-medium border border-slate-200">
-                    Archived
-                </span>
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Archived</span>
                 {% endif %}
             </div>
-            <div>
-                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Primary Contact</div>
-                <div class="text-slate-900">
-                    {% if vendor.primary_contact_name or vendor.primary_contact_email %}
-                        {{ vendor.primary_contact_name or '' }}
-                        {% if vendor.primary_contact_email %}
-                        <br><a href="mailto:{{ vendor.primary_contact_email }}" class="text-blue-600 hover:text-blue-800">{{ vendor.primary_contact_email }}</a>
-                        {% endif %}
-                    {% else %}
-                        —
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Primary Contact</div>
+                {% if vendor.primary_contact_name or vendor.primary_contact_email %}
+                    <div>{{ vendor.primary_contact_name or '' }}</div>
+                    {% if vendor.primary_contact_email %}
+                    <a href="mailto:{{ vendor.primary_contact_email }}">{{ vendor.primary_contact_email }}</a>
                     {% endif %}
-                </div>
+                {% else %}
+                    <span class="text-muted">&mdash;</span>
+                {% endif %}
             </div>
-            <div>
-                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">First Assessed</div>
-                <div class="text-slate-900">
-                    {% set first_date = namespace(val=None) %}
-                    {% for q in assessments %}
-                        {% if not first_date.val or q.created_at < first_date.val %}
-                            {% set first_date.val = q.created_at %}
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">First Assessed</div>
+                {% set first_date = namespace(val=None) %}
+                {% for q in assessments %}
+                    {% if not first_date.val or q.created_at < first_date.val %}
+                        {% set first_date.val = q.created_at %}
+                    {% endif %}
+                {% endfor %}
+                {% if first_date.val %}{{ first_date.val.strftime('%Y-%m-%d') }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Last Assessed</div>
+                {% set last_submitted = namespace(date=None) %}
+                {% for q in assessments %}
+                    {% for r in q.responses %}
+                        {% if r.status == 'SUBMITTED' and r.submitted_at %}
+                            {% if not last_submitted.date or r.submitted_at > last_submitted.date %}
+                                {% set last_submitted.date = r.submitted_at %}
+                            {% endif %}
                         {% endif %}
                     {% endfor %}
-                    {% if first_date.val %}{{ first_date.val.strftime('%Y-%m-%d') }}{% else %}—{% endif %}
-                </div>
+                {% endfor %}
+                {% if last_submitted.date %}{{ last_submitted.date.strftime('%Y-%m-%d') }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}
             </div>
-            <div>
-                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Last Assessed</div>
-                <div class="text-slate-900">
-                    {% set last_submitted = namespace(date=None) %}
-                    {% for q in assessments %}
-                        {% for r in q.responses %}
-                            {% if r.status == 'SUBMITTED' and r.submitted_at %}
-                                {% if not last_submitted.date or r.submitted_at > last_submitted.date %}
-                                    {% set last_submitted.date = r.submitted_at %}
-                                {% endif %}
-                            {% endif %}
-                        {% endfor %}
-                    {% endfor %}
-                    {% if last_submitted.date %}{{ last_submitted.date.strftime('%Y-%m-%d') }}{% else %}—{% endif %}
-                </div>
-            </div>
-            <div class="md:col-span-2">
-                <div class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Notes</div>
-                <div class="text-slate-900">{{ vendor.notes if vendor.notes else '—' }}</div>
+            <div class="col-12">
+                <div class="text-muted small text-uppercase mb-1">Notes</div>
+                <div>{{ vendor.notes if vendor.notes else '—' }}</div>
             </div>
         </div>
     </div>
+</div>
 
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-slate-900">Assessments</h2>
-        </div>
-        
-        {% if assessments %}
-        <table class="min-w-full divide-y divide-slate-200">
-            <thead class="bg-slate-50">
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Assessments</h6>
+    </div>
+    
+    {% if assessments %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Assessment</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Status</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Created</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Completed</th>
-                    <th class="px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">Actions</th>
+                    <th>Assessment</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Completed</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-200">
+            <tbody>
                 {% for q in assessments %}
                 {% set latest_response = q.responses|selectattr('status', 'equalto', 'SUBMITTED')|list|last %}
                 {% set any_response = q.responses|list|last %}
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="px-6 py-4">
-                        <div class="font-semibold text-slate-900">{{ q.title }}</div>
-                        <div class="text-sm text-slate-500">{{ q.questions|length }} questions</div>
+                <tr>
+                    <td>
+                        <div class="fw-semibold">{{ q.title }}</div>
+                        <small class="text-muted">{{ q.questions|length }} questions</small>
                     </td>
-                    <td class="px-6 py-4">
+                    <td>
                         {% if latest_response %}
-                        <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-1 text-xs font-medium border border-emerald-200">
-                            Submitted
-                        </span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Submitted</span>
                         {% elif any_response and any_response.status == 'DRAFT' %}
-                        <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-700 px-2 py-1 text-xs font-medium border border-amber-200">
-                            Draft
-                        </span>
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Draft</span>
                         {% else %}
-                        <span class="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs font-medium border border-slate-200">
-                            Sent
-                        </span>
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Sent</span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-slate-600">
-                        {{ q.created_at.strftime('%Y-%m-%d') }}
-                    </td>
-                    <td class="px-6 py-4 text-slate-600">
+                    <td>{{ q.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td>
                         {% if latest_response and latest_response.submitted_at %}
                             {{ latest_response.submitted_at.strftime('%Y-%m-%d') }}
                         {% else %}
-                            —
+                            <span class="text-muted">&mdash;</span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-right">
-                        <div class="flex items-center justify-end gap-2">
-                            {% if latest_response %}
-                            <a href="/responses/{{ q.id }}" class="text-sm text-blue-600 hover:text-blue-800">Review</a>
-                            <a href="/submissions/{{ latest_response.id }}/export" target="_blank" class="text-sm text-slate-600 hover:text-slate-800">Export PDF</a>
-                            {% endif %}
-                            <a href="/questionnaire/{{ q.id }}/share" class="text-sm text-slate-600 hover:text-slate-800">Vendor Link</a>
-                            <a href="/questionnaire/{{ q.id }}/edit" class="text-sm text-slate-600 hover:text-slate-800">Edit</a>
-                        </div>
+                    <td class="text-end">
+                        {% if latest_response %}
+                        <a href="/responses/{{ q.id }}" class="btn btn-sm btn-link">Review</a>
+                        <a href="/submissions/{{ latest_response.id }}/export" target="_blank" class="btn btn-sm btn-link">Export</a>
+                        {% endif %}
+                        <a href="/questionnaire/{{ q.id }}/share" class="btn btn-sm btn-link">Link</a>
+                        <a href="/questionnaire/{{ q.id }}/edit" class="btn btn-sm btn-link">Edit</a>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <div class="p-12 text-center">
-            <i class="bi bi-clipboard-check text-slate-300" style="font-size: 2.5rem;"></i>
-            <h3 class="mt-4 text-sm font-semibold text-slate-900">No assessments yet</h3>
-            <p class="mt-1 text-sm text-slate-600">Create an assessment to start evaluating this vendor.</p>
-            <div class="mt-4">
-                <button type="button" data-bs-toggle="modal" data-bs-target="#newAssessmentModal"
-                        class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
-                    <i class="bi bi-plus-lg me-2"></i>New Assessment
-                </button>
-            </div>
-        </div>
-        {% endif %}
     </div>
+    {% else %}
+    <div class="card-body text-center py-5">
+        <i class="bi bi-clipboard-check text-muted" style="font-size: 2.5rem;"></i>
+        <h6 class="mt-3">No assessments yet</h6>
+        <p class="text-muted small">Create an assessment to start evaluating this vendor.</p>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newAssessmentModal">
+            <i class="bi bi-plus-lg me-2"></i>New Assessment
+        </button>
+    </div>
+    {% endif %}
 </div>
 
 <div class="modal fade" id="newAssessmentModal" tabindex="-1" aria-labelledby="newAssessmentModalLabel" aria-hidden="true">

@@ -7,7 +7,7 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Framework**: FastAPI
 - **Database**: SQLite with SQLAlchemy ORM
 - **Templates**: Jinja2
-- **UI**: Bootstrap 5 with CDN, Tailwind CSS for Vendor Dashboard pages
+- **UI**: Bootstrap 5 with CDN
 - **Server**: Uvicorn
 
 ## Project Structure

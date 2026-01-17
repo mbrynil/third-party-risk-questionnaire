@@ -3,91 +3,84 @@
 {% block title %}{% if vendor %}Edit{% else %}Add{% endif %} Vendor - RiskQ{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="mb-6">
-        <a href="/vendors{% if vendor %}/{{ vendor.id }}{% endif %}" class="inline-flex items-center text-sm text-slate-600 hover:text-slate-900">
-            <i class="bi bi-arrow-left me-1"></i>Back
-        </a>
-    </div>
-
-    <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-6">
-        {% if vendor %}Edit Vendor{% else %}Add New Vendor{% endif %}
-    </h1>
-
-    {% if error %}
-    <div class="mb-4 rounded-lg bg-red-50 border border-red-200 p-4">
-        <div class="flex">
-            <i class="bi bi-exclamation-circle text-red-600 me-2"></i>
-            <span class="text-red-800">{{ error }}</span>
-        </div>
-    </div>
-    {% endif %}
-
-    <form method="post" action="{% if vendor %}/vendors/{{ vendor.id }}/edit{% else %}/vendors/new{% endif %}">
-        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 space-y-6">
-            <div>
-                <label for="name" class="block text-sm font-medium text-slate-700 mb-1">
-                    Vendor Name <span class="text-red-500">*</span>
-                </label>
-                <input type="text" id="name" name="name" required
-                       value="{{ vendor.name if vendor else '' }}"
-                       class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                       placeholder="e.g., Acme Corporation">
-            </div>
-
-            <div>
-                <label for="primary_contact_name" class="block text-sm font-medium text-slate-700 mb-1">
-                    Primary Contact Name
-                </label>
-                <input type="text" id="primary_contact_name" name="primary_contact_name"
-                       value="{{ vendor.primary_contact_name if vendor and vendor.primary_contact_name else '' }}"
-                       class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                       placeholder="e.g., John Smith">
-            </div>
-
-            <div>
-                <label for="primary_contact_email" class="block text-sm font-medium text-slate-700 mb-1">
-                    Primary Contact Email
-                </label>
-                <input type="email" id="primary_contact_email" name="primary_contact_email"
-                       value="{{ vendor.primary_contact_email if vendor and vendor.primary_contact_email else '' }}"
-                       class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                       placeholder="e.g., john@acme.com">
-            </div>
-
-            <div>
-                <label for="notes" class="block text-sm font-medium text-slate-700 mb-1">
-                    Notes
-                </label>
-                <textarea id="notes" name="notes" rows="4"
-                          class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                          placeholder="Additional notes about this vendor...">{{ vendor.notes if vendor and vendor.notes else '' }}</textarea>
-            </div>
-
-            {% if vendor %}
-            <div>
-                <label for="status" class="block text-sm font-medium text-slate-700 mb-1">
-                    Status
-                </label>
-                <select id="status" name="status"
-                        class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                    <option value="ACTIVE" {% if vendor.status == 'ACTIVE' %}selected{% endif %}>Active</option>
-                    <option value="ARCHIVED" {% if vendor.status == 'ARCHIVED' %}selected{% endif %}>Archived</option>
-                </select>
-            </div>
-            {% endif %}
-        </div>
-
-        <div class="mt-6 flex items-center justify-end gap-3">
-            <a href="/vendors{% if vendor %}/{{ vendor.id }}{% endif %}" 
-               class="inline-flex items-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-900 border border-slate-200 hover:bg-slate-50">
-                Cancel
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="mb-3">
+            <a href="/vendors{% if vendor %}/{{ vendor.id }}{% endif %}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-1"></i>Back
             </a>
-            <button type="submit" 
-                    class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
-                {% if vendor %}Save Changes{% else %}Create Vendor{% endif %}
-            </button>
         </div>
-    </form>
+
+        <h1 class="mb-4">{% if vendor %}Edit Vendor{% else %}Add New Vendor{% endif %}</h1>
+
+        {% if error %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-circle me-2"></i>{{ error }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% if vendor %}/vendors/{{ vendor.id }}/edit{% else %}/vendors/new{% endif %}">
+            <div class="card">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            Vendor Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" id="name" name="name" required
+                               value="{{ vendor.name if vendor else '' }}"
+                               class="form-control"
+                               placeholder="e.g., Acme Corporation">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="primary_contact_name" class="form-label">
+                            Primary Contact Name
+                        </label>
+                        <input type="text" id="primary_contact_name" name="primary_contact_name"
+                               value="{{ vendor.primary_contact_name if vendor and vendor.primary_contact_name else '' }}"
+                               class="form-control"
+                               placeholder="e.g., John Smith">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="primary_contact_email" class="form-label">
+                            Primary Contact Email
+                        </label>
+                        <input type="email" id="primary_contact_email" name="primary_contact_email"
+                               value="{{ vendor.primary_contact_email if vendor and vendor.primary_contact_email else '' }}"
+                               class="form-control"
+                               placeholder="e.g., john@acme.com">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea id="notes" name="notes" rows="4"
+                                  class="form-control"
+                                  placeholder="Additional notes about this vendor...">{{ vendor.notes if vendor and vendor.notes else '' }}</textarea>
+                    </div>
+
+                    {% if vendor %}
+                    <div class="mb-0">
+                        <label for="status" class="form-label">Status</label>
+                        <select id="status" name="status" class="form-select">
+                            <option value="ACTIVE" {% if vendor.status == 'ACTIVE' %}selected{% endif %}>Active</option>
+                            <option value="ARCHIVED" {% if vendor.status == 'ARCHIVED' %}selected{% endif %}>Archived</option>
+                        </select>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex justify-content-end gap-2">
+                <a href="/vendors{% if vendor %}/{{ vendor.id }}{% endif %}" class="btn btn-outline-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    {% if vendor %}Save Changes{% else %}Create Vendor{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
 </div>
 {% endblock %}
