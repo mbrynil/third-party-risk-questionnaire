@@ -7,7 +7,7 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Framework**: FastAPI
 - **Database**: SQLite with SQLAlchemy ORM
 - **Templates**: Jinja2
-- **UI**: Bootstrap 5 with CDN
+- **UI**: Bootstrap 5 with CDN, Tailwind CSS for Vendor Dashboard pages
 - **Server**: Uvicorn
 
 ## Project Structure
@@ -24,7 +24,10 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 │   ├── vendor_form.html # Vendor intake form with draft support
 │   ├── submitted.html   # Submission confirmation
 │   ├── responses.html   # Questionnaire list with status counts
-│   └── questionnaire_responses.html  # Individual response details
+│   ├── questionnaire_responses.html  # Individual response details
+│   ├── vendors.html         # Vendor directory with search and stats
+│   ├── vendor_profile.html  # Vendor profile with overview and assessments
+│   └── vendor_edit.html     # Add/edit vendor form
 ├── uploads/             # Evidence file storage (gitignored)
 │   └── {questionnaire_id}/{response_id}/  # Organized by questionnaire and response
 └── questionnaires.db    # SQLite database (auto-created)
@@ -53,9 +56,17 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Conditional Rules**: Company A can define show/hide rules for follow-up questions based on vendor answers (e.g., "If No to Q1, show Q2"); rules support make_required flag; hidden questions are excluded from validation and progress
 - **Templates**: Reusable questionnaire blueprints; save any questionnaire as a template, then create new questionnaires from templates; templates include all questions, weights, expected answers, and conditional rules; vendors cannot see or access templates
 - **Template to Edit Flow**: When creating from a template, admins are redirected to the edit page to review/customize questions before getting the vendor link
+- **Vendor Dashboard V1**: Centralized vendor management with directory page, add/edit forms, and vendor profile pages
+- **Vendor Auto-Linking**: Quick-create flow auto-creates or links vendors by company name (case-insensitive lookup)
+- **Vendor Profiles**: Overview stats (total assessments, submitted, in-progress) and assessments table with status badges
+- **Assessment Creation from Vendor**: Create new assessments directly from vendor profile using templates or blank questionnaire
 
 ## Pages
 - `/` - Home page with navigation
+- `/vendors` - Vendor directory with search and stats cards
+- `/vendors/new` - Add new vendor form
+- `/vendors/{id}` - Vendor profile with overview stats and assessments table
+- `/vendors/{id}/edit` - Edit vendor details
 - `/create` - Create questionnaire from question bank
 - `/questionnaire/{id}/edit` - Edit/configure questionnaire (weights, expected answers, rules)
 - `/questionnaire/{id}/share` - Vendor link sharing page
@@ -79,7 +90,8 @@ uvicorn main:app --host 0.0.0.0 --port 5000
 
 ## Database Models
 - **QuestionBankItem**: Category, text, active status
-- **Questionnaire**: Company name, title, unique token, is_template, template_name, template_description
+- **Vendor**: name, primary_contact_name, primary_contact_email, notes, status (ACTIVE/ARCHIVED), created_at
+- **Questionnaire**: Company name, title, unique token, is_template, template_name, template_description, vendor_id (FK)
 - **Question**: Question text, order, linked to questionnaire
 - **Response**: Vendor name, email, status (DRAFT/SUBMITTED), submitted_at, last_saved_at
 - **Answer**: Answer choice (yes/no/partial/na), notes, linked to question and response

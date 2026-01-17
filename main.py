@@ -77,24 +77,33 @@ async def create_questionnaire(
             "error": "Please select at least one question from the bank or add custom questions."
         })
     
-    token = str(uuid.uuid4())[:8]
+    # Normalize inputs
+    normalized_company_name = company_name.strip()
+    normalized_title = title.strip()
+    
+    # Generate unique token with retry
+    for _ in range(5):
+        token = str(uuid.uuid4())[:8]
+        existing = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+        if not existing:
+            break
     
     # Auto-create or link vendor by company_name (case-insensitive)
     vendor = db.query(Vendor).filter(
-        Vendor.name.ilike(company_name.strip())
+        Vendor.name.ilike(normalized_company_name)
     ).first()
     
     if not vendor:
         vendor = Vendor(
-            name=company_name.strip(),
+            name=normalized_company_name,
             status=VENDOR_STATUS_ACTIVE
         )
         db.add(vendor)
         db.flush()
     
     questionnaire = Questionnaire(
-        company_name=company_name, 
-        title=title, 
+        company_name=normalized_company_name, 
+        title=normalized_title, 
         token=token,
         vendor_id=vendor.id
     )
@@ -797,7 +806,12 @@ async def save_as_template(
     if not source:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     
-    token = str(uuid.uuid4())[:8]
+    # Generate unique token with retry
+    for _ in range(5):
+        token = str(uuid.uuid4())[:8]
+        existing = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+        if not existing:
+            break
     
     new_template = Questionnaire(
         company_name=source.company_name,
@@ -863,15 +877,38 @@ async def create_from_template(
     if not source:
         raise HTTPException(status_code=404, detail="Template not found")
     
-    token = str(uuid.uuid4())[:8]
+    # Normalize inputs
+    normalized_company_name = company_name.strip()
+    normalized_title = title.strip()
+    
+    # Generate unique token with retry
+    for _ in range(5):
+        token = str(uuid.uuid4())[:8]
+        existing = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+        if not existing:
+            break
+    
+    # Auto-create or link vendor by company_name (case-insensitive)
+    vendor = db.query(Vendor).filter(
+        Vendor.name.ilike(normalized_company_name)
+    ).first()
+    
+    if not vendor:
+        vendor = Vendor(
+            name=normalized_company_name,
+            status=VENDOR_STATUS_ACTIVE
+        )
+        db.add(vendor)
+        db.flush()
     
     new_questionnaire = Questionnaire(
-        company_name=company_name.strip(),
-        title=title.strip(),
+        company_name=normalized_company_name,
+        title=normalized_title,
         token=token,
         is_template=False,
         template_name=None,
-        template_description=None
+        template_description=None,
+        vendor_id=vendor.id
     )
     db.add(new_questionnaire)
     db.flush()
@@ -1294,7 +1331,12 @@ async def create_vendor_assessment(
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
     
-    token = str(uuid.uuid4())[:8]
+    # Generate unique token with retry
+    for _ in range(5):
+        token = str(uuid.uuid4())[:8]
+        existing = db.query(Questionnaire).filter(Questionnaire.token == token).first()
+        if not existing:
+            break
     
     if source == "template" and template_id:
         template = db.query(Questionnaire).filter(
