@@ -20,6 +20,26 @@ class QuestionBankItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+VENDOR_STATUS_ACTIVE = "ACTIVE"
+VENDOR_STATUS_ARCHIVED = "ARCHIVED"
+VALID_VENDOR_STATUSES = [VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED]
+
+
+class Vendor(Base):
+    __tablename__ = "vendors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    primary_contact_name = Column(String(255), nullable=True)
+    primary_contact_email = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+    status = Column(String(20), default=VENDOR_STATUS_ACTIVE, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    questionnaires = relationship("Questionnaire", back_populates="vendor")
+
+
 class Questionnaire(Base):
     __tablename__ = "questionnaires"
 
@@ -31,7 +51,9 @@ class Questionnaire(Base):
     is_template = Column(Boolean, default=False, nullable=False)
     template_name = Column(String(255), nullable=True)
     template_description = Column(Text, nullable=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
 
+    vendor = relationship("Vendor", back_populates="questionnaires")
     questions = relationship("Question", back_populates="questionnaire", cascade="all, delete-orphan")
     responses = relationship("Response", back_populates="questionnaire", cascade="all, delete-orphan")
     conditional_rules = relationship("ConditionalRule", back_populates="questionnaire", cascade="all, delete-orphan")

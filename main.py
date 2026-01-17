@@ -10,8 +10,9 @@ import json
 
 from models import (
     init_db, get_db, seed_question_bank, 
-    Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile, FollowUp, ConditionalRule,
+    Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile, FollowUp, ConditionalRule, Vendor,
     VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO,
+    VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED, VALID_VENDOR_STATUSES,
     compute_expectation_status
 )
 from datetime import datetime
@@ -78,7 +79,25 @@ async def create_questionnaire(
     
     token = str(uuid.uuid4())[:8]
     
-    questionnaire = Questionnaire(company_name=company_name, title=title, token=token)
+    # Auto-create or link vendor by company_name (case-insensitive)
+    vendor = db.query(Vendor).filter(
+        Vendor.name.ilike(company_name.strip())
+    ).first()
+    
+    if not vendor:
+        vendor = Vendor(
+            name=company_name.strip(),
+            status=VENDOR_STATUS_ACTIVE
+        )
+        db.add(vendor)
+        db.flush()
+    
+    questionnaire = Questionnaire(
+        company_name=company_name, 
+        title=title, 
+        token=token,
+        vendor_id=vendor.id
+    )
     db.add(questionnaire)
     db.flush()
     
@@ -1143,6 +1162,206 @@ async def delete_template(template_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return RedirectResponse(url="/templates?deleted=1", status_code=303)
+
+
+# ==================== VENDOR ROUTES ====================
+
+@app.get("/vendors", response_class=HTMLResponse)
+async def vendors_list(request: Request, db: Session = Depends(get_db)):
+    vendors = db.query(Vendor).order_by(Vendor.name).all()
+    return templates.TemplateResponse("vendors.html", {
+        "request": request,
+        "vendors": vendors
+    })
+
+
+@app.get("/vendors/new", response_class=HTMLResponse)
+async def new_vendor_page(request: Request):
+    return templates.TemplateResponse("vendor_edit.html", {
+        "request": request,
+        "vendor": None
+    })
+
+
+@app.post("/vendors/new")
+async def create_vendor(
+    request: Request,
+    name: str = Form(...),
+    primary_contact_name: str = Form(""),
+    primary_contact_email: str = Form(""),
+    notes: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    if not name.strip():
+        return templates.TemplateResponse("vendor_edit.html", {
+            "request": request,
+            "vendor": None,
+            "error": "Vendor name is required."
+        })
+    
+    vendor = Vendor(
+        name=name.strip(),
+        primary_contact_name=primary_contact_name.strip() if primary_contact_name else None,
+        primary_contact_email=primary_contact_email.strip() if primary_contact_email else None,
+        notes=notes.strip() if notes else None,
+        status=VENDOR_STATUS_ACTIVE
+    )
+    db.add(vendor)
+    db.commit()
+    
+    return RedirectResponse(url=f"/vendors/{vendor.id}?created=1", status_code=303)
+
+
+@app.get("/vendors/{vendor_id}", response_class=HTMLResponse)
+async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends(get_db)):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    assessments = db.query(Questionnaire).filter(
+        Questionnaire.vendor_id == vendor_id,
+        Questionnaire.is_template == False
+    ).order_by(Questionnaire.created_at.desc()).all()
+    
+    templates_list = db.query(Questionnaire).filter(
+        Questionnaire.is_template == True
+    ).order_by(Questionnaire.template_name).all()
+    
+    return templates.TemplateResponse("vendor_profile.html", {
+        "request": request,
+        "vendor": vendor,
+        "assessments": assessments,
+        "templates": templates_list
+    })
+
+
+@app.get("/vendors/{vendor_id}/edit", response_class=HTMLResponse)
+async def edit_vendor_page(request: Request, vendor_id: int, db: Session = Depends(get_db)):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    return templates.TemplateResponse("vendor_edit.html", {
+        "request": request,
+        "vendor": vendor
+    })
+
+
+@app.post("/vendors/{vendor_id}/edit")
+async def update_vendor(
+    request: Request,
+    vendor_id: int,
+    name: str = Form(...),
+    primary_contact_name: str = Form(""),
+    primary_contact_email: str = Form(""),
+    notes: str = Form(""),
+    status: str = Form("ACTIVE"),
+    db: Session = Depends(get_db)
+):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    if not name.strip():
+        return templates.TemplateResponse("vendor_edit.html", {
+            "request": request,
+            "vendor": vendor,
+            "error": "Vendor name is required."
+        })
+    
+    vendor.name = name.strip()
+    vendor.primary_contact_name = primary_contact_name.strip() if primary_contact_name else None
+    vendor.primary_contact_email = primary_contact_email.strip() if primary_contact_email else None
+    vendor.notes = notes.strip() if notes else None
+    if status in VALID_VENDOR_STATUSES:
+        vendor.status = status
+    
+    db.commit()
+    
+    return RedirectResponse(url=f"/vendors/{vendor_id}?updated=1", status_code=303)
+
+
+@app.post("/vendors/{vendor_id}/create-assessment")
+async def create_vendor_assessment(
+    request: Request,
+    vendor_id: int,
+    source: str = Form(...),
+    title: str = Form(...),
+    template_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db)
+):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    token = str(uuid.uuid4())[:8]
+    
+    if source == "template" and template_id:
+        template = db.query(Questionnaire).filter(
+            Questionnaire.id == template_id,
+            Questionnaire.is_template == True
+        ).first()
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+        
+        new_questionnaire = Questionnaire(
+            company_name=vendor.name,
+            title=title.strip(),
+            token=token,
+            is_template=False,
+            vendor_id=vendor.id
+        )
+        db.add(new_questionnaire)
+        db.flush()
+        
+        question_id_map = {}
+        source_questions = db.query(Question).filter(Question.questionnaire_id == template.id).order_by(Question.order).all()
+        for sq in source_questions:
+            new_q = Question(
+                questionnaire_id=new_questionnaire.id,
+                question_text=sq.question_text,
+                order=sq.order,
+                weight=sq.weight,
+                expected_operator=sq.expected_operator,
+                expected_value=sq.expected_value,
+                expected_values=sq.expected_values,
+                expected_value_type=sq.expected_value_type,
+                answer_mode=sq.answer_mode
+            )
+            db.add(new_q)
+            db.flush()
+            question_id_map[sq.id] = new_q.id
+        
+        source_rules = db.query(ConditionalRule).filter(ConditionalRule.questionnaire_id == template.id).all()
+        for rule in source_rules:
+            new_trigger = question_id_map.get(rule.trigger_question_id)
+            new_target = question_id_map.get(rule.target_question_id)
+            if new_trigger and new_target:
+                new_rule = ConditionalRule(
+                    questionnaire_id=new_questionnaire.id,
+                    trigger_question_id=new_trigger,
+                    operator=rule.operator,
+                    trigger_values=rule.trigger_values,
+                    target_question_id=new_target,
+                    make_required=rule.make_required
+                )
+                db.add(new_rule)
+        
+        db.commit()
+        return RedirectResponse(url=f"/questionnaire/{new_questionnaire.id}/edit?from_template=1", status_code=303)
+    
+    else:
+        new_questionnaire = Questionnaire(
+            company_name=vendor.name,
+            title=title.strip(),
+            token=token,
+            is_template=False,
+            vendor_id=vendor.id
+        )
+        db.add(new_questionnaire)
+        db.commit()
+        
+        return RedirectResponse(url=f"/create?vendor_id={vendor.id}&questionnaire_id={new_questionnaire.id}", status_code=303)
 
 
 if __name__ == "__main__":

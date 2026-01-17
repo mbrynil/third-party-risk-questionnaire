@@ -1,0 +1,175 @@
+Implement Vendor Dashboard V1 (vendor directory + vendor profile) with a clean, professional Tailwind UI. Keep existing “Quick Create questionnaire” flow on the front page.
+
+⸻
+
+1) Data model
+
+Create a Vendor entity/table:
+	•	id
+	•	company_id / owner_id (whatever you use to scope data to Company A)
+	•	name (required)
+	•	primary_contact_name (nullable)
+	•	primary_contact_email (nullable)
+	•	notes (nullable)
+	•	status (enum/string: ACTIVE default, ARCHIVED)
+	•	created_at, updated_at
+
+Update Questionnaire to link to vendors:
+	•	add vendor_id (nullable for backwards compatibility)
+	•	keep existing vendor fields if you have them, but new flows should use vendor_id
+
+⸻
+
+2) Keep existing Quick Create flow (front page)
+
+Do NOT remove the current flow:
+	•	Front page can still create a questionnaire and accept vendor info inline.
+
+But under the hood:
+	•	When a user quick-creates a questionnaire and enters vendor name/contact:
+	•	If a vendor with same name (case-insensitive) exists for this company, link to it
+	•	Else create a new Vendor record and link the questionnaire to it via vendor_id
+
+⸻
+
+3) Vendors Directory page (Company A)
+
+Add a new navigation item: Vendors
+Route example: /vendors
+
+UI (Tailwind, clean):
+	•	Page container: max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8
+	•	Header row:
+	•	Left: title Vendors + subtitle text
+	•	Right: primary button + Add Vendor
+
+Vendors table (not cards):
+Columns:
+	•	Vendor
+	•	show vendor name (bold)
+	•	show contact name/email underneath in muted text if present
+	•	Status (pill badge)
+	•	Assessments (# of questionnaires linked)
+	•	Last Assessed (most recent submitted/completed questionnaire date if available; else “—”)
+	•	Actions: View button
+
+Tailwind styling expectations:
+	•	Table wrapper: bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden
+	•	Table header: bg-slate-50 text-slate-600 text-xs font-semibold uppercase tracking-wide
+	•	Rows: hover effect hover:bg-slate-50
+	•	Status pills:
+	•	ACTIVE: inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-1 text-xs font-medium border border-emerald-200
+	•	ARCHIVED: inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-2 py-1 text-xs font-medium border border-slate-200
+
+⸻
+
+4) Add/Edit Vendor pages (Company A)
+
+Routes:
+	•	/vendors/new
+	•	/vendors/:vendorId/edit
+
+Form UI (Tailwind):
+	•	Card container: bg-white border border-slate-200 rounded-xl shadow-sm p-6
+Fields:
+	•	Vendor Name (required)
+	•	Primary Contact Name
+	•	Primary Contact Email
+	•	Notes (textarea)
+	•	Status (Active/Archived)
+
+Buttons:
+	•	Primary: Save
+	•	Secondary: Cancel / Back
+
+⸻
+
+5) Vendor Profile page (Company A) — MUST LOOK GOOD
+
+Route: /vendors/:vendorId
+
+Layout (Tailwind):
+Page container: max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6
+
+A) Header (“hero row”)
+	•	Left:
+	•	Vendor Name (H1): text-2xl sm:text-3xl font-bold text-slate-900
+	•	Below: contact line in muted text: text-slate-600
+	•	Right:
+	•	Primary button: + New Assessment
+	•	Secondary button: Edit Vendor
+
+Buttons styling:
+	•	Primary: inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500
+	•	Secondary: inline-flex items-center rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-900 border border-slate-200 hover:bg-slate-50
+
+B) Vendor Overview card
+	•	Card: bg-white border border-slate-200 rounded-xl shadow-sm p-6
+	•	Title: text-sm font-semibold text-slate-900 mb-4
+	•	Two-column grid: grid grid-cols-1 md:grid-cols-2 gap-6
+Show:
+	•	Status pill
+	•	Primary contact name/email
+	•	Notes (show “—” if empty)
+	•	First assessed / last assessed (based on questionnaires linked)
+
+C) Assessments section + table
+Title row:
+	•	Left: Assessments
+	•	Right: optional small button Create from Template (or keep in New Assessment flow)
+
+Assessments table (clean):
+Columns:
+	•	Assessment (questionnaire title)
+	•	Template used (if known)
+	•	Status (Draft/Sent/Submitted/etc.) as pill
+	•	Created date
+	•	Completed date
+	•	Actions (aligned right):
+	•	Review
+	•	Export PDF
+	•	Vendor Link (if available)
+	•	Continue Editing (if draft)
+
+Table styling same as vendors directory.
+
+IMPORTANT:
+	•	The “Export PDF” button should call the existing PDF export for that questionnaire id.
+	•	Review should navigate to the existing review answers page.
+
+⸻
+
+6) Create New Assessment from Vendor Profile (Company A)
+
+From Vendor Profile, clicking + New Assessment should open a modal or page that lets the user choose:
+
+Option A: “From Template”
+	•	pick a template (templates scoped to this company)
+	•	create questionnaire from template
+	•	link it to this vendor_id
+	•	redirect to the questionnaire builder/config page (NOT vendor link page)
+
+Option B: “From Question Bank”
+	•	create a new empty questionnaire linked to vendor_id
+	•	redirect to questionnaire builder/config page
+
+After builder/config, user proceeds to “Get Vendor Link” as already implemented.
+
+⸻
+
+7) Guardrails
+	•	Do NOT add scoring/risk rollups yet.
+	•	Do NOT break vendor answering flow.
+	•	Do NOT remove quick-create questionnaire from front page.
+	•	Vendors must never see vendor directory/profile pages.
+	•	Use consistent Tailwind styling across these new pages.
+
+⸻
+
+8) Acceptance criteria
+	•	Vendors page exists and lists vendors cleanly.
+	•	Vendor profile page looks modern and consistent (header + overview card + assessments table).
+	•	Can create vendor, edit vendor, archive vendor.
+	•	Can create a new assessment from vendor profile (template or blank) and it routes to builder first.
+	•	Existing quick-create questionnaire flow still works and auto-creates/links vendors behind the scenes.
+	•	Export PDF and review actions work from the vendor profile’s assessments table.
