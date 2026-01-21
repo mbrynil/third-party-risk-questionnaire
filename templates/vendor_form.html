@@ -66,7 +66,7 @@
                 <small class="text-muted"><i class="bi bi-reply me-1"></i>Your response ({{ followup.responded_at.strftime('%Y-%m-%d %H:%M') if followup.responded_at else '' }}):</small>
                 <p class="mb-0 mt-1">{{ followup.response_text }}</p>
             </div>
-            {% else %}
+            {% elif not is_submitted and not assessment_locked %}
             <form method="post" action="/vendor/{{ questionnaire.token }}/followup/{{ followup.id }}" class="ms-4">
                 <input type="hidden" name="vendor_email" value="{{ existing_response.vendor_email }}">
                 <div class="mb-2">
@@ -115,7 +115,7 @@
                     <input type="text" class="form-control" id="vendor_name" name="vendor_name" required 
                            placeholder="Your company name" 
                            value="{{ existing_response.vendor_name if existing_response else (form_data.get('vendor_name', '') if form_data else '') }}"
-                           {% if is_submitted %}readonly{% endif %}>
+                           {% if is_submitted or assessment_locked %}readonly{% endif %}>
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="vendor_email" class="form-label">Contact Email <span class="text-danger">*</span></label>
