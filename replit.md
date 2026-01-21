@@ -60,6 +60,12 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Vendor Auto-Linking**: Quick-create flow auto-creates or links vendors by company name (case-insensitive lookup)
 - **Vendor Profiles**: Overview stats (total assessments, submitted, in-progress) and assessments table with status badges
 - **Assessment Creation from Vendor**: Create new assessments directly from vendor profile using templates or blank questionnaire
+- **Assessment Lifecycle**: Assessments track status through DRAFT → SENT → IN_PROGRESS → SUBMITTED → REVIEWED states
+- **Lifecycle Transitions**: DRAFT→SENT on Get Vendor Link; SENT→IN_PROGRESS on first vendor save; IN_PROGRESS→SUBMITTED on vendor submit; SUBMITTED→REVIEWED on admin review
+- **Status Badges**: Visual Bootstrap badges on vendor profile and review pages (DRAFT=secondary, SENT=primary, IN_PROGRESS=warning, SUBMITTED=info, REVIEWED=success)
+- **Lifecycle Timestamps**: sent_at, submitted_at, reviewed_at timestamps displayed on review pages
+- **Mark as Reviewed**: Company A can mark SUBMITTED assessments as REVIEWED with one click
+- **Submission Lock**: Vendor form becomes read-only after assessment is SUBMITTED or REVIEWED (server-side enforced)
 
 ## Pages
 - `/` - Home page with navigation
@@ -91,7 +97,7 @@ uvicorn main:app --host 0.0.0.0 --port 5000
 ## Database Models
 - **QuestionBankItem**: Category, text, active status
 - **Vendor**: name, primary_contact_name, primary_contact_email, notes, status (ACTIVE/ARCHIVED), created_at
-- **Questionnaire**: Company name, title, unique token, is_template, template_name, template_description, vendor_id (FK)
+- **Questionnaire**: Company name, title, unique token, is_template, template_name, template_description, vendor_id (FK), status (DRAFT/SENT/IN_PROGRESS/SUBMITTED/REVIEWED), sent_at, submitted_at, reviewed_at
 - **Question**: Question text, order, linked to questionnaire
 - **Response**: Vendor name, email, status (DRAFT/SUBMITTED), submitted_at, last_saved_at
 - **Answer**: Answer choice (yes/no/partial/na), notes, linked to question and response

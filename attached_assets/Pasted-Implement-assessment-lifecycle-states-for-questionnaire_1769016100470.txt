@@ -1,0 +1,140 @@
+Implement assessment lifecycle states for questionnaires/assessments. Use Bootstrap components for UI (badges, buttons, layout). Do not introduce scoring or dashboards beyond status visibility.
+
+⸻
+
+1) Data model changes (Questionnaire / Assessment)
+
+Add the following fields to the Questionnaire (assessment) model/table:
+	•	status (string / enum), allowed values:
+	•	DRAFT (default)
+	•	SENT
+	•	IN_PROGRESS
+	•	SUBMITTED
+	•	REVIEWED
+
+Add timestamps (nullable):
+	•	sent_at
+	•	submitted_at
+	•	reviewed_at
+
+Rules:
+	•	New questionnaires default to DRAFT
+	•	Templates (is_template = true) are excluded from lifecycle logic and never sent to vendors
+
+⸻
+
+2) Lifecycle state transitions (explicit rules)
+
+A) Company A–controlled transitions
+	•	DRAFT → SENT
+	•	Triggered when Company A clicks Get Vendor Link / Continue to Share
+	•	Set sent_at = now()
+	•	Only transition if current status = DRAFT
+	•	SUBMITTED → REVIEWED
+	•	Triggered when Company A clicks Mark as Reviewed
+	•	Set reviewed_at = now()
+
+⸻
+
+B) Vendor-controlled transitions
+	•	SENT → IN_PROGRESS
+	•	Triggered on vendor’s first meaningful interaction:
+	•	saving an answer
+	•	uploading evidence
+	•	Only transition if current status = SENT
+	•	IN_PROGRESS → SUBMITTED
+	•	Triggered when vendor clicks Submit Assessment
+	•	Set submitted_at = now()
+	•	Allow SENT → SUBMITTED if vendor submits without intermediate saves
+
+⸻
+
+3) Vendor questionnaire behavior (editability rules)
+
+On the vendor-facing questionnaire page:
+	•	If status is SENT or IN_PROGRESS:
+	•	Inputs are editable
+	•	Save progress allowed
+	•	Uploads allowed
+	•	Submit button visible
+	•	If status is SUBMITTED or REVIEWED:
+	•	All inputs disabled
+	•	Uploads disabled
+	•	Submit button hidden
+	•	Display Bootstrap alert:
+	•	alert alert-info
+	•	Text:
+“This assessment was submitted on {submitted_at}.”
+
+Server-side enforcement required (do not rely only on disabled inputs).
+
+⸻
+
+4) Company A UI updates (Bootstrap badges)
+
+A) Vendor Profile → Assessments table
+
+Add or ensure a Status column.
+
+Render status using Bootstrap badges:
+	•	DRAFT → badge bg-secondary
+	•	SENT → badge bg-primary
+	•	IN_PROGRESS → badge bg-warning text-dark
+	•	SUBMITTED → badge bg-info
+	•	REVIEWED → badge bg-success
+
+Badges should be clearly visible in each assessment row.
+
+⸻
+
+B) Assessment Summary / Review Answers page
+
+At the top of the page:
+	•	Display the same Bootstrap status badge
+	•	Display lifecycle dates if present:
+	•	Sent on
+	•	Submitted on
+	•	Reviewed on
+
+Add a Mark as Reviewed button:
+	•	Use btn btn-success
+	•	Only visible when status = SUBMITTED
+	•	On click:
+	•	Set status to REVIEWED
+	•	Set reviewed_at = now()
+	•	Refresh UI to show updated badge and date
+
+⸻
+
+5) Get Vendor Link / Share Link flow
+
+Wherever Company A accesses the vendor share link:
+	•	If questionnaire status = DRAFT:
+	•	Transition to SENT
+	•	Set sent_at = now()
+	•	If already SENT or later:
+	•	Do nothing
+
+Templates must never trigger this flow.
+
+⸻
+
+6) Guardrails (important)
+	•	Do NOT add scoring or risk rollups
+	•	Do NOT modify templates, weights, expected answers, conditional logic, or exports
+	•	Do NOT change vendor link structure
+	•	Only add lifecycle logic, badges, and gating
+
+⸻
+
+7) Acceptance criteria
+	•	New questionnaires start as DRAFT
+	•	Clicking Get Vendor Link transitions to SENT
+	•	Vendor interaction transitions to IN_PROGRESS
+	•	Vendor submission transitions to SUBMITTED
+	•	Vendor cannot edit after submission
+	•	Company A can mark assessments as REVIEWED
+	•	Status badges appear on:
+	•	Vendor Profile assessments table
+	•	Assessment summary/review page
+	•	Bootstrap styling is used consistently

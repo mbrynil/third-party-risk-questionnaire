@@ -13,6 +13,8 @@ from models import (
     Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile, FollowUp, ConditionalRule, Vendor,
     VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO,
     VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED, VALID_VENDOR_STATUSES,
+    ASSESSMENT_STATUS_DRAFT, ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS,
+    ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED, VALID_ASSESSMENT_STATUSES,
     compute_expectation_status
 )
 from datetime import datetime
@@ -261,7 +263,9 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
         "existing_response": existing_response,
         "conditional_rules": json.dumps(rules_for_js),
         "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
-        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
+        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
+        "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
+        "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED
     })
 
 
@@ -274,6 +278,27 @@ async def submit_vendor_response(
     questionnaire = db.query(Questionnaire).filter(Questionnaire.token == token).first()
     if not questionnaire:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    # Server-side enforcement: block edits after assessment is submitted
+    if questionnaire.status in [ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED]:
+        questions = db.query(Question).filter(
+            Question.questionnaire_id == questionnaire.id
+        ).order_by(Question.order).all()
+        existing_response = db.query(Response).filter(
+            Response.questionnaire_id == questionnaire.id,
+            Response.status == RESPONSE_STATUS_SUBMITTED
+        ).first()
+        return templates.TemplateResponse("vendor_form.html", {
+            "request": request,
+            "questionnaire": questionnaire,
+            "questions": questions,
+            "existing_response": existing_response,
+            "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+            "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
+            "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
+            "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED,
+            "error": "This assessment has already been submitted and cannot be edited."
+        })
     
     form_data = await request.form()
     vendor_name = str(form_data.get("vendor_name", "")).strip()
@@ -303,6 +328,8 @@ async def submit_vendor_response(
             "existing_response": existing_response,
             "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
             "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
+            "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
+            "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED,
             "error": "You have already submitted this questionnaire. Editing is no longer allowed."
         })
     
@@ -374,6 +401,17 @@ async def submit_vendor_response(
         )
         db.add(answer)
     
+    # Update assessment lifecycle status
+    if action == "submit":
+        # Transition to SUBMITTED (from SENT or IN_PROGRESS)
+        if questionnaire.status in [ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS]:
+            questionnaire.status = ASSESSMENT_STATUS_SUBMITTED
+            questionnaire.submitted_at = datetime.utcnow()
+    else:
+        # Save draft: transition SENT → IN_PROGRESS on first interaction
+        if questionnaire.status == ASSESSMENT_STATUS_SENT:
+            questionnaire.status = ASSESSMENT_STATUS_IN_PROGRESS
+    
     db.commit()
     
     if action == "submit":
@@ -387,6 +425,8 @@ async def submit_vendor_response(
             "existing_response": response,
             "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
             "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
+            "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
+            "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED,
             "success": f"Draft saved at {response.last_saved_at.strftime('%Y-%m-%d %H:%M:%S')} UTC"
         })
 
@@ -473,7 +513,12 @@ async def view_questionnaire_responses(
         "eval_dicts": eval_dicts,
         "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
         "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
-        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
+        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
+        "ASSESSMENT_STATUS_DRAFT": ASSESSMENT_STATUS_DRAFT,
+        "ASSESSMENT_STATUS_SENT": ASSESSMENT_STATUS_SENT,
+        "ASSESSMENT_STATUS_IN_PROGRESS": ASSESSMENT_STATUS_IN_PROGRESS,
+        "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
+        "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED
     })
 
 
@@ -1047,6 +1092,12 @@ async def share_questionnaire(request: Request, questionnaire_id: int, db: Sessi
     if not questionnaire:
         raise HTTPException(status_code=404, detail="Questionnaire not found")
     
+    # Transition DRAFT → SENT when accessing share link
+    if questionnaire.status == ASSESSMENT_STATUS_DRAFT:
+        questionnaire.status = ASSESSMENT_STATUS_SENT
+        questionnaire.sent_at = datetime.utcnow()
+        db.commit()
+    
     base_url = str(request.base_url).rstrip('/')
     vendor_url = f"{base_url}/vendor/{questionnaire.token}"
     
@@ -1199,6 +1250,27 @@ async def delete_template(template_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return RedirectResponse(url="/templates?deleted=1", status_code=303)
+
+
+@app.post("/questionnaire/{questionnaire_id}/mark-reviewed")
+async def mark_questionnaire_reviewed(
+    questionnaire_id: int,
+    db: Session = Depends(get_db)
+):
+    questionnaire = db.query(Questionnaire).filter(
+        Questionnaire.id == questionnaire_id,
+        Questionnaire.is_template == False
+    ).first()
+    if not questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    # Only allow marking as reviewed if currently SUBMITTED
+    if questionnaire.status == ASSESSMENT_STATUS_SUBMITTED:
+        questionnaire.status = ASSESSMENT_STATUS_REVIEWED
+        questionnaire.reviewed_at = datetime.utcnow()
+        db.commit()
+    
+    return RedirectResponse(url=f"/responses/{questionnaire_id}?marked_reviewed=1", status_code=303)
 
 
 # ==================== VENDOR ROUTES ====================

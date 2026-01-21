@@ -121,12 +121,18 @@
                         <small class="text-muted">{{ q.questions|length }} questions</small>
                     </td>
                     <td>
-                        {% if latest_response %}
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">Submitted</span>
-                        {% elif any_response and any_response.status == 'DRAFT' %}
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Draft</span>
+                        {% if q.status == 'DRAFT' %}
+                        <span class="badge bg-secondary">Draft</span>
+                        {% elif q.status == 'SENT' %}
+                        <span class="badge bg-primary">Sent</span>
+                        {% elif q.status == 'IN_PROGRESS' %}
+                        <span class="badge bg-warning text-dark">In Progress</span>
+                        {% elif q.status == 'SUBMITTED' %}
+                        <span class="badge bg-info">Submitted</span>
+                        {% elif q.status == 'REVIEWED' %}
+                        <span class="badge bg-success">Reviewed</span>
                         {% else %}
-                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Sent</span>
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Unknown</span>
                         {% endif %}
                     </td>
                     <td>{{ q.created_at.strftime('%Y-%m-%d') }}</td>

@@ -40,6 +40,20 @@ class Vendor(Base):
     questionnaires = relationship("Questionnaire", back_populates="vendor")
 
 
+ASSESSMENT_STATUS_DRAFT = "DRAFT"
+ASSESSMENT_STATUS_SENT = "SENT"
+ASSESSMENT_STATUS_IN_PROGRESS = "IN_PROGRESS"
+ASSESSMENT_STATUS_SUBMITTED = "SUBMITTED"
+ASSESSMENT_STATUS_REVIEWED = "REVIEWED"
+VALID_ASSESSMENT_STATUSES = [
+    ASSESSMENT_STATUS_DRAFT,
+    ASSESSMENT_STATUS_SENT,
+    ASSESSMENT_STATUS_IN_PROGRESS,
+    ASSESSMENT_STATUS_SUBMITTED,
+    ASSESSMENT_STATUS_REVIEWED
+]
+
+
 class Questionnaire(Base):
     __tablename__ = "questionnaires"
 
@@ -52,6 +66,10 @@ class Questionnaire(Base):
     template_name = Column(String(255), nullable=True)
     template_description = Column(Text, nullable=True)
     vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+    status = Column(String(20), default=ASSESSMENT_STATUS_DRAFT, nullable=False)
+    sent_at = Column(DateTime, nullable=True)
+    submitted_at = Column(DateTime, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
 
     vendor = relationship("Vendor", back_populates="questionnaires")
     questions = relationship("Question", back_populates="questionnaire", cascade="all, delete-orphan")

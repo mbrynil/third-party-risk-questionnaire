@@ -10,12 +10,48 @@
             <li class="breadcrumb-item active">{{ questionnaire.title }}</li>
         </ol>
     </nav>
-    <h1>{{ questionnaire.title }}</h1>
-    <p>
-        <span class="badge bg-primary me-2">{{ responses|length }} responses</span>
-        <span class="badge bg-secondary">{{ questions|length }} questions</span>
-    </p>
+    <div class="d-flex flex-wrap justify-content-between align-items-start mb-3">
+        <div>
+            <h1 class="mb-2">{{ questionnaire.title }}</h1>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                {% if questionnaire.status == ASSESSMENT_STATUS_DRAFT %}
+                <span class="badge bg-secondary">Draft</span>
+                {% elif questionnaire.status == ASSESSMENT_STATUS_SENT %}
+                <span class="badge bg-primary">Sent</span>
+                {% elif questionnaire.status == ASSESSMENT_STATUS_IN_PROGRESS %}
+                <span class="badge bg-warning text-dark">In Progress</span>
+                {% elif questionnaire.status == ASSESSMENT_STATUS_SUBMITTED %}
+                <span class="badge bg-info">Submitted</span>
+                {% elif questionnaire.status == ASSESSMENT_STATUS_REVIEWED %}
+                <span class="badge bg-success">Reviewed</span>
+                {% endif %}
+                <span class="badge bg-light text-dark border">{{ responses|length }} responses</span>
+                <span class="badge bg-light text-dark border">{{ questions|length }} questions</span>
+            </div>
+            <div class="small text-muted mt-2">
+                {% if questionnaire.sent_at %}Sent on {{ questionnaire.sent_at.strftime('%Y-%m-%d') }}{% endif %}
+                {% if questionnaire.submitted_at %} &middot; Submitted on {{ questionnaire.submitted_at.strftime('%Y-%m-%d') }}{% endif %}
+                {% if questionnaire.reviewed_at %} &middot; Reviewed on {{ questionnaire.reviewed_at.strftime('%Y-%m-%d') }}{% endif %}
+            </div>
+        </div>
+        <div class="mt-2 mt-md-0">
+            {% if questionnaire.status == ASSESSMENT_STATUS_SUBMITTED %}
+            <form action="/questionnaire/{{ questionnaire.id }}/mark-reviewed" method="post" class="d-inline">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check2-circle me-1"></i>Mark as Reviewed
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
 </div>
+
+{% if request.query_params.get('marked_reviewed') %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>Assessment marked as reviewed.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
 
 <div class="row">
     <div class="col-lg-4 mb-4">

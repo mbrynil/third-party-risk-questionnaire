@@ -24,10 +24,11 @@
 
 {% set is_submitted = existing_response and existing_response.status == RESPONSE_STATUS_SUBMITTED %}
 {% set is_needs_info = existing_response and existing_response.status == RESPONSE_STATUS_NEEDS_INFO %}
+{% set assessment_locked = questionnaire.status in [ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED] if ASSESSMENT_STATUS_SUBMITTED is defined else false %}
 
-{% if is_submitted %}
+{% if assessment_locked or is_submitted %}
 <div class="alert alert-info">
-    <i class="bi bi-lock me-2"></i><strong>Already Submitted</strong> - This questionnaire was submitted on {{ existing_response.submitted_at.strftime('%Y-%m-%d %H:%M') }} UTC. Editing is no longer allowed.
+    <i class="bi bi-lock me-2"></i><strong>Already Submitted</strong> - This assessment was submitted on {{ questionnaire.submitted_at.strftime('%Y-%m-%d %H:%M') if questionnaire.submitted_at else (existing_response.submitted_at.strftime('%Y-%m-%d %H:%M') if existing_response and existing_response.submitted_at else 'N/A') }} UTC. Editing is no longer allowed.
 </div>
 {% endif %}
 
@@ -122,8 +123,8 @@
                         <input type="email" class="form-control" id="vendor_email" name="vendor_email" required 
                                placeholder="your.email@company.com" 
                                value="{{ existing_response.vendor_email if existing_response else (form_data.get('vendor_email', '') if form_data else '') }}"
-                               {% if is_submitted %}readonly{% endif %}>
-                        {% if not is_submitted %}
+                               {% if is_submitted or assessment_locked %}readonly{% endif %}>
+                        {% if not is_submitted and not assessment_locked %}
                         <button type="button" class="btn btn-outline-secondary" id="load-draft-btn" title="Load existing draft">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
@@ -170,7 +171,7 @@
                         <input type="checkbox" class="form-check-input answer-multi" name="multi_{{ question.id }}[]" 
                                id="yes_{{ question.id }}" value="yes"
                                {% if 'yes' in saved_choices %}checked{% endif %}
-                               {% if is_submitted %}disabled{% endif %}>
+                               {% if is_submitted or assessment_locked %}disabled{% endif %}>
                         <label class="form-check-label text-success" for="yes_{{ question.id }}">
                             <i class="bi bi-check-circle me-1"></i>Yes
                         </label>
@@ -179,7 +180,7 @@
                         <input type="checkbox" class="form-check-input answer-multi" name="multi_{{ question.id }}[]" 
                                id="no_{{ question.id }}" value="no"
                                {% if 'no' in saved_choices %}checked{% endif %}
-                               {% if is_submitted %}disabled{% endif %}>
+                               {% if is_submitted or assessment_locked %}disabled{% endif %}>
                         <label class="form-check-label text-danger" for="no_{{ question.id }}">
                             <i class="bi bi-x-circle me-1"></i>No
                         </label>
@@ -188,7 +189,7 @@
                         <input type="checkbox" class="form-check-input answer-multi" name="multi_{{ question.id }}[]" 
                                id="partial_{{ question.id }}" value="partial"
                                {% if 'partial' in saved_choices %}checked{% endif %}
-                               {% if is_submitted %}disabled{% endif %}>
+                               {% if is_submitted or assessment_locked %}disabled{% endif %}>
                         <label class="form-check-label text-warning" for="partial_{{ question.id }}">
                             <i class="bi bi-dash-circle me-1"></i>Partial
                         </label>
@@ -197,7 +198,7 @@
                         <input type="checkbox" class="form-check-input answer-multi" name="multi_{{ question.id }}[]" 
                                id="na_{{ question.id }}" value="na"
                                {% if 'na' in saved_choices %}checked{% endif %}
-                               {% if is_submitted %}disabled{% endif %}>
+                               {% if is_submitted or assessment_locked %}disabled{% endif %}>
                         <label class="form-check-label text-secondary" for="na_{{ question.id }}">
                             <i class="bi bi-slash-circle me-1"></i>N/A
                         </label>
@@ -208,7 +209,7 @@
                     <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
                            id="yes_{{ question.id }}" value="yes" autocomplete="off" 
                            {% if saved_choice == 'yes' %}checked{% endif %}
-                           {% if is_submitted %}disabled{% endif %}>
+                           {% if is_submitted or assessment_locked %}disabled{% endif %}>
                     <label class="btn btn-outline-success" for="yes_{{ question.id }}">
                         <i class="bi bi-check-circle me-1"></i>Yes
                     </label>
@@ -216,7 +217,7 @@
                     <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
                            id="no_{{ question.id }}" value="no" autocomplete="off" 
                            {% if saved_choice == 'no' %}checked{% endif %}
-                           {% if is_submitted %}disabled{% endif %}>
+                           {% if is_submitted or assessment_locked %}disabled{% endif %}>
                     <label class="btn btn-outline-danger" for="no_{{ question.id }}">
                         <i class="bi bi-x-circle me-1"></i>No
                     </label>
@@ -224,7 +225,7 @@
                     <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
                            id="partial_{{ question.id }}" value="partial" autocomplete="off" 
                            {% if saved_choice == 'partial' %}checked{% endif %}
-                           {% if is_submitted %}disabled{% endif %}>
+                           {% if is_submitted or assessment_locked %}disabled{% endif %}>
                     <label class="btn btn-outline-warning" for="partial_{{ question.id }}">
                         <i class="bi bi-dash-circle me-1"></i>Partial
                     </label>
@@ -232,7 +233,7 @@
                     <input type="radio" class="btn-check answer-choice" name="choice_{{ question.id }}" 
                            id="na_{{ question.id }}" value="na" autocomplete="off" 
                            {% if saved_choice == 'na' %}checked{% endif %}
-                           {% if is_submitted %}disabled{% endif %}>
+                           {% if is_submitted or assessment_locked %}disabled{% endif %}>
                     <label class="btn btn-outline-secondary" for="na_{{ question.id }}">
                         <i class="bi bi-slash-circle me-1"></i>N/A
                     </label>
@@ -242,7 +243,7 @@
                 <div class="mt-2">
                     <textarea class="form-control notes-field" name="notes_{{ question.id }}" 
                               rows="2" placeholder="Optional: Add notes or details..."
-                              {% if is_submitted %}readonly{% endif %}>{{ saved_notes or '' }}</textarea>
+                              {% if is_submitted or assessment_locked %}readonly{% endif %}>{{ saved_notes or '' }}</textarea>
                 </div>
             </div>
             {% endfor %}
@@ -259,11 +260,10 @@
             
             <div id="evidence-list" class="mb-3"></div>
             
-            {% if not is_submitted %}
+            {% if not is_submitted and not assessment_locked %}
             <div class="mb-3">
                 <input type="file" class="form-control" id="evidence-file-input" 
-                       accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
-                       {% if is_submitted %}disabled{% endif %}>
+                       accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg">
                 <div class="form-text">Allowed: PDF, DOCX, XLSX, PNG, JPG, JPEG</div>
             </div>
             <div id="upload-status"></div>
@@ -273,7 +273,7 @@
         </div>
     </div>
 
-    {% if not is_submitted %}
+    {% if not is_submitted and not assessment_locked %}
     <div class="row justify-content-center mb-4">
         <div class="col-md-4 mb-2">
             <button type="submit" name="action" value="draft" class="btn btn-outline-primary btn-lg w-100">
