@@ -1,0 +1,195 @@
+Add a “Perform Assessment” workflow that appears after a vendor submits an assessment. Company A can record an assessment decision using Impact + Likelihood (NIST-style levels) and an Overall Risk rating. Use Bootstrap UI. Do not implement scoring automation yet.
+
+⸻
+
+1) Data model — create an AssessmentDecision record
+
+Create a new table/model: AssessmentDecision
+
+Fields (minimum):
+	•	id
+	•	company_id / owner_id (scope to Company A)
+	•	vendor_id (FK)
+	•	questionnaire_id (FK)  (the submitted questionnaire this decision is based on)
+	•	status (string/enum): DRAFT (default), FINAL
+	•	data_sensitivity (enum/string): VERY_LOW, LOW, MODERATE, HIGH, VERY_HIGH
+	•	business_criticality (enum/string): VERY_LOW, LOW, MODERATE, HIGH, VERY_HIGH
+	•	impact_rating (enum/string): VERY_LOW, LOW, MODERATE, HIGH, VERY_HIGH
+	•	likelihood_rating (enum/string): VERY_LOW, LOW, MODERATE, HIGH, VERY_HIGH
+	•	overall_risk_rating (enum/string): VERY_LOW, LOW, MODERATE, HIGH, VERY_HIGH
+	•	decision_outcome (enum/string): APPROVE, APPROVE_WITH_CONDITIONS, NEEDS_FOLLOW_UP, REJECT
+	•	rationale (text)  (why Company A decided this)
+	•	key_findings (text) (bullets or text)
+	•	remediation_required (text) (optional but recommended)
+	•	next_review_date (date nullable)
+	•	timestamps: created_at, updated_at, and finalized_at (nullable)
+
+Constraints:
+	•	Only one FINAL decision per questionnaire (enforce via logic; allow drafts).
+	•	Decisions are Company A only (never vendor-facing).
+
+⸻
+
+2) Add “Perform Assessment” entry points (Company A)
+
+A) Vendor Profile assessments table
+
+For any questionnaire with status = SUBMITTED:
+	•	Show a Bootstrap button in the Actions column:
+	•	btn btn-outline-primary btn-sm
+	•	Label: Perform Assessment
+
+Clicking goes to the Assessment Decision page for that questionnaire.
+
+If questionnaire is already REVIEWED and has a FINAL decision:
+	•	Show View Assessment instead (btn-outline-secondary)
+
+B) Review Answers / Assessment Summary page
+
+At top of the page, if status = SUBMITTED:
+	•	Show the same Perform Assessment button.
+
+⸻
+
+3) Routing + behavior
+
+Create a route/page like:
+	•	/assessments/:questionnaireId/decision
+
+Page behavior:
+	•	Load the questionnaire + vendor + existing decision record (if any).
+	•	If no decision exists yet:
+	•	Create a new AssessmentDecision record with status DRAFT linked to questionnaire + vendor + company.
+
+⸻
+
+4) The Perform Assessment page UI (Bootstrap, must look clean)
+
+Use Bootstrap layout:
+	•	Container: container py-4
+	•	Header row with vendor + questionnaire context and actions
+
+A) Header
+
+Show:
+	•	Vendor name (H1)
+	•	Smaller line: questionnaire title + submitted date (if available)
+	•	Badge showing questionnaire lifecycle status (SUBMITTED/REVIEWED etc.)
+
+B) Submission snapshot (read-only card)
+
+Add a card near top:
+	•	card mb-3
+Inside show simple summary:
+	•	Submitted on: {submitted_at}
+	•	Total questions
+	•	Counts:
+	•	Meets expectation
+	•	Partially meets
+	•	Does not meet
+	•	No expectation
+
+(Use existing evaluation logic you already have to calculate these counts; do not create scoring.)
+
+C) Assessment Decision Form (the core)
+
+Another card:
+	•	card
+	•	card-header title: “Assessment Decision”
+	•	card-body form fields
+
+Use these dropdowns (each required except next_review_date):
+For each dropdown, options:
+	•	Very Low, Low, Moderate, High, Very High
+
+Fields (grouped):
+
+Impact Inputs
+	1.	Data Sensitivity (dropdown)
+	2.	Business Criticality (dropdown)
+	3.	Impact Rating (dropdown)
+
+Likelihood
+4) Likelihood Rating (dropdown)
+
+Overall
+5) Overall Risk Rating (dropdown)
+
+Decision
+6) Decision Outcome dropdown:
+	•	Approve
+	•	Approve with Conditions
+	•	Needs Follow-up
+	•	Reject
+
+Text areas
+7) Rationale / Notes (textarea)
+8) Key Findings (textarea)
+9) Remediation Required (textarea, optional)
+
+Next Review Date
+10) next_review_date (date input, optional)
+
+Buttons at bottom:
+	•	Save Draft (btn btn-secondary)
+	•	Finalize Assessment (btn btn-success)
+
+⸻
+
+5) Save + Finalize behavior
+
+Save Draft
+	•	Saves the AssessmentDecision fields
+	•	Keeps status = DRAFT
+	•	Does NOT change questionnaire lifecycle status
+
+Finalize Assessment
+	•	Validate required dropdowns are filled:
+	•	data_sensitivity, business_criticality, impact_rating, likelihood_rating, overall_risk_rating, decision_outcome
+	•	Set AssessmentDecision:
+	•	status = FINAL
+	•	finalized_at = now()
+
+Then update the questionnaire lifecycle:
+	•	If questionnaire.status is SUBMITTED, set to REVIEWED and set reviewed_at = now()
+	•	If already REVIEWED, leave as is
+
+After finalize:
+	•	Redirect back to Vendor Profile (or Review page) with a success message:
+	•	Bootstrap alert alert alert-success
+
+⸻
+
+6) Vendor Profile display enhancements (small but valuable)
+
+On Vendor Profile page:
+	•	In assessments table, show:
+	•	Decision Outcome (if FINAL decision exists)
+	•	Overall Risk Rating (if FINAL decision exists)
+
+Use Bootstrap badges for overall risk rating:
+	•	VERY_LOW → badge bg-success
+	•	LOW → badge bg-success
+	•	MODERATE → badge bg-warning text-dark
+	•	HIGH → badge bg-danger
+	•	VERY_HIGH → badge bg-danger
+
+(Exact mapping can be adjusted; keep it consistent.)
+
+⸻
+
+7) Guardrails
+	•	Do NOT auto-calculate impact/likelihood/overall risk yet.
+	•	Do NOT implement scoring algorithms or rollups yet.
+	•	Do NOT change vendor answering behavior.
+	•	Company A only can access and edit decisions.
+
+⸻
+
+8) Acceptance criteria
+	•	After vendor submits, Company A sees Perform Assessment button.
+	•	Company A can save a draft assessment decision.
+	•	Company A can finalize an assessment decision.
+	•	Finalizing marks questionnaire as REVIEWED.
+	•	Vendor Profile displays decision outcome + overall risk when finalized.
+	•	Page uses Bootstrap and looks clean and consistent.

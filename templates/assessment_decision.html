@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Assessment Decision - {{ vendor.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <h1 class="mb-1">{{ vendor.name }}</h1>
+            <p class="text-muted mb-2">
+                {{ questionnaire.title }}
+                {% if response and response.submitted_at %}
+                <span class="ms-2"><i class="bi bi-calendar3 me-1"></i>Submitted {{ response.submitted_at.strftime('%Y-%m-%d') }}</span>
+                {% endif %}
+            </p>
+            <div>
+                {% if questionnaire.status == 'SUBMITTED' %}
+                <span class="badge bg-info">SUBMITTED</span>
+                {% elif questionnaire.status == 'REVIEWED' %}
+                <span class="badge bg-success">REVIEWED</span>
+                {% elif questionnaire.status == 'IN_PROGRESS' %}
+                <span class="badge bg-warning text-dark">IN PROGRESS</span>
+                {% elif questionnaire.status == 'SENT' %}
+                <span class="badge bg-primary">SENT</span>
+                {% else %}
+                <span class="badge bg-secondary">{{ questionnaire.status }}</span>
+                {% endif %}
+                
+                {% if decision.status == 'FINAL' %}
+                <span class="badge bg-success ms-2"><i class="bi bi-check-circle me-1"></i>Decision Finalized</span>
+                {% else %}
+                <span class="badge bg-warning text-dark ms-2"><i class="bi bi-pencil me-1"></i>Draft Decision</span>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <a href="/vendors/{{ vendor.id }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Back to Vendor
+            </a>
+            <a href="/responses/{{ questionnaire.id }}" class="btn btn-outline-primary">
+                <i class="bi bi-eye me-1"></i>View Responses
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if request.query_params.get('message') %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ request.query_params.get('message') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-clipboard-data me-2"></i>Submission Summary
+    </div>
+    <div class="card-body">
+        <div class="row text-center">
+            <div class="col-md-3 col-6 mb-3">
+                <div class="p-3 bg-light rounded">
+                    <div class="fs-3 fw-bold text-primary">{{ total_questions }}</div>
+                    <div class="text-muted small">Total Questions</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+                <div class="p-3 bg-success bg-opacity-10 rounded">
+                    <div class="fs-3 fw-bold text-success">{{ meets_count }}</div>
+                    <div class="text-muted small">Meets Expectation</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+                <div class="p-3 bg-warning bg-opacity-10 rounded">
+                    <div class="fs-3 fw-bold text-warning">{{ partial_count }}</div>
+                    <div class="text-muted small">Partially Meets</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6 mb-3">
+                <div class="p-3 bg-danger bg-opacity-10 rounded">
+                    <div class="fs-3 fw-bold text-danger">{{ does_not_meet_count }}</div>
+                    <div class="text-muted small">Does Not Meet</div>
+                </div>
+            </div>
+        </div>
+        {% if no_expectation_count > 0 %}
+        <p class="text-muted text-center mb-0 mt-2">
+            <small><i class="bi bi-info-circle me-1"></i>{{ no_expectation_count }} question(s) have no expectation defined</small>
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<form method="post">
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-shield-check me-2"></i>Assessment Decision
+    </div>
+    <div class="card-body">
+        {% if decision.status == 'FINAL' %}
+        <div class="alert alert-success mb-4">
+            <i class="bi bi-check-circle me-2"></i>This assessment has been finalized on {{ decision.finalized_at.strftime('%Y-%m-%d %H:%M') if decision.finalized_at else 'N/A' }} UTC.
+        </div>
+        {% endif %}
+        
+        <h6 class="text-muted mb-3"><i class="bi bi-graph-up me-2"></i>Impact Assessment</h6>
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <label for="data_sensitivity" class="form-label">Data Sensitivity <span class="text-danger">*</span></label>
+                <select class="form-select" id="data_sensitivity" name="data_sensitivity" {% if decision.status == 'FINAL' %}disabled{% endif %}>
+                    <option value="">-- Select --</option>
+                    {% for level in risk_levels %}
+                    <option value="{{ level }}" {% if decision.data_sensitivity == level %}selected{% endif %}>{{ level.replace('_', ' ').title() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="business_criticality" class="form-label">Business Criticality <span class="text-danger">*</span></label>
+                <select class="form-select" id="business_criticality" name="business_criticality" {% if decision.status == 'FINAL' %}disabled{% endif %}>
+                    <option value="">-- Select --</option>
+                    {% for level in risk_levels %}
+                    <option value="{{ level }}" {% if decision.business_criticality == level %}selected{% endif %}>{{ level.replace('_', ' ').title() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="impact_rating" class="form-label">Impact Rating <span class="text-danger">*</span></label>
+                <select class="form-select" id="impact_rating" name="impact_rating" {% if decision.status == 'FINAL' %}disabled{% endif %}>
+                    <option value="">-- Select --</option>
+                    {% for level in risk_levels %}
+                    <option value="{{ level }}" {% if decision.impact_rating == level %}selected{% endif %}>{{ level.replace('_', ' ').title() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <h6 class="text-muted mb-3"><i class="bi bi-percent me-2"></i>Likelihood</h6>
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <label for="likelihood_rating" class="form-label">Likelihood Rating <span class="text-danger">*</span></label>
+                <select class="form-select" id="likelihood_rating" name="likelihood_rating" {% if decision.status == 'FINAL' %}disabled{% endif %}>
+                    <option value="">-- Select --</option>
+                    {% for level in risk_levels %}
+                    <option value="{{ level }}" {% if decision.likelihood_rating == level %}selected{% endif %}>{{ level.replace('_', ' ').title() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <h6 class="text-muted mb-3"><i class="bi bi-speedometer2 me-2"></i>Overall Assessment</h6>
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <label for="overall_risk_rating" class="form-label">Overall Risk Rating <span class="text-danger">*</span></label>
+                <select class="form-select" id="overall_risk_rating" name="overall_risk_rating" {% if decision.status == 'FINAL' %}disabled{% endif %}>
+                    <option value="">-- Select --</option>
+                    {% for level in risk_levels %}
+                    <option value="{{ level }}" {% if decision.overall_risk_rating == level %}selected{% endif %}>{{ level.replace('_', ' ').title() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="decision_outcome" class="form-label">Decision Outcome <span class="text-danger">*</span></label>
+                <select class="form-select" id="decision_outcome" name="decision_outcome" {% if decision.status == 'FINAL' %}disabled{% endif %}>
+                    <option value="">-- Select --</option>
+                    {% for outcome in decision_outcomes %}
+                    <option value="{{ outcome }}" {% if decision.decision_outcome == outcome %}selected{% endif %}>{{ outcome.replace('_', ' ').title() }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="next_review_date" class="form-label">Next Review Date</label>
+                <input type="date" class="form-control" id="next_review_date" name="next_review_date" 
+                       value="{{ decision.next_review_date.strftime('%Y-%m-%d') if decision.next_review_date else '' }}"
+                       {% if decision.status == 'FINAL' %}disabled{% endif %}>
+            </div>
+        </div>
+        
+        <h6 class="text-muted mb-3"><i class="bi bi-card-text me-2"></i>Notes & Findings</h6>
+        <div class="mb-3">
+            <label for="rationale" class="form-label">Rationale / Notes</label>
+            <textarea class="form-control" id="rationale" name="rationale" rows="3" 
+                      placeholder="Why did Company A decide this rating?"
+                      {% if decision.status == 'FINAL' %}readonly{% endif %}>{{ decision.rationale or '' }}</textarea>
+        </div>
+        <div class="mb-3">
+            <label for="key_findings" class="form-label">Key Findings</label>
+            <textarea class="form-control" id="key_findings" name="key_findings" rows="3" 
+                      placeholder="Bullet points or summary of key findings..."
+                      {% if decision.status == 'FINAL' %}readonly{% endif %}>{{ decision.key_findings or '' }}</textarea>
+        </div>
+        <div class="mb-3">
+            <label for="remediation_required" class="form-label">Remediation Required</label>
+            <textarea class="form-control" id="remediation_required" name="remediation_required" rows="3" 
+                      placeholder="Any remediation actions required from the vendor..."
+                      {% if decision.status == 'FINAL' %}readonly{% endif %}>{{ decision.remediation_required or '' }}</textarea>
+        </div>
+    </div>
+    
+    {% if decision.status != 'FINAL' %}
+    <div class="card-footer bg-white">
+        <div class="d-flex justify-content-end gap-2">
+            <button type="submit" name="action" value="draft" class="btn btn-secondary">
+                <i class="bi bi-save me-1"></i>Save Draft
+            </button>
+            <button type="submit" name="action" value="finalize" class="btn btn-success">
+                <i class="bi bi-check-circle me-1"></i>Finalize Assessment
+            </button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+</form>
+{% endblock %}

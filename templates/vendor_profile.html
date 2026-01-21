@@ -106,6 +106,8 @@
                 <tr>
                     <th>Assessment</th>
                     <th>Status</th>
+                    <th>Decision</th>
+                    <th>Risk</th>
                     <th>Created</th>
                     <th>Completed</th>
                     <th class="text-end">Actions</th>
@@ -115,6 +117,7 @@
                 {% for q in assessments %}
                 {% set latest_response = q.responses|selectattr('status', 'equalto', 'SUBMITTED')|list|last %}
                 {% set any_response = q.responses|list|last %}
+                {% set decision = decisions.get(q.id) %}
                 <tr>
                     <td>
                         <div class="fw-semibold">{{ q.title }}</div>
@@ -135,6 +138,34 @@
                         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Unknown</span>
                         {% endif %}
                     </td>
+                    <td>
+                        {% if decision and decision.status == 'FINAL' %}
+                            {% if decision.decision_outcome == 'APPROVE' %}
+                            <span class="badge bg-success">Approved</span>
+                            {% elif decision.decision_outcome == 'APPROVE_WITH_CONDITIONS' %}
+                            <span class="badge bg-warning text-dark">Conditional</span>
+                            {% elif decision.decision_outcome == 'NEEDS_FOLLOW_UP' %}
+                            <span class="badge bg-info">Follow-up</span>
+                            {% elif decision.decision_outcome == 'REJECT' %}
+                            <span class="badge bg-danger">Rejected</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if decision and decision.status == 'FINAL' and decision.overall_risk_rating %}
+                            {% if decision.overall_risk_rating in ['VERY_LOW', 'LOW'] %}
+                            <span class="badge bg-success">{{ decision.overall_risk_rating.replace('_', ' ').title() }}</span>
+                            {% elif decision.overall_risk_rating == 'MODERATE' %}
+                            <span class="badge bg-warning text-dark">Moderate</span>
+                            {% else %}
+                            <span class="badge bg-danger">{{ decision.overall_risk_rating.replace('_', ' ').title() }}</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
                     <td>{{ q.created_at.strftime('%Y-%m-%d') }}</td>
                     <td>
                         {% if latest_response and latest_response.submitted_at %}
@@ -144,12 +175,15 @@
                         {% endif %}
                     </td>
                     <td class="text-end">
+                        {% if q.status == 'SUBMITTED' and (not decision or decision.status != 'FINAL') %}
+                        <a href="/assessments/{{ q.id }}/decision" class="btn btn-sm btn-outline-primary">Perform Assessment</a>
+                        {% elif decision and decision.status == 'FINAL' %}
+                        <a href="/assessments/{{ q.id }}/decision" class="btn btn-sm btn-outline-secondary">View Assessment</a>
+                        {% endif %}
                         {% if latest_response %}
                         <a href="/responses/{{ q.id }}" class="btn btn-sm btn-link">Review</a>
-                        <a href="/submissions/{{ latest_response.id }}/export" target="_blank" class="btn btn-sm btn-link">Export</a>
                         {% endif %}
                         <a href="/questionnaire/{{ q.id }}/share" class="btn btn-sm btn-link">Link</a>
-                        <a href="/questionnaire/{{ q.id }}/edit" class="btn btn-sm btn-link">Edit</a>
                     </td>
                 </tr>
                 {% endfor %}

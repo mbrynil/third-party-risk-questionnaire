@@ -195,6 +195,49 @@ class ConditionalRule(Base):
     target_question = relationship("Question", foreign_keys=[target_question_id])
 
 
+DECISION_STATUS_DRAFT = "DRAFT"
+DECISION_STATUS_FINAL = "FINAL"
+VALID_DECISION_STATUSES = [DECISION_STATUS_DRAFT, DECISION_STATUS_FINAL]
+
+RISK_LEVEL_VERY_LOW = "VERY_LOW"
+RISK_LEVEL_LOW = "LOW"
+RISK_LEVEL_MODERATE = "MODERATE"
+RISK_LEVEL_HIGH = "HIGH"
+RISK_LEVEL_VERY_HIGH = "VERY_HIGH"
+VALID_RISK_LEVELS = [RISK_LEVEL_VERY_LOW, RISK_LEVEL_LOW, RISK_LEVEL_MODERATE, RISK_LEVEL_HIGH, RISK_LEVEL_VERY_HIGH]
+
+DECISION_APPROVE = "APPROVE"
+DECISION_APPROVE_WITH_CONDITIONS = "APPROVE_WITH_CONDITIONS"
+DECISION_NEEDS_FOLLOW_UP = "NEEDS_FOLLOW_UP"
+DECISION_REJECT = "REJECT"
+VALID_DECISION_OUTCOMES = [DECISION_APPROVE, DECISION_APPROVE_WITH_CONDITIONS, DECISION_NEEDS_FOLLOW_UP, DECISION_REJECT]
+
+
+class AssessmentDecision(Base):
+    __tablename__ = "assessment_decisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    status = Column(String(20), default=DECISION_STATUS_DRAFT, nullable=False)
+    data_sensitivity = Column(String(20), nullable=True)
+    business_criticality = Column(String(20), nullable=True)
+    impact_rating = Column(String(20), nullable=True)
+    likelihood_rating = Column(String(20), nullable=True)
+    overall_risk_rating = Column(String(20), nullable=True)
+    decision_outcome = Column(String(30), nullable=True)
+    rationale = Column(Text, nullable=True)
+    key_findings = Column(Text, nullable=True)
+    remediation_required = Column(Text, nullable=True)
+    next_review_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    finalized_at = Column(DateTime, nullable=True)
+
+    vendor = relationship("Vendor")
+    questionnaire = relationship("Questionnaire")
+
+
 VALID_CHOICES = ["yes", "no", "partial", "na"]
 
 EVAL_MEETS = "MEETS_EXPECTATION"

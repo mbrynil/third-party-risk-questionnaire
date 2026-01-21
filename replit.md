@@ -66,6 +66,9 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - **Lifecycle Timestamps**: sent_at, submitted_at, reviewed_at timestamps displayed on review pages
 - **Mark as Reviewed**: Company A can mark SUBMITTED assessments as REVIEWED with one click
 - **Submission Lock**: Vendor form becomes read-only after assessment is SUBMITTED or REVIEWED (server-side enforced)
+- **Perform Assessment Workflow**: After vendor submits, Company A can record assessment decision with Impact + Likelihood ratings (NIST-style levels), Overall Risk Rating, and Decision Outcome (Approve/Conditional/Follow-up/Reject)
+- **AssessmentDecision Model**: Stores data_sensitivity, business_criticality, impact_rating, likelihood_rating, overall_risk_rating, decision_outcome, rationale, key_findings, remediation_required, next_review_date with DRAFT/FINAL status
+- **Assessment Decision Page**: Clean Bootstrap form with submission summary counts (meets/partial/does not meet), save draft, and finalize functionality
 
 ## Pages
 - `/` - Home page with navigation
@@ -80,6 +83,7 @@ A FastAPI web application for collecting third-party vendor risk assessments. Ad
 - `/vendor/{token}` - Vendor form with save draft/submit
 - `/responses` - Questionnaire list with DRAFT/SUBMITTED counts (excludes templates)
 - `/responses/{id}` - View responses with status filter and progress bars
+- `/assessments/{id}/decision` - Assessment decision form (NIST-style impact/likelihood ratings)
 
 ## API Endpoints
 - `GET /api/vendor/{token}/check-draft?email=` - Check for existing draft

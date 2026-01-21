@@ -34,13 +34,20 @@
                 {% if questionnaire.reviewed_at %} &middot; Reviewed on {{ questionnaire.reviewed_at.strftime('%Y-%m-%d') }}{% endif %}
             </div>
         </div>
-        <div class="mt-2 mt-md-0">
+        <div class="mt-2 mt-md-0 d-flex gap-2">
             {% if questionnaire.status == ASSESSMENT_STATUS_SUBMITTED %}
+            <a href="/assessments/{{ questionnaire.id }}/decision" class="btn btn-outline-primary">
+                <i class="bi bi-clipboard-check me-1"></i>Perform Assessment
+            </a>
             <form action="/questionnaire/{{ questionnaire.id }}/mark-reviewed" method="post" class="d-inline">
                 <button type="submit" class="btn btn-success">
                     <i class="bi bi-check2-circle me-1"></i>Mark as Reviewed
                 </button>
             </form>
+            {% elif questionnaire.status == ASSESSMENT_STATUS_REVIEWED %}
+            <a href="/assessments/{{ questionnaire.id }}/decision" class="btn btn-outline-secondary">
+                <i class="bi bi-eye me-1"></i>View Assessment
+            </a>
             {% endif %}
         </div>
     </div>

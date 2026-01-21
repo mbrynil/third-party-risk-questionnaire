@@ -11,10 +11,13 @@ import json
 from models import (
     init_db, get_db, seed_question_bank, 
     Questionnaire, Question, Response, Answer, QuestionBankItem, EvidenceFile, FollowUp, ConditionalRule, Vendor,
+    AssessmentDecision,
     VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO,
     VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED, VALID_VENDOR_STATUSES,
     ASSESSMENT_STATUS_DRAFT, ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS,
     ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED, VALID_ASSESSMENT_STATUSES,
+    DECISION_STATUS_DRAFT, DECISION_STATUS_FINAL, VALID_DECISION_STATUSES,
+    VALID_RISK_LEVELS, VALID_DECISION_OUTCOMES,
     compute_expectation_status
 )
 from datetime import datetime
@@ -1336,11 +1339,18 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         Questionnaire.is_template == True
     ).order_by(Questionnaire.template_name).all()
     
+    questionnaire_ids = [a.id for a in assessments]
+    assessment_decisions = db.query(AssessmentDecision).filter(
+        AssessmentDecision.questionnaire_id.in_(questionnaire_ids)
+    ).all() if questionnaire_ids else []
+    decisions = {d.questionnaire_id: d for d in assessment_decisions}
+    
     return templates.TemplateResponse("vendor_profile.html", {
         "request": request,
         "vendor": vendor,
         "assessments": assessments,
-        "templates": templates_list
+        "templates": templates_list,
+        "decisions": decisions
     })
 
 
@@ -1476,6 +1486,167 @@ async def create_vendor_assessment(
         db.commit()
         
         return RedirectResponse(url=f"/create?vendor_id={vendor.id}&questionnaire_id={new_questionnaire.id}", status_code=303)
+
+
+@app.get("/assessments/{questionnaire_id}/decision", response_class=HTMLResponse)
+async def assessment_decision_page(request: Request, questionnaire_id: int, db: Session = Depends(get_db)):
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.id == questionnaire_id).first()
+    if not questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    if not questionnaire.vendor_id:
+        raise HTTPException(status_code=400, detail="Questionnaire has no linked vendor")
+    
+    vendor = db.query(Vendor).filter(Vendor.id == questionnaire.vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    
+    decision = db.query(AssessmentDecision).filter(
+        AssessmentDecision.questionnaire_id == questionnaire_id
+    ).first()
+    
+    if not decision:
+        decision = AssessmentDecision(
+            vendor_id=vendor.id,
+            questionnaire_id=questionnaire_id,
+            status=DECISION_STATUS_DRAFT
+        )
+        db.add(decision)
+        db.commit()
+        db.refresh(decision)
+    
+    response = db.query(Response).filter(
+        Response.questionnaire_id == questionnaire_id,
+        Response.status == RESPONSE_STATUS_SUBMITTED
+    ).first()
+    
+    questions = db.query(Question).filter(Question.questionnaire_id == questionnaire_id).order_by(Question.order).all()
+    
+    meets_count = 0
+    partial_count = 0
+    does_not_meet_count = 0
+    no_expectation_count = 0
+    
+    if response:
+        answers = {a.question_id: a for a in response.answers}
+        for q in questions:
+            answer = answers.get(q.id)
+            if answer:
+                status = compute_expectation_status(
+                    q.expected_value, 
+                    answer.answer_choice, 
+                    q.expected_values, 
+                    q.answer_mode
+                )
+                if status == "MEETS_EXPECTATION":
+                    meets_count += 1
+                elif status == "PARTIALLY_MEETS_EXPECTATION":
+                    partial_count += 1
+                elif status == "DOES_NOT_MEET_EXPECTATION":
+                    does_not_meet_count += 1
+                else:
+                    no_expectation_count += 1
+            else:
+                no_expectation_count += 1
+    
+    return templates.TemplateResponse("assessment_decision.html", {
+        "request": request,
+        "questionnaire": questionnaire,
+        "vendor": vendor,
+        "decision": decision,
+        "response": response,
+        "total_questions": len(questions),
+        "meets_count": meets_count,
+        "partial_count": partial_count,
+        "does_not_meet_count": does_not_meet_count,
+        "no_expectation_count": no_expectation_count,
+        "risk_levels": VALID_RISK_LEVELS,
+        "decision_outcomes": VALID_DECISION_OUTCOMES
+    })
+
+
+@app.post("/assessments/{questionnaire_id}/decision", response_class=HTMLResponse)
+async def save_assessment_decision(
+    request: Request,
+    questionnaire_id: int,
+    action: str = Form(...),
+    data_sensitivity: str = Form(None),
+    business_criticality: str = Form(None),
+    impact_rating: str = Form(None),
+    likelihood_rating: str = Form(None),
+    overall_risk_rating: str = Form(None),
+    decision_outcome: str = Form(None),
+    rationale: str = Form(None),
+    key_findings: str = Form(None),
+    remediation_required: str = Form(None),
+    next_review_date: str = Form(None),
+    db: Session = Depends(get_db)
+):
+    questionnaire = db.query(Questionnaire).filter(Questionnaire.id == questionnaire_id).first()
+    if not questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    
+    decision = db.query(AssessmentDecision).filter(
+        AssessmentDecision.questionnaire_id == questionnaire_id
+    ).first()
+    
+    if not decision:
+        raise HTTPException(status_code=404, detail="Decision not found")
+    
+    if decision.status == DECISION_STATUS_FINAL:
+        return RedirectResponse(
+            url=f"/vendors/{questionnaire.vendor_id}?message=Assessment already finalized&message_type=warning",
+            status_code=303
+        )
+    
+    decision.data_sensitivity = data_sensitivity if data_sensitivity else None
+    decision.business_criticality = business_criticality if business_criticality else None
+    decision.impact_rating = impact_rating if impact_rating else None
+    decision.likelihood_rating = likelihood_rating if likelihood_rating else None
+    decision.overall_risk_rating = overall_risk_rating if overall_risk_rating else None
+    decision.decision_outcome = decision_outcome if decision_outcome else None
+    decision.rationale = rationale.strip() if rationale else None
+    decision.key_findings = key_findings.strip() if key_findings else None
+    decision.remediation_required = remediation_required.strip() if remediation_required else None
+    
+    if next_review_date:
+        try:
+            decision.next_review_date = datetime.strptime(next_review_date, "%Y-%m-%d")
+        except ValueError:
+            decision.next_review_date = None
+    else:
+        decision.next_review_date = None
+    
+    if action == "finalize":
+        required_fields = [
+            data_sensitivity, business_criticality, impact_rating,
+            likelihood_rating, overall_risk_rating, decision_outcome
+        ]
+        if not all(required_fields):
+            return RedirectResponse(
+                url=f"/assessments/{questionnaire_id}/decision?message=Please fill all required fields before finalizing&message_type=danger",
+                status_code=303
+            )
+        
+        decision.status = DECISION_STATUS_FINAL
+        decision.finalized_at = datetime.utcnow()
+        
+        if questionnaire.status == ASSESSMENT_STATUS_SUBMITTED:
+            questionnaire.status = ASSESSMENT_STATUS_REVIEWED
+            questionnaire.reviewed_at = datetime.utcnow()
+    
+    db.commit()
+    
+    if action == "finalize":
+        return RedirectResponse(
+            url=f"/vendors/{questionnaire.vendor_id}?message=Assessment finalized successfully&message_type=success",
+            status_code=303
+        )
+    else:
+        return RedirectResponse(
+            url=f"/assessments/{questionnaire_id}/decision?message=Draft saved&message_type=success",
+            status_code=303
+        )
 
 
 if __name__ == "__main__":
