@@ -32,6 +32,29 @@ templates = Jinja2Templates(directory="templates")
 init_db()
 seed_question_bank()
 
+def fix_stuck_questionnaire_statuses():
+    """Fix questionnaires stuck at SENT/IN_PROGRESS when they have submitted responses."""
+    from models import SessionLocal
+    db = SessionLocal()
+    try:
+        questionnaires = db.query(Questionnaire).filter(
+            Questionnaire.is_template == False,
+            Questionnaire.status.in_([ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS])
+        ).all()
+        
+        for q in questionnaires:
+            submitted_responses = [r for r in q.responses if r.status == RESPONSE_STATUS_SUBMITTED]
+            if submitted_responses:
+                latest = max(submitted_responses, key=lambda r: r.submitted_at or datetime.min)
+                q.status = ASSESSMENT_STATUS_SUBMITTED
+                q.submitted_at = latest.submitted_at
+        
+        db.commit()
+    finally:
+        db.close()
+
+fix_stuck_questionnaire_statuses()
+
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
