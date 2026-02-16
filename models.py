@@ -70,6 +70,7 @@ class TemplateQuestion(Base):
     expected_values = Column(Text, nullable=True)
     expected_value_type = Column(String(20), default="CHOICE", nullable=False)
     answer_mode = Column(String(20), default="SINGLE", nullable=False)
+    category = Column(String(100), nullable=True, index=True)
 
     template = relationship("AssessmentTemplate", back_populates="template_questions")
 
@@ -160,6 +161,7 @@ class Question(Base):
     expected_values = Column(Text, nullable=True)
     expected_value_type = Column(String(20), default=VALUE_TYPE_CHOICE, nullable=False)
     answer_mode = Column(String(20), default=ANSWER_MODE_SINGLE, nullable=False)
+    category = Column(String(100), nullable=True, index=True)
 
     assessment = relationship("Assessment", back_populates="questions")
 

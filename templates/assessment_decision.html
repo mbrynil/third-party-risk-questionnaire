@@ -25,7 +25,7 @@
                 {% else %}
                 <span class="badge bg-secondary">{{ assessment.status }}</span>
                 {% endif %}
-                
+
                 {% if decision.status == 'FINAL' %}
                 <span class="badge bg-success ms-2"><i class="bi bi-check-circle me-1"></i>Decision Finalized</span>
                 {% else %}
@@ -51,45 +51,289 @@
 </div>
 {% endif %}
 
+{# ==================== OVERALL SCORE CARD ==================== #}
+{% set score = scores.overall_score %}
+{% if score is not none %}
+    {% if score >= 90 %}
+        {% set score_color = "success" %}
+        {% set score_hex = "#198754" %}
+    {% elif score >= 70 %}
+        {% set score_color = "info" %}
+        {% set score_hex = "#0dcaf0" %}
+    {% elif score >= 50 %}
+        {% set score_color = "warning" %}
+        {% set score_hex = "#ffc107" %}
+    {% else %}
+        {% set score_color = "danger" %}
+        {% set score_hex = "#dc3545" %}
+    {% endif %}
+{% endif %}
+
 <div class="card mb-4">
     <div class="card-header">
-        <i class="bi bi-clipboard-data me-2"></i>Submission Summary
+        <i class="bi bi-speedometer2 me-2"></i>Assessment Score
     </div>
     <div class="card-body">
-        <div class="row text-center">
-            <div class="col-md-3 col-6 mb-3">
-                <div class="p-3 bg-light rounded">
-                    <div class="fs-3 fw-bold text-primary">{{ total_questions }}</div>
-                    <div class="text-muted small">Total Questions</div>
+        <div class="row align-items-center">
+            {# Score circle #}
+            <div class="col-md-4 text-center mb-3 mb-md-0">
+                {% if score is not none %}
+                <svg width="160" height="160" viewBox="0 0 160 160">
+                    {# Background circle #}
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="#e9ecef" stroke-width="12"/>
+                    {# Score arc — dasharray = circumference, dashoffset = circumference * (1 - score/100) #}
+                    {% set circumference = 439.82 %}
+                    {% set offset = circumference * (1 - score / 100) %}
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="{{ score_hex }}" stroke-width="12"
+                            stroke-linecap="round"
+                            stroke-dasharray="{{ circumference }}"
+                            stroke-dashoffset="{{ offset }}"
+                            transform="rotate(-90 80 80)"/>
+                    <text x="80" y="72" text-anchor="middle" font-size="36" font-weight="bold" fill="{{ score_hex }}">{{ score|int }}</text>
+                    <text x="80" y="94" text-anchor="middle" font-size="13" fill="#6c757d">out of 100</text>
+                </svg>
+                {% if scores.suggested_risk_level %}
+                <div class="mt-2">
+                    <span class="badge bg-{{ score_color }} fs-6">{{ scores.suggested_risk_level.replace('_', ' ').title() }} Risk</span>
                 </div>
+                {% endif %}
+                {% else %}
+                <div class="text-muted py-4">
+                    <i class="bi bi-question-circle fs-1 d-block mb-2"></i>
+                    No scorable questions
+                </div>
+                {% endif %}
             </div>
-            <div class="col-md-3 col-6 mb-3">
-                <div class="p-3 bg-success bg-opacity-10 rounded">
-                    <div class="fs-3 fw-bold text-success">{{ meets_count }}</div>
-                    <div class="text-muted small">Meets Expectation</div>
+
+            {# Counts — clickable to expand question lists #}
+            <div class="col-md-8">
+                <div class="row text-center">
+                    <div class="col-6 col-lg-3 mb-3">
+                        <div class="p-3 bg-light rounded">
+                            <div class="fs-3 fw-bold text-primary">{{ total_questions }}</div>
+                            <div class="text-muted small">Total Questions</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-3 mb-3">
+                        <a class="text-decoration-none d-block p-3 bg-success bg-opacity-10 rounded{% if meets_count > 0 %} cursor-pointer{% endif %}"
+                           {% if meets_count > 0 %}data-bs-toggle="collapse" href="#collapse-meets" role="button"{% endif %}>
+                            <div class="fs-3 fw-bold text-success">{{ meets_count }}</div>
+                            <div class="text-muted small">Meets{% if meets_count > 0 %} <i class="bi bi-chevron-down"></i>{% endif %}</div>
+                        </a>
+                    </div>
+                    <div class="col-6 col-lg-3 mb-3">
+                        <a class="text-decoration-none d-block p-3 bg-warning bg-opacity-10 rounded{% if partial_count > 0 %} cursor-pointer{% endif %}"
+                           {% if partial_count > 0 %}data-bs-toggle="collapse" href="#collapse-partial" role="button"{% endif %}>
+                            <div class="fs-3 fw-bold text-warning">{{ partial_count }}</div>
+                            <div class="text-muted small">Partial{% if partial_count > 0 %} <i class="bi bi-chevron-down"></i>{% endif %}</div>
+                        </a>
+                    </div>
+                    <div class="col-6 col-lg-3 mb-3">
+                        <a class="text-decoration-none d-block p-3 bg-danger bg-opacity-10 rounded{% if does_not_meet_count > 0 %} cursor-pointer{% endif %}"
+                           {% if does_not_meet_count > 0 %}data-bs-toggle="collapse" href="#collapse-dnm" role="button"{% endif %}>
+                            <div class="fs-3 fw-bold text-danger">{{ does_not_meet_count }}</div>
+                            <div class="text-muted small">Does Not Meet{% if does_not_meet_count > 0 %} <i class="bi bi-chevron-down"></i>{% endif %}</div>
+                        </a>
+                    </div>
                 </div>
-            </div>
-            <div class="col-md-3 col-6 mb-3">
-                <div class="p-3 bg-warning bg-opacity-10 rounded">
-                    <div class="fs-3 fw-bold text-warning">{{ partial_count }}</div>
-                    <div class="text-muted small">Partially Meets</div>
-                </div>
-            </div>
-            <div class="col-md-3 col-6 mb-3">
-                <div class="p-3 bg-danger bg-opacity-10 rounded">
-                    <div class="fs-3 fw-bold text-danger">{{ does_not_meet_count }}</div>
-                    <div class="text-muted small">Does Not Meet</div>
-                </div>
+                {% if no_expectation_count > 0 %}
+                <p class="text-muted text-center mb-0">
+                    <a class="text-muted text-decoration-none" data-bs-toggle="collapse" href="#collapse-noexp" role="button">
+                        <small><i class="bi bi-info-circle me-1"></i>{{ no_expectation_count }} question(s) excluded (no expectation defined) <i class="bi bi-chevron-down"></i></small>
+                    </a>
+                </p>
+                {% endif %}
             </div>
         </div>
+
+        {# Expandable question lists #}
+        {% if meets_count > 0 %}
+        <div class="collapse mt-3" id="collapse-meets">
+            <h6 class="text-success mb-2"><i class="bi bi-check-circle me-1"></i>Meets Expectation</h6>
+            <ul class="list-group list-group-flush small">
+                {% for q in scores.question_details if q.eval_status == 'MEETS_EXPECTATION' %}
+                <li class="list-group-item py-2 d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="text-muted me-2">[{{ q.weight }}]</span>
+                        {{ q.question_text[:150] }}{% if q.question_text|length > 150 %}...{% endif %}
+                    </div>
+                    <span class="badge bg-light text-muted">{{ q.answer_choice or '-' }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if partial_count > 0 %}
+        <div class="collapse mt-3" id="collapse-partial">
+            <h6 class="text-warning mb-2"><i class="bi bi-exclamation-circle me-1"></i>Partially Meets</h6>
+            <ul class="list-group list-group-flush small">
+                {% for q in scores.question_details if q.eval_status == 'PARTIALLY_MEETS_EXPECTATION' %}
+                <li class="list-group-item py-2 d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="text-muted me-2">[{{ q.weight }}]</span>
+                        {{ q.question_text[:150] }}{% if q.question_text|length > 150 %}...{% endif %}
+                    </div>
+                    <span class="badge bg-light text-muted">{{ q.answer_choice or '-' }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if does_not_meet_count > 0 %}
+        <div class="collapse mt-3" id="collapse-dnm">
+            <h6 class="text-danger mb-2"><i class="bi bi-x-circle me-1"></i>Does Not Meet</h6>
+            <ul class="list-group list-group-flush small">
+                {% for q in scores.question_details if q.eval_status == 'DOES_NOT_MEET_EXPECTATION' %}
+                <li class="list-group-item py-2 d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="text-muted me-2">[{{ q.weight }}]</span>
+                        {{ q.question_text[:150] }}{% if q.question_text|length > 150 %}...{% endif %}
+                    </div>
+                    <span class="badge bg-light text-muted">{{ q.answer_choice or '-' }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
         {% if no_expectation_count > 0 %}
-        <p class="text-muted text-center mb-0 mt-2">
-            <small><i class="bi bi-info-circle me-1"></i>{{ no_expectation_count }} question(s) have no expectation defined</small>
-        </p>
+        <div class="collapse mt-3" id="collapse-noexp">
+            <h6 class="text-muted mb-2"><i class="bi bi-dash-circle me-1"></i>No Expectation Defined</h6>
+            <ul class="list-group list-group-flush small">
+                {% for q in scores.question_details if q.eval_status == 'NO_EXPECTATION_DEFINED' %}
+                <li class="list-group-item py-2 d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="text-muted me-2">[{{ q.weight }}]</span>
+                        {{ q.question_text[:150] }}{% if q.question_text|length > 150 %}...{% endif %}
+                    </div>
+                    <span class="badge bg-light text-muted">{{ q.answer_choice or '-' }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
         {% endif %}
     </div>
 </div>
 
+{# ==================== CATEGORY BREAKDOWN ==================== #}
+{% if scores.category_scores %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-bar-chart me-2"></i>Category Breakdown
+    </div>
+    <div class="card-body">
+        {% for cat in scores.category_scores %}
+        {% if cat.score is not none %}
+            {% if cat.score >= 90 %}
+                {% set cat_color = "success" %}
+            {% elif cat.score >= 70 %}
+                {% set cat_color = "info" %}
+            {% elif cat.score >= 50 %}
+                {% set cat_color = "warning" %}
+            {% else %}
+                {% set cat_color = "danger" %}
+            {% endif %}
+        <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="fw-semibold">{{ cat.category }}</span>
+                <span class="text-muted small">{{ cat.score }}% <span class="text-muted">({{ cat.count }} questions)</span></span>
+            </div>
+            <div class="progress" style="height: 10px;">
+                <div class="progress-bar bg-{{ cat_color }}" role="progressbar" style="width: {{ cat.score }}%" aria-valuenow="{{ cat.score }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ==================== FLAGGED ITEMS ==================== #}
+{% if scores.flagged_items %}
+<div class="card mb-4">
+    <div class="card-header text-danger">
+        <i class="bi bi-exclamation-triangle me-2"></i>Flagged Items ({{ scores.flagged_items|length }})
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:100px">Weight</th>
+                        <th style="width:160px">Category</th>
+                        <th>Question</th>
+                        <th style="width:130px">Status</th>
+                        <th style="width:100px">Answer</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in scores.flagged_items %}
+                    <tr>
+                        <td>
+                            {% if item.weight == 'CRITICAL' %}
+                            <span class="badge bg-danger">CRITICAL</span>
+                            {% elif item.weight == 'HIGH' %}
+                            <span class="badge bg-warning text-dark">HIGH</span>
+                            {% elif item.weight == 'MEDIUM' %}
+                            <span class="badge bg-info">MEDIUM</span>
+                            {% else %}
+                            <span class="badge bg-secondary">LOW</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ item.category }}</td>
+                        <td>{{ item.question_text[:120] }}{% if item.question_text|length > 120 %}...{% endif %}</td>
+                        <td>
+                            {% if item.eval_status == 'DOES_NOT_MEET_EXPECTATION' %}
+                            <span class="badge bg-danger">Does Not Meet</span>
+                            {% elif item.eval_status == 'PARTIALLY_MEETS_EXPECTATION' %}
+                            <span class="badge bg-warning text-dark">Partial</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ item.answer_choice or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ==================== EVIDENCE & FOLLOW-UP STATUS ==================== #}
+<div class="row mb-4">
+    <div class="col-md-6 mb-3 mb-md-0">
+        <div class="card h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="me-3">
+                    <i class="bi bi-paperclip fs-2 text-primary"></i>
+                </div>
+                <div>
+                    <div class="fw-semibold">Evidence Files</div>
+                    <div class="text-muted">{{ evidence_count }} file{{ 's' if evidence_count != 1 else '' }} attached</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body d-flex align-items-center">
+                <div class="me-3">
+                    <i class="bi bi-chat-left-dots fs-2 text-primary"></i>
+                </div>
+                <div>
+                    <div class="fw-semibold">Follow-ups</div>
+                    <div class="text-muted">
+                        {{ followup_total }} total{% if followup_open > 0 %}, <span class="text-warning fw-semibold">{{ followup_open }} open</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ==================== DECISION FORM ==================== #}
 <form method="post">
 <div class="card mb-4">
     <div class="card-header">
@@ -101,7 +345,7 @@
             <i class="bi bi-check-circle me-2"></i>This assessment has been finalized on {{ decision.finalized_at.strftime('%Y-%m-%d %H:%M') if decision.finalized_at else 'N/A' }} UTC.
         </div>
         {% endif %}
-        
+
         <h6 class="text-muted mb-3"><i class="bi bi-graph-up me-2"></i>Impact Assessment</h6>
         <div class="row mb-4">
             <div class="col-md-4 mb-3">
@@ -132,7 +376,7 @@
                 </select>
             </div>
         </div>
-        
+
         <h6 class="text-muted mb-3"><i class="bi bi-percent me-2"></i>Likelihood</h6>
         <div class="row mb-4">
             <div class="col-md-4 mb-3">
@@ -145,7 +389,7 @@
                 </select>
             </div>
         </div>
-        
+
         <h6 class="text-muted mb-3"><i class="bi bi-speedometer2 me-2"></i>Overall Assessment</h6>
         <div class="row mb-4">
             <div class="col-md-4 mb-3">
@@ -153,9 +397,19 @@
                 <select class="form-select" id="overall_risk_rating" name="overall_risk_rating" {% if decision.status == 'FINAL' %}disabled{% endif %}>
                     <option value="">-- Select --</option>
                     {% for level in risk_levels %}
-                    <option value="{{ level }}" {% if decision.overall_risk_rating == level %}selected{% endif %}>{{ level.replace('_', ' ').title() }}</option>
+                    {# Pre-fill with suggested risk level for new drafts #}
+                    {% if decision.overall_risk_rating %}
+                        <option value="{{ level }}" {% if decision.overall_risk_rating == level %}selected{% endif %}>{{ level.replace('_', ' ').title() }}</option>
+                    {% else %}
+                        <option value="{{ level }}" {% if scores.suggested_risk_level == level %}selected{% endif %}>{{ level.replace('_', ' ').title() }}</option>
+                    {% endif %}
                     {% endfor %}
                 </select>
+                {% if scores.suggested_risk_level and decision.overall_risk_rating and decision.overall_risk_rating != scores.suggested_risk_level %}
+                <div class="form-text text-info">
+                    <i class="bi bi-lightbulb me-1"></i>System suggests: {{ scores.suggested_risk_level.replace('_', ' ').title() }}
+                </div>
+                {% endif %}
             </div>
             <div class="col-md-4 mb-3">
                 <label for="decision_outcome" class="form-label">Decision Outcome <span class="text-danger">*</span></label>
@@ -168,33 +422,33 @@
             </div>
             <div class="col-md-4 mb-3">
                 <label for="next_review_date" class="form-label">Next Review Date</label>
-                <input type="date" class="form-control" id="next_review_date" name="next_review_date" 
+                <input type="date" class="form-control" id="next_review_date" name="next_review_date"
                        value="{{ decision.next_review_date.strftime('%Y-%m-%d') if decision.next_review_date else '' }}"
                        {% if decision.status == 'FINAL' %}disabled{% endif %}>
             </div>
         </div>
-        
+
         <h6 class="text-muted mb-3"><i class="bi bi-card-text me-2"></i>Notes & Findings</h6>
         <div class="mb-3">
             <label for="rationale" class="form-label">Rationale / Notes</label>
-            <textarea class="form-control" id="rationale" name="rationale" rows="3" 
+            <textarea class="form-control" id="rationale" name="rationale" rows="3"
                       placeholder="Why did Company A decide this rating?"
                       {% if decision.status == 'FINAL' %}readonly{% endif %}>{{ decision.rationale or '' }}</textarea>
         </div>
         <div class="mb-3">
             <label for="key_findings" class="form-label">Key Findings</label>
-            <textarea class="form-control" id="key_findings" name="key_findings" rows="3" 
+            <textarea class="form-control" id="key_findings" name="key_findings" rows="3"
                       placeholder="Bullet points or summary of key findings..."
                       {% if decision.status == 'FINAL' %}readonly{% endif %}>{{ decision.key_findings or '' }}</textarea>
         </div>
         <div class="mb-3">
             <label for="remediation_required" class="form-label">Remediation Required</label>
-            <textarea class="form-control" id="remediation_required" name="remediation_required" rows="3" 
+            <textarea class="form-control" id="remediation_required" name="remediation_required" rows="3"
                       placeholder="Any remediation actions required from the vendor..."
                       {% if decision.status == 'FINAL' %}readonly{% endif %}>{{ decision.remediation_required or '' }}</textarea>
         </div>
     </div>
-    
+
     {% if decision.status != 'FINAL' %}
     <div class="card-footer bg-white">
         <div class="d-flex justify-content-end gap-2">

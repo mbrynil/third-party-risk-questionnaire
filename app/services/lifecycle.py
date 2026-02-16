@@ -29,8 +29,8 @@ def transition_to_in_progress(db: Session, assessment: Assessment) -> bool:
 
 
 def transition_to_submitted(db: Session, assessment: Assessment) -> bool:
-    """Transition SENT/IN_PROGRESS → SUBMITTED. Returns True if transition occurred."""
-    if assessment.status in [ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS]:
+    """Transition DRAFT/SENT/IN_PROGRESS → SUBMITTED. Returns True if transition occurred."""
+    if assessment.status in [ASSESSMENT_STATUS_DRAFT, ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS]:
         assessment.status = ASSESSMENT_STATUS_SUBMITTED
         assessment.submitted_at = datetime.utcnow()
         return True

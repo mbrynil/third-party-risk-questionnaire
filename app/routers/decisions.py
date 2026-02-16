@@ -10,7 +10,7 @@ from models import (
     VALID_RISK_LEVELS, VALID_DECISION_OUTCOMES,
 )
 from app.services.decision_service import get_or_create_decision, save_decision
-from app.services.evaluation import compute_expectation_stats
+from app.services.scoring import compute_assessment_scores
 from app.services.lifecycle import transition_to_reviewed
 
 router = APIRouter()
@@ -40,7 +40,11 @@ async def assessment_decision_page(request: Request, assessment_id: int, db: Ses
         Question.assessment_id == assessment_id
     ).order_by(Question.order).all()
 
-    stats = compute_expectation_stats(questions, response)
+    scores = compute_assessment_scores(questions, response)
+
+    evidence_count = len(response.evidence_files) if response else 0
+    followup_total = len(response.follow_ups) if response else 0
+    followup_open = sum(1 for f in response.follow_ups if not f.response_text) if response else 0
 
     return templates.TemplateResponse("assessment_decision.html", {
         "request": request,
@@ -49,9 +53,13 @@ async def assessment_decision_page(request: Request, assessment_id: int, db: Ses
         "decision": decision,
         "response": response,
         "total_questions": len(questions),
-        **stats,
+        "scores": scores,
+        **{k: scores[k] for k in ("meets_count", "partial_count", "does_not_meet_count", "no_expectation_count")},
+        "evidence_count": evidence_count,
+        "followup_total": followup_total,
+        "followup_open": followup_open,
         "risk_levels": VALID_RISK_LEVELS,
-        "decision_outcomes": VALID_DECISION_OUTCOMES
+        "decision_outcomes": VALID_DECISION_OUTCOMES,
     })
 
 
