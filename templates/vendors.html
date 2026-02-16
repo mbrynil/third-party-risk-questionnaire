@@ -62,10 +62,10 @@
                         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Archived</span>
                         {% endif %}
                     </td>
-                    <td>{{ vendor.questionnaires|length }}</td>
+                    <td>{{ vendor.assessments|length }}</td>
                     <td>
                         {% set last_submitted = namespace(date=None) %}
-                        {% for q in vendor.questionnaires %}
+                        {% for q in vendor.assessments %}
                             {% for r in q.responses %}
                                 {% if r.status == 'SUBMITTED' and r.submitted_at %}
                                     {% if not last_submitted.date or r.submitted_at > last_submitted.date %}

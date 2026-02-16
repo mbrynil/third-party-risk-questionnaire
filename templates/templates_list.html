@@ -45,18 +45,18 @@
                 <tr>
                     <td>
                         <i class="bi bi-bookmark-fill me-1 text-success"></i>
-                        <strong>{{ t.template_name }}</strong>
-                        <br><span class="text-muted small">{{ t.company_name }} - {{ t.title }}</span>
+                        <strong>{{ t.name }}</strong>
+                        <br><span class="text-muted small">{{ t.source_company }} - {{ t.source_title }}</span>
                     </td>
                     <td>
-                        {% if t.template_description %}
-                        <span class="text-muted">{{ t.template_description[:100] }}{% if t.template_description|length > 100 %}...{% endif %}</span>
+                        {% if t.description %}
+                        <span class="text-muted">{{ t.description[:100] }}{% if t.description|length > 100 %}...{% endif %}</span>
                         {% else %}
                         <span class="text-muted fst-italic">No description</span>
                         {% endif %}
                     </td>
                     <td>
-                        <span class="badge bg-secondary">{{ t.questions|length }}</span>
+                        <span class="badge bg-secondary">{{ t.template_questions|length }}</span>
                     </td>
                     <td>
                         <span class="text-muted">
@@ -97,7 +97,7 @@
                 </div>
                 <div class="modal-body">
                     <p class="text-muted mb-3">
-                        Creating from: <strong>{{ t.template_name }}</strong>
+                        Creating from: <strong>{{ t.name }}</strong>
                     </p>
                     <div class="mb-3">
                         <label for="companyName{{ t.id }}" class="form-label">Company Name <span class="text-danger">*</span></label>
@@ -107,7 +107,7 @@
                     <div class="mb-3">
                         <label for="questionnaireTitle{{ t.id }}" class="form-label">Questionnaire Title <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="questionnaireTitle{{ t.id }}" name="title" 
-                               value="{{ t.title }}" required>
+                               value="{{ t.source_title }}" required>
                     </div>
                 </div>
                 <div class="modal-footer">

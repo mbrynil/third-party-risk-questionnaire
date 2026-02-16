@@ -227,7 +227,7 @@
                                     <select name="template_id" class="form-select form-select-sm mb-2" required>
                                         <option value="">Select template...</option>
                                         {% for t in templates %}
-                                        <option value="{{ t.id }}">{{ t.template_name }}</option>
+                                        <option value="{{ t.id }}">{{ t.name }}</option>
                                         {% endfor %}
                                     </select>
                                     <input type="text" name="title" class="form-control form-control-sm mb-2" 

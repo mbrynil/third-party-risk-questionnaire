@@ -37,8 +37,60 @@ class Vendor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    questionnaires = relationship("Questionnaire", back_populates="vendor")
+    assessments = relationship("Assessment", back_populates="vendor")
 
+
+# ==================== ASSESSMENT TEMPLATE ====================
+
+class AssessmentTemplate(Base):
+    __tablename__ = "assessment_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    source_title = Column(String(255), nullable=True)
+    source_company = Column(String(255), nullable=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    template_questions = relationship("TemplateQuestion", back_populates="template", cascade="all, delete-orphan")
+    template_rules = relationship("TemplateConditionalRule", back_populates="template", cascade="all, delete-orphan")
+
+
+class TemplateQuestion(Base):
+    __tablename__ = "template_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("assessment_templates.id"), nullable=False)
+    question_text = Column(Text, nullable=False)
+    order = Column(Integer, default=0)
+    weight = Column(String(20), default="MEDIUM", nullable=False)
+    expected_operator = Column(String(20), default="EQUALS", nullable=False)
+    expected_value = Column(String(50), nullable=True)
+    expected_values = Column(Text, nullable=True)
+    expected_value_type = Column(String(20), default="CHOICE", nullable=False)
+    answer_mode = Column(String(20), default="SINGLE", nullable=False)
+
+    template = relationship("AssessmentTemplate", back_populates="template_questions")
+
+
+class TemplateConditionalRule(Base):
+    __tablename__ = "template_conditional_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey("assessment_templates.id"), nullable=False)
+    trigger_question_id = Column(Integer, ForeignKey("template_questions.id"), nullable=False)
+    operator = Column(String(20), default="IN", nullable=False)
+    trigger_values = Column(Text, nullable=False)
+    target_question_id = Column(Integer, ForeignKey("template_questions.id"), nullable=False)
+    make_required = Column(Boolean, default=False, nullable=False)
+
+    template = relationship("AssessmentTemplate", back_populates="template_rules")
+    trigger_question = relationship("TemplateQuestion", foreign_keys=[trigger_question_id])
+    target_question = relationship("TemplateQuestion", foreign_keys=[target_question_id])
+
+
+# ==================== ASSESSMENT (LIVE INSTANCE) ====================
 
 ASSESSMENT_STATUS_DRAFT = "DRAFT"
 ASSESSMENT_STATUS_SENT = "SENT"
@@ -54,27 +106,26 @@ VALID_ASSESSMENT_STATUSES = [
 ]
 
 
-class Questionnaire(Base):
-    __tablename__ = "questionnaires"
+class Assessment(Base):
+    __tablename__ = "assessments"
 
     id = Column(Integer, primary_key=True, index=True)
     company_name = Column(String(255), nullable=False)
     title = Column(String(255), nullable=False)
     token = Column(String(64), unique=True, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    is_template = Column(Boolean, default=False, nullable=False)
-    template_name = Column(String(255), nullable=True)
-    template_description = Column(Text, nullable=True)
     vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+    template_id = Column(Integer, ForeignKey("assessment_templates.id"), nullable=True)
     status = Column(String(20), default=ASSESSMENT_STATUS_DRAFT, nullable=False)
     sent_at = Column(DateTime, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-    vendor = relationship("Vendor", back_populates="questionnaires")
-    questions = relationship("Question", back_populates="questionnaire", cascade="all, delete-orphan")
-    responses = relationship("Response", back_populates="questionnaire", cascade="all, delete-orphan")
-    conditional_rules = relationship("ConditionalRule", back_populates="questionnaire", cascade="all, delete-orphan")
+    vendor = relationship("Vendor", back_populates="assessments")
+    template = relationship("AssessmentTemplate")
+    questions = relationship("Question", back_populates="assessment", cascade="all, delete-orphan")
+    responses = relationship("Response", back_populates="assessment", cascade="all, delete-orphan")
+    conditional_rules = relationship("ConditionalRule", back_populates="assessment", cascade="all, delete-orphan")
 
 
 WEIGHT_LOW = "LOW"
@@ -100,17 +151,17 @@ class Question(Base):
     __tablename__ = "questions"
 
     id = Column(Integer, primary_key=True, index=True)
-    questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=False)
     question_text = Column(Text, nullable=False)
     order = Column(Integer, default=0)
     weight = Column(String(20), default=WEIGHT_MEDIUM, nullable=False)
     expected_operator = Column(String(20), default=OPERATOR_EQUALS, nullable=False)
     expected_value = Column(String(50), nullable=True)
-    expected_values = Column(Text, nullable=True)  # JSON array of acceptable answers e.g. '["yes","partial"]'
+    expected_values = Column(Text, nullable=True)
     expected_value_type = Column(String(20), default=VALUE_TYPE_CHOICE, nullable=False)
     answer_mode = Column(String(20), default=ANSWER_MODE_SINGLE, nullable=False)
 
-    questionnaire = relationship("Questionnaire", back_populates="questions")
+    assessment = relationship("Assessment", back_populates="questions")
 
 
 RESPONSE_STATUS_DRAFT = "DRAFT"
@@ -122,14 +173,14 @@ class Response(Base):
     __tablename__ = "responses"
 
     id = Column(Integer, primary_key=True, index=True)
-    questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=False)
     vendor_name = Column(String(255), nullable=False)
     vendor_email = Column(String(255), nullable=False)
     status = Column(String(20), default=RESPONSE_STATUS_DRAFT, nullable=False)
     submitted_at = Column(DateTime, default=datetime.utcnow)
     last_saved_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    questionnaire = relationship("Questionnaire", back_populates="responses")
+    assessment = relationship("Assessment", back_populates="responses")
     answers = relationship("Answer", back_populates="response", cascade="all, delete-orphan")
     evidence_files = relationship("EvidenceFile", back_populates="response", cascade="all, delete-orphan")
     follow_ups = relationship("FollowUp", back_populates="response", cascade="all, delete-orphan")
@@ -153,7 +204,7 @@ class EvidenceFile(Base):
     __tablename__ = "evidence_files"
 
     id = Column(Integer, primary_key=True, index=True)
-    questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=False)
     response_id = Column(Integer, ForeignKey("responses.id"), nullable=False)
     original_filename = Column(String(255), nullable=False)
     stored_filename = Column(String(255), nullable=False)
@@ -161,8 +212,9 @@ class EvidenceFile(Base):
     content_type = Column(String(100), nullable=False)
     size_bytes = Column(Integer, nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+    module = Column(String(50), default="vendor_risk", nullable=False, index=True)
 
-    questionnaire = relationship("Questionnaire")
+    assessment = relationship("Assessment")
     response = relationship("Response", back_populates="evidence_files")
 
 
@@ -175,6 +227,7 @@ class FollowUp(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     response_text = Column(Text, nullable=True)
     responded_at = Column(DateTime, nullable=True)
+    module = Column(String(50), default="vendor_risk", nullable=False, index=True)
 
     response = relationship("Response", back_populates="follow_ups")
 
@@ -183,14 +236,14 @@ class ConditionalRule(Base):
     __tablename__ = "conditional_rules"
 
     id = Column(Integer, primary_key=True, index=True)
-    questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=False)
     trigger_question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
     operator = Column(String(20), default="IN", nullable=False)
-    trigger_values = Column(Text, nullable=False)  # JSON array e.g. '["no","partial"]'
+    trigger_values = Column(Text, nullable=False)
     target_question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
     make_required = Column(Boolean, default=False, nullable=False)
 
-    questionnaire = relationship("Questionnaire", back_populates="conditional_rules")
+    assessment = relationship("Assessment", back_populates="conditional_rules")
     trigger_question = relationship("Question", foreign_keys=[trigger_question_id])
     target_question = relationship("Question", foreign_keys=[target_question_id])
 
@@ -218,7 +271,7 @@ class AssessmentDecision(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
-    questionnaire_id = Column(Integer, ForeignKey("questionnaires.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=False)
     status = Column(String(20), default=DECISION_STATUS_DRAFT, nullable=False)
     data_sensitivity = Column(String(20), nullable=True)
     business_criticality = Column(String(20), nullable=True)
@@ -235,7 +288,7 @@ class AssessmentDecision(Base):
     finalized_at = Column(DateTime, nullable=True)
 
     vendor = relationship("Vendor")
-    questionnaire = relationship("Questionnaire")
+    assessment = relationship("Assessment")
 
 
 VALID_CHOICES = ["yes", "no", "partial", "na"]
@@ -250,13 +303,9 @@ def compute_expectation_status(expected_value, answer_choice, expected_values=No
     """
     Compute evaluation status by comparing vendor answer to expected answer(s).
     Returns one of: EVAL_MEETS, EVAL_PARTIAL, EVAL_DOES_NOT_MEET, EVAL_NO_EXPECTATION
-    
-    For SINGLE mode: vendor answer must be in expected_set
-    For MULTI mode: uses set intersection logic
     """
     import json
-    
-    # Build expected_set from expected_values (JSON) or fallback to single expected_value
+
     expected_set = set()
     if expected_values:
         try:
@@ -265,47 +314,38 @@ def compute_expectation_status(expected_value, answer_choice, expected_values=No
                 expected_set = set(v.lower() for v in parsed if v)
         except (json.JSONDecodeError, TypeError):
             pass
-    
-    # Fallback to single expected_value if expected_values is empty
+
     if not expected_set and expected_value:
         expected_set = {expected_value.lower()}
-    
-    # No expectation defined
+
     if not expected_set:
         return EVAL_NO_EXPECTATION
-    
-    # No answer provided
+
     if not answer_choice:
         return EVAL_DOES_NOT_MEET
-    
+
     if answer_mode == "MULTI":
-        # Multi-select: answer_choice is comma-separated
         answers = set(a.strip().lower() for a in answer_choice.split(',') if a.strip())
         if not answers:
             return EVAL_DOES_NOT_MEET
-        
+
         intersection = answers & expected_set
-        
+
         if intersection and answers <= expected_set:
-            # All selected answers are acceptable
             return EVAL_MEETS
         elif intersection:
-            # Some acceptable, some not
             return EVAL_PARTIAL
         else:
-            # No intersection - none of the selected answers are acceptable
             return EVAL_DOES_NOT_MEET
     else:
-        # Single-select mode
         answer_lower = answer_choice.lower()
-        
+
         if answer_lower in expected_set:
             return EVAL_MEETS
-        
-        # Partial meets if answer is "partial" and "yes" is expected
+
         if answer_lower == "partial" and "yes" in expected_set:
             return EVAL_PARTIAL
-        
+
         return EVAL_DOES_NOT_MEET
 
 

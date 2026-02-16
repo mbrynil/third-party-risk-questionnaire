@@ -1,51 +1,51 @@
 {% extends "base.html" %}
 
-{% block title %}{{ questionnaire.title }} - Responses - RiskQ{% endblock %}
+{% block title %}{{ assessment.title }} - Responses - RiskQ{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="/responses">All Questionnaires</a></li>
-            <li class="breadcrumb-item active">{{ questionnaire.title }}</li>
+            <li class="breadcrumb-item active">{{ assessment.title }}</li>
         </ol>
     </nav>
     <div class="d-flex flex-wrap justify-content-between align-items-start mb-3">
         <div>
-            <h1 class="mb-2">{{ questionnaire.title }}</h1>
+            <h1 class="mb-2">{{ assessment.title }}</h1>
             <div class="d-flex flex-wrap gap-2 align-items-center">
-                {% if questionnaire.status == ASSESSMENT_STATUS_DRAFT %}
+                {% if assessment.status == ASSESSMENT_STATUS_DRAFT %}
                 <span class="badge bg-secondary">Draft</span>
-                {% elif questionnaire.status == ASSESSMENT_STATUS_SENT %}
+                {% elif assessment.status == ASSESSMENT_STATUS_SENT %}
                 <span class="badge bg-primary">Sent</span>
-                {% elif questionnaire.status == ASSESSMENT_STATUS_IN_PROGRESS %}
+                {% elif assessment.status == ASSESSMENT_STATUS_IN_PROGRESS %}
                 <span class="badge bg-warning text-dark">In Progress</span>
-                {% elif questionnaire.status == ASSESSMENT_STATUS_SUBMITTED %}
+                {% elif assessment.status == ASSESSMENT_STATUS_SUBMITTED %}
                 <span class="badge bg-info">Submitted</span>
-                {% elif questionnaire.status == ASSESSMENT_STATUS_REVIEWED %}
+                {% elif assessment.status == ASSESSMENT_STATUS_REVIEWED %}
                 <span class="badge bg-success">Reviewed</span>
                 {% endif %}
                 <span class="badge bg-light text-dark border">{{ responses|length }} responses</span>
                 <span class="badge bg-light text-dark border">{{ questions|length }} questions</span>
             </div>
             <div class="small text-muted mt-2">
-                {% if questionnaire.sent_at %}Sent on {{ questionnaire.sent_at.strftime('%Y-%m-%d') }}{% endif %}
-                {% if questionnaire.submitted_at %} &middot; Submitted on {{ questionnaire.submitted_at.strftime('%Y-%m-%d') }}{% endif %}
-                {% if questionnaire.reviewed_at %} &middot; Reviewed on {{ questionnaire.reviewed_at.strftime('%Y-%m-%d') }}{% endif %}
+                {% if assessment.sent_at %}Sent on {{ assessment.sent_at.strftime('%Y-%m-%d') }}{% endif %}
+                {% if assessment.submitted_at %} &middot; Submitted on {{ assessment.submitted_at.strftime('%Y-%m-%d') }}{% endif %}
+                {% if assessment.reviewed_at %} &middot; Reviewed on {{ assessment.reviewed_at.strftime('%Y-%m-%d') }}{% endif %}
             </div>
         </div>
         <div class="mt-2 mt-md-0 d-flex gap-2">
-            {% if questionnaire.status == ASSESSMENT_STATUS_SUBMITTED %}
-            <a href="/assessments/{{ questionnaire.id }}/decision" class="btn btn-outline-primary">
+            {% if assessment.status == ASSESSMENT_STATUS_SUBMITTED %}
+            <a href="/assessments/{{ assessment.id }}/decision" class="btn btn-outline-primary">
                 <i class="bi bi-clipboard-check me-1"></i>Perform Assessment
             </a>
-            <form action="/questionnaire/{{ questionnaire.id }}/mark-reviewed" method="post" class="d-inline">
+            <form action="/questionnaire/{{ assessment.id }}/mark-reviewed" method="post" class="d-inline">
                 <button type="submit" class="btn btn-success">
                     <i class="bi bi-check2-circle me-1"></i>Mark as Reviewed
                 </button>
             </form>
-            {% elif questionnaire.status == ASSESSMENT_STATUS_REVIEWED %}
-            <a href="/assessments/{{ questionnaire.id }}/decision" class="btn btn-outline-secondary">
+            {% elif assessment.status == ASSESSMENT_STATUS_REVIEWED %}
+            <a href="/assessments/{{ assessment.id }}/decision" class="btn btn-outline-secondary">
                 <i class="bi bi-eye me-1"></i>View Assessment
             </a>
             {% endif %}
@@ -86,7 +86,7 @@
                 </ol>
             </div>
             <div class="card-footer bg-transparent">
-                <a href="/vendor/{{ questionnaire.token }}" class="btn btn-sm btn-outline-primary w-100" target="_blank">
+                <a href="/vendor/{{ assessment.token }}" class="btn btn-sm btn-outline-primary w-100" target="_blank">
                     <i class="bi bi-link-45deg me-1"></i>Vendor Link
                 </a>
             </div>
@@ -99,16 +99,16 @@
                 <i class="bi bi-people me-2"></i>Vendor Responses
             </h5>
             <div class="btn-group" role="group">
-                <a href="/responses/{{ questionnaire.id }}" class="btn btn-sm {% if not status_filter %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                <a href="/responses/{{ assessment.id }}" class="btn btn-sm {% if not status_filter %}btn-primary{% else %}btn-outline-primary{% endif %}">
                     All
                 </a>
-                <a href="/responses/{{ questionnaire.id }}?status_filter=DRAFT" class="btn btn-sm {% if status_filter == 'DRAFT' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                <a href="/responses/{{ assessment.id }}?status_filter=DRAFT" class="btn btn-sm {% if status_filter == 'DRAFT' %}btn-warning{% else %}btn-outline-warning{% endif %}">
                     <i class="bi bi-file-earmark me-1"></i>Drafts
                 </a>
-                <a href="/responses/{{ questionnaire.id }}?status_filter=NEEDS_INFO" class="btn btn-sm {% if status_filter == 'NEEDS_INFO' %}btn-info{% else %}btn-outline-info{% endif %}">
+                <a href="/responses/{{ assessment.id }}?status_filter=NEEDS_INFO" class="btn btn-sm {% if status_filter == 'NEEDS_INFO' %}btn-info{% else %}btn-outline-info{% endif %}">
                     <i class="bi bi-question-circle me-1"></i>Needs Info
                 </a>
-                <a href="/responses/{{ questionnaire.id }}?status_filter=SUBMITTED" class="btn btn-sm {% if status_filter == 'SUBMITTED' %}btn-success{% else %}btn-outline-success{% endif %}">
+                <a href="/responses/{{ assessment.id }}?status_filter=SUBMITTED" class="btn btn-sm {% if status_filter == 'SUBMITTED' %}btn-success{% else %}btn-outline-success{% endif %}">
                     <i class="bi bi-check-circle me-1"></i>Submitted
                 </a>
             </div>
@@ -371,7 +371,7 @@
                         {% endif %}
                         
                         {% if response.status in [RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO] %}
-                        <form method="post" action="/responses/{{ questionnaire.id }}/followup/{{ response.id }}" class="mt-3">
+                        <form method="post" action="/responses/{{ assessment.id }}/followup/{{ response.id }}" class="mt-3">
                             <div class="input-group">
                                 <input type="text" class="form-control" name="message" placeholder="Request additional information from vendor..." required minlength="5">
                                 <button type="submit" class="btn btn-outline-info">
@@ -391,13 +391,13 @@
                     <h5 class="mt-3">No responses {% if status_filter %}with status "{{ status_filter }}"{% endif %}</h5>
                     <p class="text-muted">
                         {% if status_filter %}
-                        <a href="/responses/{{ questionnaire.id }}">View all responses</a> or share the vendor link to collect more.
+                        <a href="/responses/{{ assessment.id }}">View all responses</a> or share the vendor link to collect more.
                         {% else %}
                         Share the vendor link to start collecting responses.
                         {% endif %}
                     </p>
                     <div class="link-box d-inline-block px-4 py-2">
-                        <code>/vendor/{{ questionnaire.token }}</code>
+                        <code>/vendor/{{ assessment.token }}</code>
                     </div>
                 </div>
             </div>

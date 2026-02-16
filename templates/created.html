@@ -15,7 +15,7 @@
     <div class="col-md-8">
         <div class="alert alert-success d-flex align-items-center" role="alert">
             <i class="bi bi-check-circle-fill me-2"></i>
-            <div><strong>{{ questionnaire.title }}</strong> has been created successfully for <strong>{{ questionnaire.company_name }}</strong>.</div>
+            <div><strong>{{ assessment.title }}</strong> has been created successfully for <strong>{{ assessment.company_name }}</strong>.</div>
         </div>
 
         <div class="card mb-4">
@@ -33,7 +33,7 @@
                     <div class="input-group">
                         <a href="{{ vendor_url }}" target="_blank" class="form-control text-decoration-none" 
                            style="background-color: #f8f9fa; overflow: hidden; text-overflow: ellipsis;">
-                            {{ questionnaire.company_name }} – {{ questionnaire.title }}
+                            {{ assessment.company_name }} – {{ assessment.title }}
                         </a>
                         <button class="btn btn-primary" type="button" onclick="copyLink()" id="copyBtn">
                             <i class="bi bi-clipboard me-1"></i>Copy Link
@@ -55,7 +55,7 @@
         </div>
 
         <div class="d-flex gap-2 justify-content-center flex-wrap">
-            <a href="/questionnaire/{{ questionnaire.id }}/edit" class="btn btn-outline-secondary">
+            <a href="/questionnaire/{{ assessment.id }}/edit" class="btn btn-outline-secondary">
                 <i class="bi bi-pencil me-1"></i>Edit Questionnaire
             </a>
             <a href="/create" class="btn btn-primary">
@@ -77,7 +77,7 @@
 <div class="modal fade" id="saveTemplateModal" tabindex="-1" aria-labelledby="saveTemplateModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="/questionnaires/{{ questionnaire.id }}/save-as-template" method="post">
+            <form action="/questionnaires/{{ assessment.id }}/save-as-template" method="post">
                 <div class="modal-header">
                     <h5 class="modal-title" id="saveTemplateModalLabel">
                         <i class="bi bi-bookmark-plus me-2"></i>Save as Template
@@ -89,7 +89,7 @@
                     <div class="mb-3">
                         <label for="templateName" class="form-label">Template Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="templateName" name="template_name" 
-                               value="{{ questionnaire.title }} Template" required>
+                               value="{{ assessment.title }} Template" required>
                     </div>
                     <div class="mb-3">
                         <label for="templateDescription" class="form-label">Description (optional)</label>

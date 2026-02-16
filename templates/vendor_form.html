@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}{{ questionnaire.title }} - RiskQ{% endblock %}
+{% block title %}{{ assessment.title }} - RiskQ{% endblock %}
 
 {% block content %}
 <div class="page-header">
-    <h1>{{ questionnaire.title }}</h1>
+    <h1>{{ assessment.title }}</h1>
     <p>Please complete this questionnaire and submit your responses</p>
 </div>
 
@@ -24,11 +24,11 @@
 
 {% set is_submitted = existing_response and existing_response.status == RESPONSE_STATUS_SUBMITTED %}
 {% set is_needs_info = existing_response and existing_response.status == RESPONSE_STATUS_NEEDS_INFO %}
-{% set assessment_locked = questionnaire.status in [ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED] if ASSESSMENT_STATUS_SUBMITTED is defined else false %}
+{% set assessment_locked = assessment.status in [ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED] if ASSESSMENT_STATUS_SUBMITTED is defined else false %}
 
 {% if assessment_locked or is_submitted %}
 <div class="alert alert-info">
-    <i class="bi bi-lock me-2"></i><strong>Already Submitted</strong> - This assessment was submitted on {{ questionnaire.submitted_at.strftime('%Y-%m-%d %H:%M') if questionnaire.submitted_at else (existing_response.submitted_at.strftime('%Y-%m-%d %H:%M') if existing_response and existing_response.submitted_at else 'N/A') }} UTC. Editing is no longer allowed.
+    <i class="bi bi-lock me-2"></i><strong>Already Submitted</strong> - This assessment was submitted on {{ assessment.submitted_at.strftime('%Y-%m-%d %H:%M') if assessment.submitted_at else (existing_response.submitted_at.strftime('%Y-%m-%d %H:%M') if existing_response and existing_response.submitted_at else 'N/A') }} UTC. Editing is no longer allowed.
 </div>
 {% endif %}
 
@@ -67,7 +67,7 @@
                 <p class="mb-0 mt-1">{{ followup.response_text }}</p>
             </div>
             {% elif not is_submitted and not assessment_locked %}
-            <form method="post" action="/vendor/{{ questionnaire.token }}/followup/{{ followup.id }}" class="ms-4">
+            <form method="post" action="/vendor/{{ assessment.token }}/followup/{{ followup.id }}" class="ms-4">
                 <input type="hidden" name="vendor_email" value="{{ existing_response.vendor_email }}">
                 <div class="mb-2">
                     <textarea class="form-control" name="response_text" rows="3" placeholder="Enter your response..." required minlength="5"></textarea>
@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded', function() {
             loadDraftBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
             
             try {
-                const response = await fetch(`/api/vendor/{{ questionnaire.token }}/check-draft?email=${encodeURIComponent(email)}`);
+                const response = await fetch(`/api/vendor/{{ assessment.token }}/check-draft?email=${encodeURIComponent(email)}`);
                 const data = await response.json();
                 
                 if (data.found) {
@@ -579,7 +579,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!confirm('Delete this file?')) return;
                     
                     try {
-                        const response = await fetch(`/vendor/{{ questionnaire.token }}/evidence/${fileId}?vendor_email=${encodeURIComponent(email)}`, {
+                        const response = await fetch(`/vendor/{{ assessment.token }}/evidence/${fileId}?vendor_email=${encodeURIComponent(email)}`, {
                             method: 'DELETE'
                         });
                         const data = await response.json();
@@ -605,7 +605,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            const response = await fetch(`/api/vendor/{{ questionnaire.token }}/evidence?email=${encodeURIComponent(email)}`);
+            const response = await fetch(`/api/vendor/{{ assessment.token }}/evidence?email=${encodeURIComponent(email)}`);
             const data = await response.json();
             renderEvidenceList(data.files || []);
         } catch (error) {
@@ -640,7 +640,7 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('vendor_name', name);
             
             try {
-                const response = await fetch(`/vendor/{{ questionnaire.token }}/upload-evidence`, {
+                const response = await fetch(`/vendor/{{ assessment.token }}/upload-evidence`, {
                     method: 'POST',
                     body: formData
                 });

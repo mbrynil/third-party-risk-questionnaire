@@ -29,7 +29,7 @@
 </div>
 {% endif %}
 
-<form method="post" action="/questionnaire/{{ questionnaire.id }}/edit">
+<form method="post" action="/questionnaire/{{ assessment.id }}/edit">
     <div class="card mb-4">
         <div class="card-header">
             <i class="bi bi-info-circle me-2"></i>Basic Information
@@ -41,14 +41,14 @@
                         <i class="bi bi-building me-1"></i>Vendor Company Name
                     </label>
                     <input type="text" class="form-control" id="company_name" name="company_name" required 
-                           value="{{ questionnaire.company_name }}" placeholder="e.g., Acme Corporation">
+                           value="{{ assessment.company_name }}" placeholder="e.g., Acme Corporation">
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="title" class="form-label">
                         <i class="bi bi-tag me-1"></i>Questionnaire Title
                     </label>
                     <input type="text" class="form-control" id="title" name="title" required 
-                           value="{{ questionnaire.title }}" placeholder="e.g., Vendor Security Assessment 2024">
+                           value="{{ assessment.title }}" placeholder="e.g., Vendor Security Assessment 2024">
                 </div>
             </div>
         </div>
@@ -247,7 +247,7 @@
                     <button type="submit" class="btn btn-outline-primary" name="action" value="save">
                         <i class="bi bi-save me-1"></i>Save Changes
                     </button>
-                    <a href="/questionnaire/{{ questionnaire.id }}/share" class="btn btn-primary">
+                    <a href="/questionnaire/{{ assessment.id }}/share" class="btn btn-primary">
                         <i class="bi bi-share me-1"></i>Get Vendor Link
                     </a>
                 </div>
@@ -306,20 +306,20 @@
     </div>
 </div>
 
-<form id="deleteQuestionForm" method="post" action="/questionnaire/{{ questionnaire.id }}/remove-question" style="display:none;">
+<form id="deleteQuestionForm" method="post" action="/questionnaire/{{ assessment.id }}/remove-question" style="display:none;">
     <input type="hidden" name="question_id" id="deleteQuestionId">
 </form>
 
-<form id="addQuestionsForm" method="post" action="/questionnaire/{{ questionnaire.id }}/add-questions" style="display:none;">
+<form id="addQuestionsForm" method="post" action="/questionnaire/{{ assessment.id }}/add-questions" style="display:none;">
     <input type="hidden" name="bank_ids" id="addBankIds">
     <input type="hidden" name="custom_text" id="addCustomText">
 </form>
 
-<form id="deleteRuleForm" method="post" action="/questionnaire/{{ questionnaire.id }}/delete-rule" style="display:none;">
+<form id="deleteRuleForm" method="post" action="/questionnaire/{{ assessment.id }}/delete-rule" style="display:none;">
     <input type="hidden" name="rule_id" id="deleteRuleId">
 </form>
 
-<form id="addRuleForm" method="post" action="/questionnaire/{{ questionnaire.id }}/add-rule" style="display:none;">
+<form id="addRuleForm" method="post" action="/questionnaire/{{ assessment.id }}/add-rule" style="display:none;">
     <input type="hidden" name="trigger_id" id="addRuleTrigger">
     <input type="hidden" name="target_id" id="addRuleTarget">
     <input type="hidden" name="trigger_values" id="addRuleTriggerValues">
