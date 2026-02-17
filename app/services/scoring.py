@@ -134,6 +134,14 @@ def compute_assessment_scores(questions, response) -> dict:
     else:
         overall_score = None
 
+    # Group question details by category
+    category_questions = {}
+    for detail in question_details:
+        cat = detail["category"]
+        if cat not in category_questions:
+            category_questions[cat] = []
+        category_questions[cat].append(detail)
+
     # Category scores sorted worst-first
     category_scores = []
     for cat in category_earned:
@@ -145,9 +153,11 @@ def compute_assessment_scores(questions, response) -> dict:
         category_scores.append({
             "category": cat,
             "score": score,
+            "risk_level": suggest_risk_level(score) if score is not None else None,
             "earned": category_earned[cat],
             "possible": possible,
             "count": category_count.get(cat, 0),
+            "questions": category_questions.get(cat, []),
         })
     category_scores.sort(key=lambda c: c["score"] if c["score"] is not None else 999)
 

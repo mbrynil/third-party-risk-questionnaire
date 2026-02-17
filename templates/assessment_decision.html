@@ -237,11 +237,53 @@
             {% endif %}
         <div class="mb-3">
             <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="fw-semibold">{{ cat.category }}</span>
-                <span class="text-muted small">{{ cat.score }}% <span class="text-muted">({{ cat.count }} questions)</span></span>
+                <div>
+                    <span class="fw-semibold">{{ cat.category }}</span>
+                    <span class="badge bg-{{ cat_color }} ms-2">{{ cat.risk_level.replace('_', ' ').title() }} Risk</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted small">{{ cat.score }}% ({{ cat.count }} questions)</span>
+                    <a class="btn btn-sm btn-outline-secondary py-0 px-2" data-bs-toggle="collapse" href="#collapse-cat-{{ loop.index }}" role="button">
+                        <small><i class="bi bi-chevron-down me-1"></i>Details</small>
+                    </a>
+                </div>
             </div>
             <div class="progress" style="height: 10px;">
                 <div class="progress-bar bg-{{ cat_color }}" role="progressbar" style="width: {{ cat.score }}%" aria-valuenow="{{ cat.score }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="collapse mt-2" id="collapse-cat-{{ loop.index }}">
+                <table class="table table-sm table-borderless mb-0 small">
+                    <tbody>
+                        {% for q in cat.questions %}
+                        <tr>
+                            <td style="width:80px">
+                                {% if q.weight == 'CRITICAL' %}
+                                <span class="badge bg-danger">CRITICAL</span>
+                                {% elif q.weight == 'HIGH' %}
+                                <span class="badge bg-warning text-dark">HIGH</span>
+                                {% elif q.weight == 'MEDIUM' %}
+                                <span class="badge bg-info">MEDIUM</span>
+                                {% else %}
+                                <span class="badge bg-secondary">LOW</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ q.question_text[:120] }}{% if q.question_text|length > 120 %}...{% endif %}</td>
+                            <td style="width:120px" class="text-end">
+                                {% if q.eval_status == 'MEETS_EXPECTATION' %}
+                                <span class="badge bg-success">Meets</span>
+                                {% elif q.eval_status == 'PARTIALLY_MEETS_EXPECTATION' %}
+                                <span class="badge bg-warning text-dark">Partial</span>
+                                {% elif q.eval_status == 'DOES_NOT_MEET_EXPECTATION' %}
+                                <span class="badge bg-danger">Does Not Meet</span>
+                                {% else %}
+                                <span class="badge bg-light text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td style="width:70px" class="text-muted text-end">{{ q.answer_choice or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
         {% endif %}
