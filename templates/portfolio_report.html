@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Portfolio Report - RiskQ</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #fff;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .report-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .report-header {
+            border-bottom: 3px solid #1e3a5f;
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .report-header h1 {
+            color: #1e3a5f;
+            font-weight: 700;
+            font-size: 1.75rem;
+            margin-bottom: 0.25rem;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            text-align: center;
+        }
+        .meta-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+        .meta-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #111827;
+        }
+        .meta-value-blue { color: #2563eb; }
+        .meta-value-green { color: #198754; }
+        .meta-value-amber { color: #f59e0b; }
+        .meta-value-red { color: #dc3545; }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e3a5f;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            margin-top: 2rem;
+        }
+
+        .dist-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .dist-label {
+            width: 180px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #374151;
+            flex-shrink: 0;
+        }
+        .dist-bar-track {
+            flex: 1;
+            height: 18px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0 0.75rem;
+        }
+        .dist-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            min-width: 2px;
+        }
+        .dist-count {
+            width: 40px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #374151;
+            flex-shrink: 0;
+        }
+
+        .category-bar-track {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .category-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        .cat-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.6rem;
+            page-break-inside: avoid;
+        }
+        .cat-label {
+            width: 260px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: #374151;
+            flex-shrink: 0;
+        }
+        .cat-bar-track {
+            flex: 1;
+            height: 14px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0 0.75rem;
+        }
+        .cat-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+        .cat-pct {
+            width: 50px;
+            text-align: right;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #374151;
+            flex-shrink: 0;
+        }
+
+        .badge-risk {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.7rem;
+        }
+        .badge-risk-very_low { background: #d1e7dd; color: #166534; }
+        .badge-risk-low { background: #d1f2eb; color: #0f766e; }
+        .badge-risk-moderate { background: #fff3cd; color: #92400e; }
+        .badge-risk-high { background: #ffe4cc; color: #9a3412; }
+        .badge-risk-very_high { background: #f8d7da; color: #991b1b; }
+
+        .badge-outcome {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.7rem;
+        }
+        .badge-outcome-approve { background: #d1e7dd; color: #166534; }
+        .badge-outcome-approve_with_conditions { background: #ffe4cc; color: #9a3412; }
+        .badge-outcome-needs_follow_up { background: #fff3cd; color: #92400e; }
+        .badge-outcome-reject { background: #f8d7da; color: #991b1b; }
+
+        .text-overdue {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .no-data {
+            color: #9ca3af;
+            font-style: italic;
+        }
+        .print-btn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+        }
+
+        @media print {
+            .print-btn, .no-print {
+                display: none !important;
+            }
+            body {
+                font-size: 11px;
+                background: #fff;
+            }
+            .report-container {
+                max-width: 100%;
+                padding: 0;
+            }
+            .meta-grid {
+                background: #f9fafb !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .badge-risk, .badge-outcome, .dist-bar-fill, .cat-bar-fill, .category-bar-fill {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .meta-value-blue, .meta-value-green, .meta-value-amber, .meta-value-red {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            table {
+                page-break-inside: auto;
+            }
+            tr {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="position: fixed; top: 1rem; right: 1rem; z-index: 1000; display: flex; gap: 0.5rem;">
+        <a href="/" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Dashboard</a>
+        <button class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print / Save PDF</button>
+    </div>
+
+    <div class="report-container">
+
+        {# ==================== HEADER ==================== #}
+        <div class="report-header">
+            <h1>Vendor Portfolio Report</h1>
+            <p class="text-muted mb-0">Generated {{ now.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+        </div>
+
+        {# ==================== KEY METRICS ==================== #}
+        <h2 class="section-title"><i class="bi bi-speedometer2 me-2"></i>Key Metrics</h2>
+        <div class="meta-grid">
+            <div class="meta-item">
+                <span class="meta-value meta-value-blue">{{ kpis.total_active_vendors }}</span>
+                <span class="meta-label">Active Vendors</span>
+            </div>
+            <div class="meta-item">
+                {% if kpis.average_risk_score is not none %}
+                    {% if kpis.average_risk_score >= 70 %}
+                <span class="meta-value meta-value-green">{{ kpis.average_risk_score }}%</span>
+                    {% elif kpis.average_risk_score >= 50 %}
+                <span class="meta-value meta-value-amber">{{ kpis.average_risk_score }}%</span>
+                    {% else %}
+                <span class="meta-value meta-value-red">{{ kpis.average_risk_score }}%</span>
+                    {% endif %}
+                {% else %}
+                <span class="meta-value" style="color:#6b7280;">—</span>
+                {% endif %}
+                <span class="meta-label">Avg Risk Score</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-value meta-value-amber">{{ kpis.pending_assessments }}</span>
+                <span class="meta-label">Pending Assessments</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-value meta-value-red">{{ kpis.overdue_reviews }}</span>
+                <span class="meta-label">Overdue Reviews</span>
+            </div>
+        </div>
+
+        {# ==================== RISK DISTRIBUTION ==================== #}
+        {% set risk_max = risk_distribution.counts | max if risk_distribution.counts | sum > 0 else 1 %}
+        {% if risk_distribution.counts | sum > 0 %}
+        <h2 class="section-title"><i class="bi bi-pie-chart me-2"></i>Risk Distribution</h2>
+        {% for i in range(risk_distribution.labels | length) %}
+        <div class="dist-row">
+            <span class="dist-label">{{ risk_distribution.labels[i] }}</span>
+            <div class="dist-bar-track">
+                <div class="dist-bar-fill" style="width: {{ (risk_distribution.counts[i] / risk_max * 100) if risk_max > 0 else 0 }}%; background: {{ risk_distribution.colors[i] }};"></div>
+            </div>
+            <span class="dist-count">{{ risk_distribution.counts[i] }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {# ==================== DECISION OUTCOMES ==================== #}
+        {% set dec_max = decision_outcomes.counts | max if decision_outcomes.counts | sum > 0 else 1 %}
+        {% if decision_outcomes.counts | sum > 0 %}
+        <h2 class="section-title"><i class="bi bi-check2-circle me-2"></i>Decision Outcomes</h2>
+        {% for i in range(decision_outcomes.labels | length) %}
+        <div class="dist-row">
+            <span class="dist-label">{{ decision_outcomes.labels[i] }}</span>
+            <div class="dist-bar-track">
+                <div class="dist-bar-fill" style="width: {{ (decision_outcomes.counts[i] / dec_max * 100) if dec_max > 0 else 0 }}%; background: {{ decision_outcomes.colors[i] }};"></div>
+            </div>
+            <span class="dist-count">{{ decision_outcomes.counts[i] }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {# ==================== ASSESSMENT PIPELINE ==================== #}
+        {% set pipe_max = assessment_pipeline.counts | max if assessment_pipeline.counts | sum > 0 else 1 %}
+        <h2 class="section-title"><i class="bi bi-bar-chart-line me-2"></i>Assessment Pipeline</h2>
+        {% for i in range(assessment_pipeline.labels | length) %}
+        <div class="dist-row">
+            <span class="dist-label">{{ assessment_pipeline.labels[i] }}</span>
+            <div class="dist-bar-track">
+                <div class="dist-bar-fill" style="width: {{ (assessment_pipeline.counts[i] / pipe_max * 100) if pipe_max > 0 else 0 }}%; background: {{ assessment_pipeline.colors[i] }};"></div>
+            </div>
+            <span class="dist-count">{{ assessment_pipeline.counts[i] }}</span>
+        </div>
+        {% endfor %}
+
+        {# ==================== CATEGORY RISK ANALYSIS ==================== #}
+        {% if category_analysis.labels | length > 0 %}
+        <h2 class="section-title"><i class="bi bi-bar-chart me-2"></i>Category Risk Analysis</h2>
+        {% for i in range(category_analysis.labels | length) %}
+        <div class="cat-row">
+            <span class="cat-label">{{ category_analysis.labels[i] }}</span>
+            <div class="cat-bar-track">
+                <div class="cat-bar-fill" style="width: {{ category_analysis.scores[i] }}%; background: {{ category_analysis.colors[i] }};"></div>
+            </div>
+            <span class="cat-pct">{{ category_analysis.scores[i] }}%</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {# ==================== VENDOR SUMMARY TABLE ==================== #}
+        <h2 class="section-title"><i class="bi bi-building me-2"></i>Vendor Summary</h2>
+        {% if vendors %}
+        <table class="table table-sm" style="font-size: 0.8rem;">
+            <thead>
+                <tr>
+                    <th>Vendor</th>
+                    <th>Risk</th>
+                    <th>Decision</th>
+                    <th>Score</th>
+                    <th>Last Assessed</th>
+                    <th>Next Review</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vendors %}
+                <tr>
+                    <td><strong>{{ v.name }}</strong></td>
+                    <td>
+                        {% if v.risk_rating_display %}
+                        <span class="badge-risk badge-risk-{{ v.risk_rating|lower }}">{{ v.risk_rating_display }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if v.decision_outcome_display %}
+                        <span class="badge-outcome badge-outcome-{{ v.decision_outcome|lower }}">{{ v.decision_outcome_display }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>{{ (v.overall_score|string + '%') if v.overall_score is not none else '—' }}</td>
+                    <td>{{ v.last_assessed_date or '—' }}</td>
+                    <td>
+                        {% if v.next_review_date %}
+                            {% if v.is_overdue %}<span class="text-overdue">{{ v.next_review_date }}</span>{% else %}{{ v.next_review_date }}{% endif %}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>{{ v.status }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="no-data">No vendors in portfolio.</p>
+        {% endif %}
+
+        {# ==================== FOOTER ==================== #}
+        <div class="text-center text-muted mt-5 pt-3 border-top">
+            <small>Generated by RiskQ on {{ now.strftime('%Y-%m-%d %H:%M UTC') }}</small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Request, Form, Depends
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
@@ -10,13 +12,38 @@ from models import (
 )
 from app.services.token import generate_unique_token
 from app.services.vendor_service import find_or_create_vendor
+from app.services.portfolio import get_portfolio_data
 
 router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse("home.html", {"request": request})
+async def home(request: Request, db: Session = Depends(get_db)):
+    data = get_portfolio_data(db)
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "kpis": data["kpis"],
+        "vendors": data["vendors"],
+        "risk_distribution_json": json.dumps(data["risk_distribution"]),
+        "decision_outcomes_json": json.dumps(data["decision_outcomes"]),
+        "assessment_pipeline_json": json.dumps(data["assessment_pipeline"]),
+        "category_analysis_json": json.dumps(data["category_analysis"]),
+    })
+
+
+@router.get("/dashboard/report", response_class=HTMLResponse)
+async def portfolio_report(request: Request, db: Session = Depends(get_db)):
+    data = get_portfolio_data(db)
+    return templates.TemplateResponse("portfolio_report.html", {
+        "request": request,
+        "kpis": data["kpis"],
+        "vendors": data["vendors"],
+        "risk_distribution": data["risk_distribution"],
+        "decision_outcomes": data["decision_outcomes"],
+        "assessment_pipeline": data["assessment_pipeline"],
+        "category_analysis": data["category_analysis"],
+        "now": datetime.utcnow(),
+    })
 
 
 @router.get("/create", response_class=HTMLResponse)

@@ -1,0 +1,613 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - RiskQ{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card {
+        border-radius: 12px;
+        padding: 1.5rem;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        transition: transform 0.15s, box-shadow 0.15s;
+        cursor: default;
+    }
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .kpi-card .kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+    .kpi-card .kpi-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+    .kpi-blue { border-left: 4px solid #2563eb; }
+    .kpi-blue .kpi-value { color: #2563eb; }
+    .kpi-green .kpi-value { color: #198754; }
+    .kpi-amber { border-left: 4px solid #f59e0b; }
+    .kpi-amber .kpi-value { color: #f59e0b; }
+    .kpi-red { border-left: 4px solid #dc3545; }
+    .kpi-red .kpi-value { color: #dc3545; }
+
+    .chart-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        padding: 1.25rem;
+    }
+    .chart-card h6 {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .filter-bar {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        padding: 1rem 1.25rem;
+    }
+    .filter-bar .form-select, .filter-bar .form-control {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+    .filter-count {
+        font-size: 0.85rem;
+        color: #6b7280;
+        font-weight: 500;
+    }
+
+    .vendor-table-wrap {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        overflow: hidden;
+    }
+    .vendor-table-wrap .table {
+        margin-bottom: 0;
+    }
+    .vendor-table-wrap .table tbody tr {
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+    .vendor-table-wrap .table tbody tr:hover {
+        background: #f0f4ff;
+    }
+    .sortable-header {
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .sortable-header:hover {
+        color: #2563eb;
+    }
+    .sort-icon {
+        font-size: 0.65rem;
+        margin-left: 0.25rem;
+        opacity: 0.4;
+    }
+    .sort-icon.active {
+        opacity: 1;
+        color: #2563eb;
+    }
+
+    .badge-risk {
+        padding: 0.3rem 0.6rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+    .badge-risk-very_low { background: #d1e7dd; color: #166534; }
+    .badge-risk-low { background: #d1f2eb; color: #0f766e; }
+    .badge-risk-moderate { background: #fff3cd; color: #92400e; }
+    .badge-risk-high { background: #ffe4cc; color: #9a3412; }
+    .badge-risk-very_high { background: #f8d7da; color: #991b1b; }
+
+    .badge-outcome {
+        padding: 0.3rem 0.6rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+    .badge-outcome-approve { background: #d1e7dd; color: #166534; }
+    .badge-outcome-approve_with_conditions { background: #ffe4cc; color: #9a3412; }
+    .badge-outcome-needs_follow_up { background: #fff3cd; color: #92400e; }
+    .badge-outcome-reject { background: #f8d7da; color: #991b1b; }
+
+    .text-overdue {
+        color: #dc3545;
+        font-weight: 600;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #9ca3af;
+    }
+    .empty-state i {
+        font-size: 3rem;
+        display: block;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ==================== PAGE HEADER ==================== #}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0" style="font-weight: 700; color: #1e3a5f;">Vendor Portfolio</h1>
+        <p class="text-muted mb-0">Holistic view of your third-party risk program</p>
+    </div>
+    <a href="/dashboard/report" target="_blank" class="btn btn-outline-primary">
+        <i class="bi bi-printer me-1"></i>Print Portfolio Report
+    </a>
+</div>
+
+{# ==================== KPI ROW ==================== #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card kpi-blue">
+            <div class="kpi-value">{{ kpis.total_active_vendors }}</div>
+            <div class="kpi-label">Active Vendors</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        {% if kpis.average_risk_score is not none %}
+            {% if kpis.average_risk_score >= 90 %}
+                {% set score_class = "kpi-green" %}
+            {% elif kpis.average_risk_score >= 70 %}
+                {% set score_class = "kpi-green" %}
+            {% elif kpis.average_risk_score >= 50 %}
+                {% set score_class = "kpi-amber" %}
+            {% else %}
+                {% set score_class = "kpi-red" %}
+            {% endif %}
+        {% else %}
+            {% set score_class = "kpi-blue" %}
+        {% endif %}
+        <div class="kpi-card {{ score_class }}" style="{% if kpis.average_risk_score is not none %}{% if kpis.average_risk_score >= 70 %}border-left: 4px solid #198754;{% elif kpis.average_risk_score >= 50 %}{% else %}{% endif %}{% else %}border-left: 4px solid #6c757d;{% endif %}">
+            <div class="kpi-value">{{ kpis.average_risk_score if kpis.average_risk_score is not none else '—' }}{% if kpis.average_risk_score is not none %}<span style="font-size: 1rem; font-weight: 400;">%</span>{% endif %}</div>
+            <div class="kpi-label">Avg Risk Score</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card kpi-amber">
+            <div class="kpi-value">{{ kpis.pending_assessments }}</div>
+            <div class="kpi-label">Pending Assessments</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card kpi-red">
+            <div class="kpi-value">{{ kpis.overdue_reviews }}</div>
+            <div class="kpi-label">Overdue Reviews</div>
+        </div>
+    </div>
+</div>
+
+{# ==================== CHARTS ROW 1 ==================== #}
+<div class="row g-3 mb-4">
+    <div class="col-lg-4">
+        <div class="chart-card">
+            <h6><i class="bi bi-pie-chart me-1"></i>Risk Distribution</h6>
+            <div style="position: relative; height: 240px;">
+                <canvas id="riskDistChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="chart-card">
+            <h6><i class="bi bi-pie-chart me-1"></i>Decision Outcomes</h6>
+            <div style="position: relative; height: 240px;">
+                <canvas id="decisionChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="chart-card">
+            <h6><i class="bi bi-bar-chart-line me-1"></i>Assessment Pipeline</h6>
+            <div style="position: relative; height: 240px;">
+                <canvas id="pipelineChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ==================== CHARTS ROW 2 ==================== #}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="chart-card">
+            <h6><i class="bi bi-bar-chart me-1"></i>Category Risk Analysis</h6>
+            <div id="categoryChartWrap" style="position: relative; height: 200px;">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ==================== FILTER BAR ==================== #}
+<div class="filter-bar mb-3">
+    <div class="row g-2 align-items-center">
+        <div class="col-auto">
+            <select id="filterRisk" class="form-select form-select-sm">
+                <option value="">All Risk Levels</option>
+                <option value="VERY_LOW">Very Low</option>
+                <option value="LOW">Low</option>
+                <option value="MODERATE">Moderate</option>
+                <option value="HIGH">High</option>
+                <option value="VERY_HIGH">Very High</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <select id="filterOutcome" class="form-select form-select-sm">
+                <option value="">All Decisions</option>
+                <option value="APPROVE">Approve</option>
+                <option value="APPROVE_WITH_CONDITIONS">Approve With Conditions</option>
+                <option value="NEEDS_FOLLOW_UP">Needs Follow Up</option>
+                <option value="REJECT">Reject</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <select id="filterStatus" class="form-select form-select-sm">
+                <option value="">All Statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="ARCHIVED">Archived</option>
+            </select>
+        </div>
+        <div class="col">
+            <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="Search vendor name...">
+        </div>
+        <div class="col-auto">
+            <button id="filterClear" class="btn btn-sm btn-outline-secondary">Clear</button>
+        </div>
+        <div class="col-auto">
+            <span id="filterCount" class="filter-count"></span>
+        </div>
+    </div>
+</div>
+
+{# ==================== VENDOR TABLE ==================== #}
+{% if vendors %}
+<div class="vendor-table-wrap">
+    <table class="table table-hover mb-0" id="vendorTable">
+        <thead>
+            <tr>
+                <th class="sortable-header" data-sort="name">Vendor <i class="bi bi-chevron-expand sort-icon"></i></th>
+                <th class="sortable-header" data-sort="risk">Risk <i class="bi bi-chevron-expand sort-icon"></i></th>
+                <th class="sortable-header" data-sort="outcome">Decision <i class="bi bi-chevron-expand sort-icon"></i></th>
+                <th class="sortable-header" data-sort="score">Score <i class="bi bi-chevron-expand sort-icon"></i></th>
+                <th class="sortable-header" data-sort="assessed">Last Assessed <i class="bi bi-chevron-expand sort-icon"></i></th>
+                <th class="sortable-header" data-sort="review">Next Review <i class="bi bi-chevron-expand sort-icon"></i></th>
+                <th class="sortable-header" data-sort="status">Status <i class="bi bi-chevron-expand sort-icon"></i></th>
+            </tr>
+        </thead>
+        <tbody id="vendorTableBody">
+            {% for v in vendors %}
+            <tr data-href="/vendors/{{ v.id }}"
+                data-risk="{{ v.risk_rating or '' }}"
+                data-outcome="{{ v.decision_outcome or '' }}"
+                data-status="{{ v.status }}"
+                data-name="{{ v.name|lower }}"
+                data-score="{{ v.overall_score if v.overall_score is not none else '' }}"
+                data-assessed="{{ v.last_assessed_date or '' }}"
+                data-review="{{ v.next_review_date or '' }}">
+                <td>
+                    <strong>{{ v.name }}</strong>
+                    {% if v.assessment_count > 0 %}
+                    <span class="badge-count ms-1" style="font-size: 0.7rem;">{{ v.assessment_count }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if v.risk_rating_display %}
+                    <span class="badge-risk badge-risk-{{ v.risk_rating|lower }}">{{ v.risk_rating_display }}</span>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if v.decision_outcome_display %}
+                    <span class="badge-outcome badge-outcome-{{ v.decision_outcome|lower }}">{{ v.decision_outcome_display }}</span>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if v.overall_score is not none %}
+                    <strong>{{ v.overall_score }}%</strong>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>{{ v.last_assessed_date or '—' }}</td>
+                <td>
+                    {% if v.next_review_date %}
+                        {% if v.is_overdue %}
+                        <span class="text-overdue">{{ v.next_review_date }}</span>
+                        {% else %}
+                        {{ v.next_review_date }}
+                        {% endif %}
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if v.status == 'ACTIVE' %}
+                    <span class="badge bg-success bg-opacity-10 text-success" style="font-weight:600;">Active</span>
+                    {% else %}
+                    <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-weight:600;">Archived</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="vendor-table-wrap">
+    <div class="empty-state">
+        <i class="bi bi-building"></i>
+        <h5>No vendors yet</h5>
+        <p>Create your first vendor risk assessment to get started.</p>
+        <a href="/create" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Vendor</a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ==================== CHART DATA ====================
+    const riskDist = {{ risk_distribution_json|safe }};
+    const decisionData = {{ decision_outcomes_json|safe }};
+    const pipelineData = {{ assessment_pipeline_json|safe }};
+    const categoryData = {{ category_analysis_json|safe }};
+
+    // ==================== DONUT: RISK DISTRIBUTION ====================
+    const riskTotal = riskDist.counts.reduce((a, b) => a + b, 0);
+    if (riskTotal > 0) {
+        new Chart(document.getElementById('riskDistChart'), {
+            type: 'doughnut',
+            data: {
+                labels: riskDist.labels,
+                datasets: [{
+                    data: riskDist.counts,
+                    backgroundColor: riskDist.colors,
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                }]
+            },
+            options: {
+                cutout: '60%',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true, pointStyle: 'circle' } },
+                }
+            }
+        });
+    } else {
+        document.getElementById('riskDistChart').parentElement.innerHTML += '<p class="text-muted text-center mt-3" style="font-size:0.85rem;">No finalized risk ratings yet</p>';
+    }
+
+    // ==================== DONUT: DECISION OUTCOMES ====================
+    const decTotal = decisionData.counts.reduce((a, b) => a + b, 0);
+    if (decTotal > 0) {
+        new Chart(document.getElementById('decisionChart'), {
+            type: 'doughnut',
+            data: {
+                labels: decisionData.labels,
+                datasets: [{
+                    data: decisionData.counts,
+                    backgroundColor: decisionData.colors,
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                }]
+            },
+            options: {
+                cutout: '60%',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true, pointStyle: 'circle' } },
+                }
+            }
+        });
+    } else {
+        document.getElementById('decisionChart').parentElement.innerHTML += '<p class="text-muted text-center mt-3" style="font-size:0.85rem;">No finalized decisions yet</p>';
+    }
+
+    // ==================== BAR: ASSESSMENT PIPELINE ====================
+    new Chart(document.getElementById('pipelineChart'), {
+        type: 'bar',
+        data: {
+            labels: pipelineData.labels,
+            datasets: [{
+                data: pipelineData.counts,
+                backgroundColor: pipelineData.colors,
+                borderRadius: 6,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { display: false } },
+                y: { grid: { display: false } }
+            }
+        }
+    });
+
+    // ==================== BAR: CATEGORY ANALYSIS ====================
+    const catCanvas = document.getElementById('categoryChart');
+    const catWrap = document.getElementById('categoryChartWrap');
+    if (categoryData.labels.length > 0) {
+        const catHeight = Math.max(120, categoryData.labels.length * 28 + 40);
+        catWrap.style.height = catHeight + 'px';
+
+        new Chart(catCanvas, {
+            type: 'bar',
+            data: {
+                labels: categoryData.labels,
+                datasets: [{
+                    data: categoryData.scores,
+                    backgroundColor: categoryData.colors,
+                    borderRadius: 4,
+                    borderSkipped: false,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) { return ctx.parsed.x.toFixed(1) + '%'; }
+                        }
+                    }
+                },
+                scales: {
+                    x: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: '#f0f0f0' } },
+                    y: { grid: { display: false } }
+                }
+            }
+        });
+    } else {
+        catCanvas.parentElement.innerHTML += '<p class="text-muted text-center mt-3" style="font-size:0.85rem;">No category data available yet</p>';
+    }
+
+    // ==================== TABLE: ROW CLICK ====================
+    document.querySelectorAll('#vendorTableBody tr[data-href]').forEach(function(row) {
+        row.addEventListener('click', function() {
+            window.location.href = this.dataset.href;
+        });
+    });
+
+    // ==================== FILTERING ====================
+    const filterRisk = document.getElementById('filterRisk');
+    const filterOutcome = document.getElementById('filterOutcome');
+    const filterStatus = document.getElementById('filterStatus');
+    const filterSearch = document.getElementById('filterSearch');
+    const filterClear = document.getElementById('filterClear');
+    const filterCount = document.getElementById('filterCount');
+    const rows = document.querySelectorAll('#vendorTableBody tr');
+    const totalRows = rows.length;
+
+    function applyFilters() {
+        const risk = filterRisk.value;
+        const outcome = filterOutcome.value;
+        const status = filterStatus.value;
+        const search = filterSearch.value.toLowerCase().trim();
+        let visible = 0;
+
+        rows.forEach(function(row) {
+            let show = true;
+            if (risk && row.dataset.risk !== risk) show = false;
+            if (outcome && row.dataset.outcome !== outcome) show = false;
+            if (status && row.dataset.status !== status) show = false;
+            if (search && row.dataset.name.indexOf(search) === -1) show = false;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+
+        filterCount.textContent = 'Showing ' + visible + ' of ' + totalRows;
+    }
+
+    if (filterRisk) filterRisk.addEventListener('change', applyFilters);
+    if (filterOutcome) filterOutcome.addEventListener('change', applyFilters);
+    if (filterStatus) filterStatus.addEventListener('change', applyFilters);
+    if (filterSearch) filterSearch.addEventListener('input', applyFilters);
+    if (filterClear) {
+        filterClear.addEventListener('click', function() {
+            filterRisk.value = '';
+            filterOutcome.value = '';
+            filterStatus.value = '';
+            filterSearch.value = '';
+            applyFilters();
+        });
+    }
+    applyFilters();
+
+    // ==================== SORTING ====================
+    const headers = document.querySelectorAll('.sortable-header');
+    let currentSort = null;
+    let currentDir = 'asc';
+
+    headers.forEach(function(header) {
+        header.addEventListener('click', function() {
+            const sortKey = this.dataset.sort;
+            if (currentSort === sortKey) {
+                currentDir = currentDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort = sortKey;
+                currentDir = 'asc';
+            }
+
+            // Update icons
+            document.querySelectorAll('.sort-icon').forEach(function(icon) {
+                icon.className = 'bi bi-chevron-expand sort-icon';
+            });
+            const icon = this.querySelector('.sort-icon');
+            icon.className = 'bi bi-chevron-' + (currentDir === 'asc' ? 'up' : 'down') + ' sort-icon active';
+
+            const tbody = document.getElementById('vendorTableBody');
+            const rowsArr = Array.from(tbody.querySelectorAll('tr'));
+
+            rowsArr.sort(function(a, b) {
+                let va, vb;
+                switch (sortKey) {
+                    case 'name':
+                        va = a.dataset.name; vb = b.dataset.name;
+                        break;
+                    case 'risk':
+                        const riskOrder = {'VERY_HIGH':0,'HIGH':1,'MODERATE':2,'LOW':3,'VERY_LOW':4,'':5};
+                        va = riskOrder[a.dataset.risk] ?? 5;
+                        vb = riskOrder[b.dataset.risk] ?? 5;
+                        return currentDir === 'asc' ? va - vb : vb - va;
+                    case 'outcome':
+                        va = a.dataset.outcome || 'zzz'; vb = b.dataset.outcome || 'zzz';
+                        break;
+                    case 'score':
+                        va = a.dataset.score ? parseFloat(a.dataset.score) : -1;
+                        vb = b.dataset.score ? parseFloat(b.dataset.score) : -1;
+                        return currentDir === 'asc' ? va - vb : vb - va;
+                    case 'assessed':
+                        va = a.dataset.assessed || ''; vb = b.dataset.assessed || '';
+                        break;
+                    case 'review':
+                        va = a.dataset.review || ''; vb = b.dataset.review || '';
+                        break;
+                    case 'status':
+                        va = a.dataset.status; vb = b.dataset.status;
+                        break;
+                    default:
+                        va = ''; vb = '';
+                }
+                if (va < vb) return currentDir === 'asc' ? -1 : 1;
+                if (va > vb) return currentDir === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            rowsArr.forEach(function(row) { tbody.appendChild(row); });
+        });
+    });
+});
+</script>
+{% endblock %}
