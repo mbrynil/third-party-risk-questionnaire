@@ -162,8 +162,10 @@ class Question(Base):
     expected_value_type = Column(String(20), default=VALUE_TYPE_CHOICE, nullable=False)
     answer_mode = Column(String(20), default=ANSWER_MODE_SINGLE, nullable=False)
     category = Column(String(100), nullable=True, index=True)
+    question_bank_item_id = Column(Integer, ForeignKey("question_bank_items.id"), nullable=True)
 
     assessment = relationship("Assessment", back_populates="questions")
+    question_bank_item = relationship("QuestionBankItem")
 
 
 RESPONSE_STATUS_DRAFT = "DRAFT"
@@ -298,7 +300,8 @@ class AssessmentDecision(Base):
 TRIGGER_CATEGORY_HAS_DNM = "CATEGORY_HAS_DNM"
 TRIGGER_PARTIAL_HIGH_CRITICAL = "PARTIAL_HIGH_CRITICAL"
 TRIGGER_CATEGORY_SCORE_BELOW_50 = "CATEGORY_SCORE_BELOW_50"
-VALID_TRIGGER_CONDITIONS = [TRIGGER_CATEGORY_HAS_DNM, TRIGGER_PARTIAL_HIGH_CRITICAL, TRIGGER_CATEGORY_SCORE_BELOW_50]
+TRIGGER_QUESTION_ANSWERED = "QUESTION_ANSWERED"
+VALID_TRIGGER_CONDITIONS = [TRIGGER_CATEGORY_HAS_DNM, TRIGGER_PARTIAL_HIGH_CRITICAL, TRIGGER_CATEGORY_SCORE_BELOW_50, TRIGGER_QUESTION_ANSWERED]
 
 SEVERITY_LOW = "LOW"
 SEVERITY_MEDIUM = "MEDIUM"
@@ -310,6 +313,7 @@ TRIGGER_LABELS = {
     TRIGGER_CATEGORY_HAS_DNM: "Any question does not meet expectation",
     TRIGGER_PARTIAL_HIGH_CRITICAL: "Partial answer on HIGH/CRITICAL weight question",
     TRIGGER_CATEGORY_SCORE_BELOW_50: "Category score below 50%",
+    TRIGGER_QUESTION_ANSWERED: "Specific question answered",
 }
 
 
@@ -324,6 +328,10 @@ class RiskStatement(Base):
     remediation_text = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    trigger_question_id = Column(Integer, ForeignKey("question_bank_items.id"), nullable=True)
+    trigger_answer_value = Column(String(20), nullable=True)
+
+    trigger_question = relationship("QuestionBankItem")
 
 
 VALID_CHOICES = ["yes", "no", "partial", "na"]
@@ -788,6 +796,31 @@ def backfill_question_categories():
             cat = bank_map.get(q.question_text)
             if cat:
                 q.category = cat
+                updated += 1
+
+        if updated > 0:
+            db.commit()
+    finally:
+        db.close()
+
+
+def backfill_question_bank_item_ids():
+    """Backfill question_bank_item_id on assessment questions by matching text to question bank."""
+    db = SessionLocal()
+    try:
+        unlinked = db.query(Question).filter(
+            Question.question_bank_item_id == None
+        ).all()
+        if not unlinked:
+            return
+
+        bank_map = {item.text: item.id for item in db.query(QuestionBankItem).all()}
+
+        updated = 0
+        for q in unlinked:
+            bank_id = bank_map.get(q.question_text)
+            if bank_id:
+                q.question_bank_item_id = bank_id
                 updated += 1
 
         if updated > 0:

@@ -95,6 +95,7 @@ def compute_assessment_scores(questions, response) -> dict:
             "eval_status": eval_status,
             "answer_choice": answer_choice,
             "answer_text": answer_text,
+            "question_bank_item_id": getattr(q, 'question_bank_item_id', None),
         }
 
         if eval_status != EVAL_NO_EXPECTATION:

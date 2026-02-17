@@ -25,22 +25,6 @@
                 <div class="card-body">
                     <div class="row mb-3">
                         <div class="col-md-4">
-                            <label for="category" class="form-label">
-                                Category <span class="text-danger">*</span>
-                            </label>
-                            <input type="text" id="category" name="category" required
-                                   list="category-list"
-                                   value="{{ statement.category if statement else '' }}"
-                                   class="form-control"
-                                   placeholder="e.g., Access Control">
-                            <datalist id="category-list">
-                                {% for cat in categories %}
-                                <option value="{{ cat }}">
-                                {% endfor %}
-                            </datalist>
-                            <div class="form-text">Select from existing categories or type a new one.</div>
-                        </div>
-                        <div class="col-md-4">
                             <label for="trigger_condition" class="form-label">
                                 Trigger Condition <span class="text-danger">*</span>
                             </label>
@@ -54,6 +38,22 @@
                             </select>
                         </div>
                         <div class="col-md-4">
+                            <label for="category" class="form-label">
+                                Category <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="category" name="category" required
+                                   list="category-list"
+                                   value="{{ statement.category if statement else '' }}"
+                                   class="form-control"
+                                   placeholder="e.g., Access Control">
+                            <datalist id="category-list">
+                                {% for cat in categories %}
+                                <option value="{{ cat }}">
+                                {% endfor %}
+                            </datalist>
+                            <div class="form-text" id="category-help-text">Select from existing categories or type a new one.</div>
+                        </div>
+                        <div class="col-md-4">
                             <label for="severity" class="form-label">
                                 Severity <span class="text-danger">*</span>
                             </label>
@@ -62,6 +62,49 @@
                                 <option value="{{ sev }}"
                                         {% if statement and statement.severity == sev %}selected{% elif not statement and sev == 'MEDIUM' %}selected{% endif %}>
                                     {{ sev }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {# Question-level trigger fields (shown only for QUESTION_ANSWERED) #}
+                    <div id="question-trigger-fields" class="row mb-3" style="display:none;">
+                        <div class="col-md-8">
+                            <label for="trigger_question_id" class="form-label">
+                                Trigger Question <span class="text-danger">*</span>
+                            </label>
+                            <select id="trigger_question_id" name="trigger_question_id" class="form-select">
+                                <option value="">-- Select a question --</option>
+                                {% set current_cat = namespace(value='') %}
+                                {% for item in question_bank_items %}
+                                    {% if item.category != current_cat.value %}
+                                        {% if current_cat.value %}
+                                        </optgroup>
+                                        {% endif %}
+                                        <optgroup label="{{ item.category }}">
+                                        {% set current_cat.value = item.category %}
+                                    {% endif %}
+                                    <option value="{{ item.id }}" data-category="{{ item.category }}"
+                                            {% if statement and statement.trigger_question_id == item.id %}selected{% endif %}>
+                                        {{ item.text[:100] }}{% if item.text|length > 100 %}...{% endif %}
+                                    </option>
+                                {% endfor %}
+                                {% if current_cat.value %}
+                                </optgroup>
+                                {% endif %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="trigger_answer_value" class="form-label">
+                                Answer Value <span class="text-danger">*</span>
+                            </label>
+                            <select id="trigger_answer_value" name="trigger_answer_value" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for choice in answer_choices %}
+                                <option value="{{ choice }}"
+                                        {% if statement and statement.trigger_answer_value == choice %}selected{% endif %}>
+                                    {{ choice }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -108,4 +151,46 @@
         </form>
     </div>
 </div>
+
+<script>
+(function() {
+    var triggerSelect = document.getElementById('trigger_condition');
+    var questionFields = document.getElementById('question-trigger-fields');
+    var categoryInput = document.getElementById('category');
+    var categoryHelp = document.getElementById('category-help-text');
+    var questionSelect = document.getElementById('trigger_question_id');
+
+    function toggleQuestionFields() {
+        var isQuestion = triggerSelect.value === 'QUESTION_ANSWERED';
+        questionFields.style.display = isQuestion ? '' : 'none';
+
+        if (isQuestion) {
+            categoryInput.readOnly = true;
+            categoryHelp.textContent = 'Auto-filled from selected question.';
+            // Auto-fill category from selected question
+            updateCategoryFromQuestion();
+        } else {
+            categoryInput.readOnly = false;
+            categoryHelp.textContent = 'Select from existing categories or type a new one.';
+        }
+    }
+
+    function updateCategoryFromQuestion() {
+        var selected = questionSelect.options[questionSelect.selectedIndex];
+        if (selected && selected.value) {
+            categoryInput.value = selected.getAttribute('data-category') || '';
+        }
+    }
+
+    triggerSelect.addEventListener('change', toggleQuestionFields);
+    questionSelect.addEventListener('change', function() {
+        if (triggerSelect.value === 'QUESTION_ANSWERED') {
+            updateCategoryFromQuestion();
+        }
+    });
+
+    // Run on page load for edit pre-population
+    toggleQuestionFields();
+})();
+</script>
 {% endblock %}

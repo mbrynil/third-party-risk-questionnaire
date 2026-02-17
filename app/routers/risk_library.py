@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from app import templates
 from models import (
     get_db, RiskStatement, QuestionBankItem,
     VALID_TRIGGER_CONDITIONS, VALID_SEVERITIES, TRIGGER_LABELS,
+    TRIGGER_QUESTION_ANSWERED, VALID_CHOICES,
 )
 
 router = APIRouter()
@@ -18,9 +19,33 @@ def _get_categories(db: Session) -> list[str]:
     return [r[0] for r in rows]
 
 
+def _get_question_bank_items(db: Session) -> list[dict]:
+    """Get all active question bank items grouped info for dropdowns."""
+    items = db.query(QuestionBankItem).filter(
+        QuestionBankItem.is_active == True
+    ).order_by(QuestionBankItem.category, QuestionBankItem.id).all()
+    return [{"id": item.id, "text": item.text, "category": item.category} for item in items]
+
+
+def _form_context(db: Session, statement=None, error=None):
+    """Build common template context for the risk library edit form."""
+    return {
+        "statement": statement,
+        "categories": _get_categories(db),
+        "trigger_conditions": VALID_TRIGGER_CONDITIONS,
+        "trigger_labels": TRIGGER_LABELS,
+        "severities": VALID_SEVERITIES,
+        "question_bank_items": _get_question_bank_items(db),
+        "answer_choices": VALID_CHOICES,
+        "error": error,
+    }
+
+
 @router.get("/risk-library", response_class=HTMLResponse)
 async def risk_library_list(request: Request, db: Session = Depends(get_db)):
-    statements = db.query(RiskStatement).order_by(RiskStatement.category, RiskStatement.severity).all()
+    statements = db.query(RiskStatement).options(
+        joinedload(RiskStatement.trigger_question)
+    ).order_by(RiskStatement.category, RiskStatement.severity).all()
 
     grouped = {}
     for stmt in statements:
@@ -38,14 +63,9 @@ async def risk_library_list(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/risk-library/new", response_class=HTMLResponse)
 async def risk_library_new(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse("risk_library_edit.html", {
-        "request": request,
-        "statement": None,
-        "categories": _get_categories(db),
-        "trigger_conditions": VALID_TRIGGER_CONDITIONS,
-        "trigger_labels": TRIGGER_LABELS,
-        "severities": VALID_SEVERITIES,
-    })
+    ctx = _form_context(db)
+    ctx["request"] = request
+    return templates.TemplateResponse("risk_library_edit.html", ctx)
 
 
 @router.post("/risk-library/new", response_class=HTMLResponse)
@@ -56,18 +76,27 @@ async def risk_library_create(
     severity: str = Form(...),
     finding_text: str = Form(...),
     remediation_text: str = Form(...),
+    trigger_question_id: str = Form(""),
+    trigger_answer_value: str = Form(""),
     db: Session = Depends(get_db),
 ):
+    # For QUESTION_ANSWERED, auto-derive category from the selected question
+    if trigger_condition == TRIGGER_QUESTION_ANSWERED:
+        if not trigger_question_id.strip() or not trigger_answer_value.strip():
+            ctx = _form_context(db, error="Question and answer value are required for question-level triggers.")
+            ctx["request"] = request
+            return templates.TemplateResponse("risk_library_edit.html", ctx)
+
+        bank_item = db.query(QuestionBankItem).filter(
+            QuestionBankItem.id == int(trigger_question_id)
+        ).first()
+        if bank_item:
+            category = bank_item.category
+
     if not category.strip() or not finding_text.strip() or not remediation_text.strip():
-        return templates.TemplateResponse("risk_library_edit.html", {
-            "request": request,
-            "statement": None,
-            "categories": _get_categories(db),
-            "trigger_conditions": VALID_TRIGGER_CONDITIONS,
-            "trigger_labels": TRIGGER_LABELS,
-            "severities": VALID_SEVERITIES,
-            "error": "Category, finding text, and remediation text are required.",
-        })
+        ctx = _form_context(db, error="Category, finding text, and remediation text are required.")
+        ctx["request"] = request
+        return templates.TemplateResponse("risk_library_edit.html", ctx)
 
     stmt = RiskStatement(
         category=category.strip(),
@@ -76,6 +105,8 @@ async def risk_library_create(
         finding_text=finding_text.strip(),
         remediation_text=remediation_text.strip(),
         is_active=True,
+        trigger_question_id=int(trigger_question_id) if trigger_condition == TRIGGER_QUESTION_ANSWERED and trigger_question_id.strip() else None,
+        trigger_answer_value=trigger_answer_value.strip() if trigger_condition == TRIGGER_QUESTION_ANSWERED and trigger_answer_value.strip() else None,
     )
     db.add(stmt)
     db.commit()
@@ -88,18 +119,15 @@ async def risk_library_create(
 
 @router.get("/risk-library/{statement_id}/edit", response_class=HTMLResponse)
 async def risk_library_edit(request: Request, statement_id: int, db: Session = Depends(get_db)):
-    stmt = db.query(RiskStatement).filter(RiskStatement.id == statement_id).first()
+    stmt = db.query(RiskStatement).options(
+        joinedload(RiskStatement.trigger_question)
+    ).filter(RiskStatement.id == statement_id).first()
     if not stmt:
         raise HTTPException(status_code=404, detail="Risk statement not found")
 
-    return templates.TemplateResponse("risk_library_edit.html", {
-        "request": request,
-        "statement": stmt,
-        "categories": _get_categories(db),
-        "trigger_conditions": VALID_TRIGGER_CONDITIONS,
-        "trigger_labels": TRIGGER_LABELS,
-        "severities": VALID_SEVERITIES,
-    })
+    ctx = _form_context(db, statement=stmt)
+    ctx["request"] = request
+    return templates.TemplateResponse("risk_library_edit.html", ctx)
 
 
 @router.post("/risk-library/{statement_id}/edit", response_class=HTMLResponse)
@@ -112,22 +140,31 @@ async def risk_library_update(
     finding_text: str = Form(...),
     remediation_text: str = Form(...),
     is_active: str = Form(None),
+    trigger_question_id: str = Form(""),
+    trigger_answer_value: str = Form(""),
     db: Session = Depends(get_db),
 ):
     stmt = db.query(RiskStatement).filter(RiskStatement.id == statement_id).first()
     if not stmt:
         raise HTTPException(status_code=404, detail="Risk statement not found")
 
+    # For QUESTION_ANSWERED, auto-derive category from the selected question
+    if trigger_condition == TRIGGER_QUESTION_ANSWERED:
+        if not trigger_question_id.strip() or not trigger_answer_value.strip():
+            ctx = _form_context(db, statement=stmt, error="Question and answer value are required for question-level triggers.")
+            ctx["request"] = request
+            return templates.TemplateResponse("risk_library_edit.html", ctx)
+
+        bank_item = db.query(QuestionBankItem).filter(
+            QuestionBankItem.id == int(trigger_question_id)
+        ).first()
+        if bank_item:
+            category = bank_item.category
+
     if not category.strip() or not finding_text.strip() or not remediation_text.strip():
-        return templates.TemplateResponse("risk_library_edit.html", {
-            "request": request,
-            "statement": stmt,
-            "categories": _get_categories(db),
-            "trigger_conditions": VALID_TRIGGER_CONDITIONS,
-            "trigger_labels": TRIGGER_LABELS,
-            "severities": VALID_SEVERITIES,
-            "error": "Category, finding text, and remediation text are required.",
-        })
+        ctx = _form_context(db, statement=stmt, error="Category, finding text, and remediation text are required.")
+        ctx["request"] = request
+        return templates.TemplateResponse("risk_library_edit.html", ctx)
 
     stmt.category = category.strip()
     stmt.trigger_condition = trigger_condition
@@ -135,6 +172,14 @@ async def risk_library_update(
     stmt.finding_text = finding_text.strip()
     stmt.remediation_text = remediation_text.strip()
     stmt.is_active = is_active == "on"
+
+    if trigger_condition == TRIGGER_QUESTION_ANSWERED:
+        stmt.trigger_question_id = int(trigger_question_id) if trigger_question_id.strip() else None
+        stmt.trigger_answer_value = trigger_answer_value.strip() if trigger_answer_value.strip() else None
+    else:
+        stmt.trigger_question_id = None
+        stmt.trigger_answer_value = None
+
     db.commit()
 
     return RedirectResponse(

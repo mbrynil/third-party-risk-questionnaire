@@ -154,7 +154,8 @@ async def add_questions_to_assessment(
                         expected_values=None,
                         expected_value_type="CHOICE",
                         answer_mode="SINGLE",
-                        category=bank_item.category
+                        category=bank_item.category,
+                        question_bank_item_id=bank_item.id
                     )
                     db.add(question)
                     order += 1

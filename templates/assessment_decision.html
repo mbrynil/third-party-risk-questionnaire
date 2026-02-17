@@ -365,6 +365,11 @@
                     {% else %}
                     <span class="badge bg-secondary ms-2">LOW</span>
                     {% endif %}
+                    {% if suggestion.trigger_question_text %}
+                    <div class="text-muted small mt-1">
+                        <i class="bi bi-pin-angle me-1"></i>Triggered by: "{{ suggestion.trigger_question_text[:80] }}{% if suggestion.trigger_question_text|length > 80 %}...{% endif %}" answered <strong>{{ suggestion.trigger_answer_value }}</strong>
+                    </div>
+                    {% endif %}
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-primary btn-apply-suggestion"
                         data-finding="{{ suggestion.finding_text }}"

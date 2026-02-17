@@ -56,7 +56,13 @@
                             <span class="badge bg-secondary">LOW</span>
                             {% endif %}
                         </td>
-                        <td class="small text-muted">{{ trigger_labels.get(stmt.trigger_condition, stmt.trigger_condition) }}</td>
+                        <td class="small text-muted">
+                            {% if stmt.trigger_condition == 'QUESTION_ANSWERED' and stmt.trigger_question %}
+                            Q: "{{ stmt.trigger_question.text[:60] }}{% if stmt.trigger_question.text|length > 60 %}...{% endif %}" = {{ stmt.trigger_answer_value }}
+                            {% else %}
+                            {{ trigger_labels.get(stmt.trigger_condition, stmt.trigger_condition) }}
+                            {% endif %}
+                        </td>
                         <td class="small">{{ stmt.finding_text[:120] }}{% if stmt.finding_text|length > 120 %}...{% endif %}</td>
                         <td>
                             {% if stmt.is_active %}
