@@ -11,6 +11,7 @@ from models import (
 )
 from app.services.decision_service import get_or_create_decision, save_decision
 from app.services.scoring import compute_assessment_scores
+from app.services.risk_statements import match_risk_statements
 from app.services.lifecycle import transition_to_reviewed
 
 router = APIRouter()
@@ -41,6 +42,7 @@ async def assessment_decision_page(request: Request, assessment_id: int, db: Ses
     ).order_by(Question.order).all()
 
     scores = compute_assessment_scores(questions, response)
+    risk_suggestions = match_risk_statements(db, scores)
 
     evidence_count = len(response.evidence_files) if response else 0
     followup_total = len(response.follow_ups) if response else 0
@@ -60,6 +62,7 @@ async def assessment_decision_page(request: Request, assessment_id: int, db: Ses
         "followup_open": followup_open,
         "risk_levels": VALID_RISK_LEVELS,
         "decision_outcomes": VALID_DECISION_OUTCOMES,
+        "risk_suggestions": risk_suggestions,
     })
 
 

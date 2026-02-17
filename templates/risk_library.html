@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Risk Statement Library - RiskQ{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center">
+    <div>
+        <h1>Risk Statement Library</h1>
+        <p>Pre-written risk findings and remediation actions matched to assessment results</p>
+    </div>
+    <div class="mt-3 mt-sm-0">
+        <a href="/risk-library/new" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-2"></i>Add Statement
+        </a>
+    </div>
+</div>
+
+{% if request.query_params.get('message') %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ request.query_params.get('message') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if grouped %}
+<p class="text-muted mb-3">{{ total_count }} statement{{ 's' if total_count != 1 else '' }} across {{ grouped|length }} categor{{ 'ies' if grouped|length != 1 else 'y' }}</p>
+
+{% for category, statements in grouped.items() %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-folder me-2"></i>{{ category }} <span class="badge badge-count ms-2">{{ statements|length }}</span></span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:100px">Severity</th>
+                        <th style="width:220px">Trigger</th>
+                        <th>Finding</th>
+                        <th style="width:80px">Active</th>
+                        <th style="width:120px" class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stmt in statements %}
+                    <tr{% if not stmt.is_active %} class="table-secondary"{% endif %}>
+                        <td>
+                            {% if stmt.severity == 'CRITICAL' %}
+                            <span class="badge bg-danger">CRITICAL</span>
+                            {% elif stmt.severity == 'HIGH' %}
+                            <span class="badge bg-warning text-dark">HIGH</span>
+                            {% elif stmt.severity == 'MEDIUM' %}
+                            <span class="badge bg-info">MEDIUM</span>
+                            {% else %}
+                            <span class="badge bg-secondary">LOW</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-muted">{{ trigger_labels.get(stmt.trigger_condition, stmt.trigger_condition) }}</td>
+                        <td class="small">{{ stmt.finding_text[:120] }}{% if stmt.finding_text|length > 120 %}...{% endif %}</td>
+                        <td>
+                            {% if stmt.is_active %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">Yes</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">No</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="/risk-library/{{ stmt.id }}/edit" class="btn btn-sm btn-outline-secondary me-1">Edit</a>
+                            <form method="post" action="/risk-library/{{ stmt.id }}/delete" class="d-inline"
+                                  onsubmit="return confirm('Delete this risk statement?')">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-journal-medical text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-4">No risk statements yet</h5>
+        <p class="text-muted">Add risk statements to auto-suggest findings during assessment decisions.</p>
+        <a href="/risk-library/new" class="btn btn-primary mt-2">
+            <i class="bi bi-plus-lg me-2"></i>Add Statement
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

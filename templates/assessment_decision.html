@@ -343,6 +343,52 @@
 </div>
 {% endif %}
 
+{# ==================== RISK STATEMENT SUGGESTIONS ==================== #}
+{% if risk_suggestions and decision.status != 'FINAL' %}
+<div class="card mb-4">
+    <div class="card-header">
+        <i class="bi bi-lightbulb me-2"></i>Suggested Risk Findings ({{ risk_suggestions|length }})
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">Auto-matched from the Risk Statement Library based on flagged items and category scores. Click "Apply" to append to Key Findings and Remediation fields below.</p>
+        {% for suggestion in risk_suggestions %}
+        <div class="border rounded p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <span class="fw-semibold">{{ suggestion.category }}</span>
+                    {% if suggestion.severity == 'CRITICAL' %}
+                    <span class="badge bg-danger ms-2">CRITICAL</span>
+                    {% elif suggestion.severity == 'HIGH' %}
+                    <span class="badge bg-warning text-dark ms-2">HIGH</span>
+                    {% elif suggestion.severity == 'MEDIUM' %}
+                    <span class="badge bg-info ms-2">MEDIUM</span>
+                    {% else %}
+                    <span class="badge bg-secondary ms-2">LOW</span>
+                    {% endif %}
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary btn-apply-suggestion"
+                        data-finding="{{ suggestion.finding_text }}"
+                        data-remediation="{{ suggestion.remediation_text }}"
+                        data-category="{{ suggestion.category }}">
+                    <i class="bi bi-plus-circle me-1"></i>Apply
+                </button>
+            </div>
+            <div class="small">
+                <div class="mb-2">
+                    <strong class="text-muted">Finding:</strong>
+                    <span>{{ suggestion.finding_text }}</span>
+                </div>
+                <div>
+                    <strong class="text-muted">Remediation:</strong>
+                    <span>{{ suggestion.remediation_text }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {# ==================== EVIDENCE & FOLLOW-UP STATUS ==================== #}
 <div class="row mb-4">
     <div class="col-md-6 mb-3 mb-md-0">
@@ -505,4 +551,38 @@
     {% endif %}
 </div>
 </form>
+
+{% if risk_suggestions and decision.status != 'FINAL' %}
+<script>
+document.querySelectorAll('.btn-apply-suggestion').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var finding = this.getAttribute('data-finding');
+        var remediation = this.getAttribute('data-remediation');
+        var category = this.getAttribute('data-category');
+
+        var findingsArea = document.getElementById('key_findings');
+        var remediationArea = document.getElementById('remediation_required');
+
+        var prefix = '[' + category + '] ';
+
+        if (findingsArea.value.trim()) {
+            findingsArea.value += '\n\n' + prefix + finding;
+        } else {
+            findingsArea.value = prefix + finding;
+        }
+
+        if (remediationArea.value.trim()) {
+            remediationArea.value += '\n\n' + prefix + remediation;
+        } else {
+            remediationArea.value = prefix + remediation;
+        }
+
+        this.disabled = true;
+        this.classList.remove('btn-outline-primary');
+        this.classList.add('btn-success');
+        this.innerHTML = '<i class="bi bi-check-circle me-1"></i>Applied';
+    });
+});
+</script>
+{% endif %}
 {% endblock %}

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}{% if statement %}Edit{% else %}Add{% endif %} Risk Statement - RiskQ{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="mb-3">
+            <a href="/risk-library" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-1"></i>Back to Risk Library
+            </a>
+        </div>
+
+        <h1 class="mb-4">{% if statement %}Edit Risk Statement{% else %}Add Risk Statement{% endif %}</h1>
+
+        {% if error %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-circle me-2"></i>{{ error }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% if statement %}/risk-library/{{ statement.id }}/edit{% else %}/risk-library/new{% endif %}">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="category" class="form-label">
+                                Category <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="category" name="category" required
+                                   list="category-list"
+                                   value="{{ statement.category if statement else '' }}"
+                                   class="form-control"
+                                   placeholder="e.g., Access Control">
+                            <datalist id="category-list">
+                                {% for cat in categories %}
+                                <option value="{{ cat }}">
+                                {% endfor %}
+                            </datalist>
+                            <div class="form-text">Select from existing categories or type a new one.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="trigger_condition" class="form-label">
+                                Trigger Condition <span class="text-danger">*</span>
+                            </label>
+                            <select id="trigger_condition" name="trigger_condition" required class="form-select">
+                                {% for tc in trigger_conditions %}
+                                <option value="{{ tc }}"
+                                        {% if statement and statement.trigger_condition == tc %}selected{% endif %}>
+                                    {{ trigger_labels.get(tc, tc) }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="severity" class="form-label">
+                                Severity <span class="text-danger">*</span>
+                            </label>
+                            <select id="severity" name="severity" required class="form-select">
+                                {% for sev in severities %}
+                                <option value="{{ sev }}"
+                                        {% if statement and statement.severity == sev %}selected{% elif not statement and sev == 'MEDIUM' %}selected{% endif %}>
+                                    {{ sev }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="finding_text" class="form-label">
+                            Finding Text <span class="text-danger">*</span>
+                        </label>
+                        <textarea id="finding_text" name="finding_text" rows="4" required
+                                  class="form-control"
+                                  placeholder="Describe the risk finding that will be suggested to the analyst...">{{ statement.finding_text if statement else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="remediation_text" class="form-label">
+                            Remediation Text <span class="text-danger">*</span>
+                        </label>
+                        <textarea id="remediation_text" name="remediation_text" rows="4" required
+                                  class="form-control"
+                                  placeholder="Describe the remediation actions the vendor should take...">{{ statement.remediation_text if statement else '' }}</textarea>
+                    </div>
+
+                    {% if statement %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active"
+                               {% if statement.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">
+                            Active
+                        </label>
+                        <div class="form-text">Inactive statements will not be suggested on assessment decisions.</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex justify-content-end gap-2">
+                <a href="/risk-library" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">
+                    {% if statement %}Save Changes{% else %}Create Statement{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

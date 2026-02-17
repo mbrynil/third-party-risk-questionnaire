@@ -293,6 +293,39 @@ class AssessmentDecision(Base):
     assessment = relationship("Assessment")
 
 
+# ==================== RISK STATEMENT LIBRARY ====================
+
+TRIGGER_CATEGORY_HAS_DNM = "CATEGORY_HAS_DNM"
+TRIGGER_PARTIAL_HIGH_CRITICAL = "PARTIAL_HIGH_CRITICAL"
+TRIGGER_CATEGORY_SCORE_BELOW_50 = "CATEGORY_SCORE_BELOW_50"
+VALID_TRIGGER_CONDITIONS = [TRIGGER_CATEGORY_HAS_DNM, TRIGGER_PARTIAL_HIGH_CRITICAL, TRIGGER_CATEGORY_SCORE_BELOW_50]
+
+SEVERITY_LOW = "LOW"
+SEVERITY_MEDIUM = "MEDIUM"
+SEVERITY_HIGH = "HIGH"
+SEVERITY_CRITICAL = "CRITICAL"
+VALID_SEVERITIES = [SEVERITY_LOW, SEVERITY_MEDIUM, SEVERITY_HIGH, SEVERITY_CRITICAL]
+
+TRIGGER_LABELS = {
+    TRIGGER_CATEGORY_HAS_DNM: "Any question does not meet expectation",
+    TRIGGER_PARTIAL_HIGH_CRITICAL: "Partial answer on HIGH/CRITICAL weight question",
+    TRIGGER_CATEGORY_SCORE_BELOW_50: "Category score below 50%",
+}
+
+
+class RiskStatement(Base):
+    __tablename__ = "risk_statements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String(100), nullable=False, index=True)
+    trigger_condition = Column(String(50), nullable=False)
+    severity = Column(String(20), default=SEVERITY_MEDIUM, nullable=False)
+    finding_text = Column(Text, nullable=False)
+    remediation_text = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 VALID_CHOICES = ["yes", "no", "partial", "na"]
 
 EVAL_MEETS = "MEETS_EXPECTATION"
@@ -520,6 +553,220 @@ def seed_question_bank():
                     added += 1
             if added > 0:
                 db.commit()
+    finally:
+        db.close()
+
+
+def seed_risk_statements():
+    db = SessionLocal()
+    seed_data = [
+        # Access Control
+        ("Access Control", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor fails to meet access control requirements. Unauthorized access to systems and data may not be adequately prevented, increasing risk of data breach or privilege escalation.",
+         "Vendor must implement role-based access control (RBAC), enforce multi-factor authentication for privileged accounts, and establish a user access review process. Provide evidence of implementation within 60 days."),
+        ("Access Control", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor access control posture is critically deficient. Multiple access control requirements are unmet, indicating systemic gaps in identity and access management.",
+         "Vendor must conduct a comprehensive access control gap assessment and submit a remediation plan within 30 days. All critical gaps must be resolved within 90 days with independent verification."),
+
+        # Encryption
+        ("Encryption", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_CRITICAL,
+         "Vendor fails to meet encryption requirements. Data at rest or in transit may not be adequately protected, exposing sensitive information to interception or unauthorized access.",
+         "Vendor must implement AES-256 encryption at rest and TLS 1.2+ in transit within 30 days. Provide documentation of encryption standards and key management procedures."),
+        ("Encryption", TRIGGER_PARTIAL_HIGH_CRITICAL, SEVERITY_HIGH,
+         "Vendor partially meets encryption requirements on critical controls. Encryption key management or backup encryption may have gaps requiring attention.",
+         "Vendor must address encryption gaps identified in the assessment. Submit an encryption improvement plan within 45 days and complete implementation within 90 days."),
+
+        # Incident Response
+        ("Incident Response", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor lacks adequate incident response capabilities. Without documented procedures and defined response timelines, security incidents may go undetected or unresolved.",
+         "Vendor must establish a documented incident response plan with defined roles, escalation paths, and notification timelines. Provide the plan for review within 45 days."),
+        ("Incident Response", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor incident response posture is critically deficient. Multiple incident response requirements are unmet, indicating inability to detect, respond to, or recover from security incidents.",
+         "Vendor must engage qualified security personnel to develop and implement a comprehensive incident response program within 60 days. Include tabletop exercises and provide evidence of readiness."),
+
+        # Vulnerability Management
+        ("Vulnerability Management", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet vulnerability management requirements. Unpatched vulnerabilities may exist in production systems, increasing exposure to known exploits.",
+         "Vendor must implement regular vulnerability scanning (at minimum monthly) and establish a patch management process with defined SLAs. Provide scan results and remediation timelines within 30 days."),
+        ("Vulnerability Management", TRIGGER_PARTIAL_HIGH_CRITICAL, SEVERITY_MEDIUM,
+         "Vendor partially meets critical vulnerability management controls. Penetration testing or vulnerability prioritization processes may have gaps.",
+         "Vendor must address gaps in vulnerability management practices. Submit evidence of penetration testing and a vulnerability prioritization framework within 60 days."),
+
+        # SOC2
+        ("SOC2", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor lacks current SOC 2 Type II certification or has noted exceptions. Independent assurance of security controls cannot be verified.",
+         "Vendor must obtain SOC 2 Type II certification or provide equivalent independent audit evidence. Submit a timeline for audit completion within 30 days."),
+        ("SOC2", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor compliance posture is critically deficient. Lack of SOC 2 or equivalent certifications indicates insufficient third-party validation of security controls.",
+         "Vendor must engage an accredited audit firm and provide a SOC 2 Type II audit plan within 45 days. Consider alternative compensating controls in the interim."),
+
+        # BC/DR
+        ("BC/DR", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet business continuity and disaster recovery requirements. Service availability and data recovery capabilities may be inadequate.",
+         "Vendor must establish documented BC/DR plans with defined RTO/RPO targets. Provide plans and evidence of testing within 60 days."),
+        ("BC/DR", TRIGGER_PARTIAL_HIGH_CRITICAL, SEVERITY_MEDIUM,
+         "Vendor partially meets critical business continuity controls. DR testing frequency or geographic separation of backups may be insufficient.",
+         "Vendor must address BC/DR gaps and provide evidence of annual DR testing and geographically separated backup locations within 90 days."),
+
+        # Vendor Management
+        ("Vendor Management", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_MEDIUM,
+         "Vendor does not meet third-party vendor management requirements. Supply chain risk may not be adequately managed or monitored.",
+         "Vendor must establish a vendor inventory and assessment program. Provide documentation of vendor risk management procedures within 60 days."),
+        ("Vendor Management", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_HIGH,
+         "Vendor's own third-party risk management is critically deficient. Cascading supply chain risks are not being identified or mitigated.",
+         "Vendor must implement a formal third-party risk management program including vendor assessments and minimum security standards. Submit program documentation within 45 days."),
+
+        # System Categorization & Impact Assessment
+        ("System Categorization & Impact Assessment", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_MEDIUM,
+         "Vendor does not adequately classify systems and data based on criticality and sensitivity. Without proper categorization, security controls may not be proportionate to risk.",
+         "Vendor must implement a data classification and system categorization framework. Provide documentation of classification standards and asset inventory within 60 days."),
+        ("System Categorization & Impact Assessment", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_HIGH,
+         "Vendor system categorization and impact assessment processes are critically deficient. Lack of asset inventory and risk assessment indicates fundamental gaps in security governance.",
+         "Vendor must conduct a comprehensive asset inventory and impact assessment within 45 days. Classify all systems handling customer data and apply appropriate controls."),
+
+        # Secure System Design & Architecture
+        ("Secure System Design & Architecture", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet secure system design requirements. Systems may lack fundamental security controls such as segmentation, secure SDLC practices, or phishing-resistant MFA.",
+         "Vendor must incorporate security-by-design principles into system architecture and development lifecycle. Submit a secure architecture review and remediation plan within 45 days."),
+        ("Secure System Design & Architecture", TRIGGER_PARTIAL_HIGH_CRITICAL, SEVERITY_MEDIUM,
+         "Vendor partially meets critical secure design controls. MFA enforcement or SSO integration capabilities may have gaps.",
+         "Vendor must address secure design gaps, particularly around MFA and identity provider integration. Provide an improvement plan within 60 days."),
+
+        # Access Control (Extended)
+        ("Access Control (Extended)", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet extended access control requirements. Shared accounts, inadequate RBAC, or inability for customer self-service user management creates security and operational risk.",
+         "Vendor must eliminate shared accounts, implement configurable RBAC, and enable customer-managed user provisioning. Provide a remediation timeline within 30 days."),
+        ("Access Control (Extended)", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor extended access control posture is critically deficient. Multiple access management capabilities are missing, preventing adequate customer control over user access.",
+         "Vendor must conduct a comprehensive access control capability assessment and deliver a remediation plan within 30 days. All critical gaps must be addressed within 90 days."),
+
+        # U.S. Citizenship & Legal Residency
+        ("U.S. Citizenship & Legal Residency", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor cannot verify U.S. citizenship or legal residency for personnel with administrative access to customer data. This may violate regulatory or contractual requirements.",
+         "Vendor must implement personnel eligibility verification processes and access restriction controls. Provide documentation of compliance within 30 days."),
+
+        # Continuous Monitoring
+        ("Continuous Monitoring", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet continuous monitoring requirements. Security events may not be detected, logged, or analyzed, reducing visibility into potential threats.",
+         "Vendor must implement continuous security monitoring including SIEM integration, audit logging, and anomaly detection. Provide a monitoring architecture document within 45 days."),
+        ("Continuous Monitoring", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor continuous monitoring posture is critically deficient. Widespread gaps in logging, monitoring, and audit capabilities indicate inability to detect or respond to security events.",
+         "Vendor must implement a comprehensive security monitoring program within 60 days. Include SIEM deployment, log aggregation, and real-time alerting for critical systems."),
+        ("Continuous Monitoring", TRIGGER_PARTIAL_HIGH_CRITICAL, SEVERITY_MEDIUM,
+         "Vendor partially meets critical continuous monitoring controls. Log delivery mechanisms, SIEM integration, or audit trail completeness may have gaps.",
+         "Vendor must address monitoring gaps, particularly around log export capabilities and audit trail completeness. Submit improvement plan within 60 days."),
+
+        # Incident Response & Reporting
+        ("Incident Response & Reporting", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet incident response and reporting requirements. Incident notification timelines, escalation procedures, or breach history disclosure may be inadequate.",
+         "Vendor must establish documented incident response and notification procedures with defined timelines. Provide updated procedures within 30 days."),
+        ("Incident Response & Reporting", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor incident response and reporting capabilities are critically deficient. Lack of documented procedures and unclear notification commitments present significant risk.",
+         "Vendor must engage qualified incident response resources and establish a comprehensive incident management program within 45 days."),
+
+        # Risk & Compliance Assessment
+        ("Risk & Compliance Assessment", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_MEDIUM,
+         "Vendor does not meet risk and compliance assessment requirements. Regular risk assessments may not be conducted or may not align with recognized frameworks.",
+         "Vendor must implement a risk assessment program aligned with NIST or ISO frameworks. Provide evidence of most recent risk assessment within 45 days."),
+        ("Risk & Compliance Assessment", TRIGGER_PARTIAL_HIGH_CRITICAL, SEVERITY_MEDIUM,
+         "Vendor partially meets critical risk and compliance controls. Remediation validation or third-party assessment processes may have gaps.",
+         "Vendor must address gaps in risk assessment validation and remediation tracking. Submit evidence of improvement within 60 days."),
+
+        # Backup & Recovery
+        ("Backup & Recovery", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet backup and recovery requirements. Customer data may not be adequately backed up, encrypted, or recoverable in the event of a disaster.",
+         "Vendor must implement encrypted backups with defined RTO/RPO targets, separated from production systems. Provide backup architecture documentation within 30 days."),
+        ("Backup & Recovery", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor backup and recovery posture is critically deficient. Multiple backup and DR requirements are unmet, indicating high risk of data loss during an incident.",
+         "Vendor must implement a comprehensive backup and recovery program within 45 days. Include encryption, geographic separation, and annual DR testing."),
+
+        # Configuration Management
+        ("Configuration Management", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_MEDIUM,
+         "Vendor does not meet configuration management requirements. Unauthorized configuration changes may go undetected, and default credentials may remain in production systems.",
+         "Vendor must implement configuration baselines, change detection, and formal change management processes. Provide evidence within 60 days."),
+        ("Configuration Management", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_HIGH,
+         "Vendor configuration management practices are critically deficient. Lack of baselines, change control, and credential management creates significant vulnerability exposure.",
+         "Vendor must establish configuration management standards and change control processes within 45 days. Remove all default credentials immediately."),
+
+        # Security Control Lifecycle Management
+        ("Security Control Lifecycle Management", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_MEDIUM,
+         "Vendor does not meet security control lifecycle management requirements. Controls may not be regularly reviewed, audited, or updated to address evolving threats.",
+         "Vendor must implement a control lifecycle management process including periodic review, independent audit, and documented change tracking. Provide evidence within 60 days."),
+
+        # Data Protection & Standard Encryption
+        ("Data Protection & Standard Encryption", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_CRITICAL,
+         "Vendor does not meet data protection requirements. Sensitive data may lack encryption, data flows may not be restricted, or data residency requirements may not be met.",
+         "Vendor must implement comprehensive data protection controls including encryption at rest and in transit, data flow restrictions, and data residency compliance within 30 days."),
+        ("Data Protection & Standard Encryption", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor data protection posture is critically deficient. Multiple data protection requirements are unmet, indicating high risk of unauthorized data exposure.",
+         "Vendor must conduct a data protection gap assessment and implement remediation within 30 days. Prioritize encryption, data segregation, and geographic controls."),
+
+        # Information Classification
+        ("Information Classification", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_MEDIUM,
+         "Vendor does not meet information classification requirements. Data may not be properly classified, labeled, or handled according to sensitivity levels.",
+         "Vendor must implement a data classification scheme with handling requirements. Provide classification policy and evidence of implementation within 60 days."),
+
+        # Cybersecurity Governance
+        ("Cybersecurity Governance", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet cybersecurity governance requirements. Security policies may not be documented, published, or aligned with recognized frameworks.",
+         "Vendor must establish formal cybersecurity governance with documented policies aligned to NIST or ISO frameworks. Provide policy documentation within 45 days."),
+        ("Cybersecurity Governance", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor cybersecurity governance is critically deficient. Lack of policies, leadership accountability, and framework alignment indicates fundamental gaps in security program maturity.",
+         "Vendor must engage qualified security leadership and establish a formal cybersecurity governance program within 45 days. Align policies with recognized frameworks and enforce password/patch management."),
+
+        # Advanced Encryption
+        ("Advanced Encryption", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet advanced encryption requirements. Key rotation, customer-managed keys, or encryption monitoring capabilities may be missing.",
+         "Vendor must address advanced encryption gaps including key rotation policies and BYOK/CMK support. Provide a remediation plan within 45 days."),
+        ("Advanced Encryption", TRIGGER_PARTIAL_HIGH_CRITICAL, SEVERITY_MEDIUM,
+         "Vendor partially meets critical advanced encryption controls. Customer-managed key support or encryption access logging may have gaps.",
+         "Vendor must address advanced encryption gaps and provide a timeline for BYOK/CMK support and encryption audit logging within 60 days."),
+
+        # Third-Party Risk Management
+        ("Third-Party Risk Management", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet third-party risk management requirements. Subcontractor security, vendor incident reporting, and supply chain risk may not be adequately managed.",
+         "Vendor must implement a third-party risk management program covering subcontractors and supply chain. Provide program documentation and incident reporting procedures within 45 days."),
+        ("Third-Party Risk Management", TRIGGER_CATEGORY_SCORE_BELOW_50, SEVERITY_CRITICAL,
+         "Vendor third-party risk management is critically deficient. Supply chain risks are not being identified, assessed, or mitigated, creating cascading risk exposure.",
+         "Vendor must establish a comprehensive third-party risk program within 45 days including vendor assessments, contractual security requirements, and incident notification obligations."),
+
+        # Training & Security Awareness
+        ("Training & Security Awareness", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_MEDIUM,
+         "Vendor does not meet security training and awareness requirements. Employees may not receive adequate cybersecurity training, increasing risk of human-factor security incidents.",
+         "Vendor must implement annual role-based security awareness training with phishing simulations. Provide training records and program documentation within 60 days."),
+
+        # Physical & Environmental Security
+        ("Physical & Environmental Security", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_MEDIUM,
+         "Vendor does not meet physical and environmental security requirements. Physical access to critical systems may not be adequately controlled or monitored.",
+         "Vendor must implement physical access controls, monitoring, and environmental protections for critical infrastructure. Provide evidence of controls within 60 days."),
+
+        # AI Governance & Data Control
+        ("AI Governance & Data Control", TRIGGER_CATEGORY_HAS_DNM, SEVERITY_HIGH,
+         "Vendor does not meet AI governance and data control requirements. Customer data may be used for AI model training, or AI features may lack adequate controls and audit logging.",
+         "Vendor must provide clear documentation on AI data usage, implement customer controls for AI features, and enable AI audit logging. Address gaps within 45 days."),
+        ("AI Governance & Data Control", TRIGGER_PARTIAL_HIGH_CRITICAL, SEVERITY_MEDIUM,
+         "Vendor partially meets critical AI governance controls. Data masking, customer opt-out, or AI audit capabilities may have gaps.",
+         "Vendor must address AI governance gaps including data protection controls and customer configurability. Provide improvement plan within 60 days."),
+    ]
+    try:
+        existing = set()
+        for rs in db.query(RiskStatement).all():
+            existing.add((rs.category, rs.trigger_condition, rs.finding_text))
+
+        added = 0
+        for category, trigger, severity, finding, remediation in seed_data:
+            if (category, trigger, finding) not in existing:
+                db.add(RiskStatement(
+                    category=category,
+                    trigger_condition=trigger,
+                    severity=severity,
+                    finding_text=finding,
+                    remediation_text=remediation,
+                    is_active=True,
+                ))
+                added += 1
+        if added > 0:
+            db.commit()
     finally:
         db.close()
 
