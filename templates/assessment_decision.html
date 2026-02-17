@@ -51,6 +51,100 @@
 </div>
 {% endif %}
 
+{# ==================== REASSESSMENT DELTA ==================== #}
+{% if delta %}
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary bg-opacity-10">
+        <h6 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Reassessment Comparison</h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-4 mb-3">
+            <div class="col-md-4 text-center">
+                <div class="text-muted small text-uppercase mb-1">Previous Score</div>
+                <div class="h3 mb-0">
+                    {% if delta.previous_overall is not none %}{{ delta.previous_overall }}%{% else %}&mdash;{% endif %}
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="text-muted small text-uppercase mb-1">Current Score</div>
+                <div class="h3 mb-0">
+                    {% if delta.current_overall is not none %}{{ delta.current_overall }}%{% else %}&mdash;{% endif %}
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="text-muted small text-uppercase mb-1">Change</div>
+                {% if delta.overall_delta is not none %}
+                    {% if delta.overall_delta > 0 %}
+                    <div class="h3 mb-0 text-success"><i class="bi bi-arrow-up"></i> +{{ delta.overall_delta }}%</div>
+                    {% elif delta.overall_delta < 0 %}
+                    <div class="h3 mb-0 text-danger"><i class="bi bi-arrow-down"></i> {{ delta.overall_delta }}%</div>
+                    {% else %}
+                    <div class="h3 mb-0 text-muted">No change</div>
+                    {% endif %}
+                {% else %}
+                <div class="h3 mb-0 text-muted">&mdash;</div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if delta.category_deltas %}
+        <h6 class="text-muted small text-uppercase mb-2">Category Changes</h6>
+        <div class="table-responsive">
+            <table class="table table-sm mb-3">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th class="text-center">Previous</th>
+                        <th class="text-center">Current</th>
+                        <th class="text-center">Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cd in delta.category_deltas %}
+                    <tr>
+                        <td>{{ cd.category }}</td>
+                        <td class="text-center">{% if cd.previous_score is not none %}{{ cd.previous_score }}%{% else %}&mdash;{% endif %}</td>
+                        <td class="text-center">{% if cd.current_score is not none %}{{ cd.current_score }}%{% else %}&mdash;{% endif %}</td>
+                        <td class="text-center">
+                            {% if cd.delta is not none %}
+                                {% if cd.delta > 0 %}
+                                <span class="text-success"><i class="bi bi-arrow-up"></i> +{{ cd.delta }}%</span>
+                                {% elif cd.delta < 0 %}
+                                <span class="text-danger"><i class="bi bi-arrow-down"></i> {{ cd.delta }}%</span>
+                                {% else %}
+                                <span class="text-muted">=</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <div class="row g-3">
+            {% if delta.new_flagged_count > 0 %}
+            <div class="col-md-6">
+                <div class="alert alert-danger py-2 mb-0">
+                    <i class="bi bi-exclamation-triangle me-1"></i><strong>{{ delta.new_flagged_count }}</strong> new flagged item{{ 's' if delta.new_flagged_count != 1 }}
+                </div>
+            </div>
+            {% endif %}
+            {% if delta.resolved_flagged_count > 0 %}
+            <div class="col-md-6">
+                <div class="alert alert-success py-2 mb-0">
+                    <i class="bi bi-check-circle me-1"></i><strong>{{ delta.resolved_flagged_count }}</strong> resolved flagged item{{ 's' if delta.resolved_flagged_count != 1 }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# ==================== OVERALL SCORE CARD ==================== #}
 {% set score = scores.overall_score %}
 {% if score is not none %}
@@ -640,7 +734,10 @@
             <div class="col-md-4 mb-3">
                 <label for="next_review_date" class="form-label">Next Review Date</label>
                 <input type="date" class="form-control" id="next_review_date" name="next_review_date"
-                       value="{{ decision.next_review_date.strftime('%Y-%m-%d') if decision.next_review_date else '' }}">
+                       value="{{ decision.next_review_date.strftime('%Y-%m-%d') if decision.next_review_date else (suggested_review_date or '') }}">
+                {% if suggested_review_date and effective_tier and not decision.next_review_date %}
+                <small class="text-muted"><i class="bi bi-lightbulb me-1"></i>Suggested: {{ suggested_review_date }} ({{ effective_tier }})</small>
+                {% endif %}
             </div>
         </div>
 

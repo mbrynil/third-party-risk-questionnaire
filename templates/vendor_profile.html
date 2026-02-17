@@ -2,6 +2,46 @@
 
 {% block title %}{{ vendor.name }} - RiskQ{% endblock %}
 
+{% block extra_head %}
+<style>
+    .tier-badge {
+        display: inline-block;
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.8rem;
+        color: #fff;
+    }
+    .tag-badge {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        background: #e9ecef;
+        color: #495057;
+        font-weight: 500;
+    }
+    .classification-badge {
+        display: inline-block;
+        padding: 0.3rem 0.6rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+    .doc-type-badge {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.7rem;
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+    .expiry-warning { color: #f59e0b; font-weight: 600; }
+    .expiry-expired { color: #dc3545; font-weight: 600; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="mb-3">
     <a href="/vendors" class="text-decoration-none text-muted">
@@ -9,38 +49,65 @@
     </a>
 </div>
 
-{% if request.query_params.get('assessment_created') %}
-<div class="alert alert-success alert-dismissible fade show" role="alert">
-    <i class="bi bi-check-circle me-2"></i>Assessment created! Configure it below and click "Get Vendor Link" when ready.
+{# ==================== ALERTS ==================== #}
+{% set msg = request.query_params.get('message') %}
+{% set msg_type = request.query_params.get('message_type', 'success') %}
+{% if msg %}
+<div class="alert alert-{{ msg_type }} alert-dismissible fade show" role="alert">
+    {{ msg }}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 {% endif %}
 
+{% if request.query_params.get('created') or request.query_params.get('updated') or request.query_params.get('contact_added') or request.query_params.get('document_uploaded') or request.query_params.get('tier_updated') %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>
+    {% if request.query_params.get('created') %}Vendor created successfully!
+    {% elif request.query_params.get('updated') %}Vendor updated successfully!
+    {% elif request.query_params.get('contact_added') %}Contact added.
+    {% elif request.query_params.get('document_uploaded') %}Document uploaded.
+    {% elif request.query_params.get('tier_updated') %}Tier override updated.
+    {% endif %}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# ==================== PAGE HEADER ==================== #}
 <div class="page-header d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4">
     <div>
-        <h1>{{ vendor.name }}</h1>
-        {% if vendor.primary_contact_name or vendor.primary_contact_email %}
-        <p class="text-muted mb-0">
-            {% if vendor.primary_contact_name %}{{ vendor.primary_contact_name }}{% endif %}
-            {% if vendor.primary_contact_name and vendor.primary_contact_email %} &middot; {% endif %}
-            {% if vendor.primary_contact_email %}{{ vendor.primary_contact_email }}{% endif %}
-        </p>
-        {% endif %}
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <h1 class="mb-0">{{ vendor.name }}</h1>
+            {% if effective_tier %}
+            <span class="tier-badge" style="background: {{ tier_colors.get(effective_tier, '#6c757d') }};">
+                {{ effective_tier }}
+            </span>
+            {% endif %}
+        </div>
+        <div class="mt-1 d-flex gap-2 flex-wrap">
+            {% if vendor.industry %}
+            <span class="tag-badge"><i class="bi bi-building me-1"></i>{{ vendor.industry }}</span>
+            {% endif %}
+            {% if vendor.service_type %}
+            <span class="tag-badge"><i class="bi bi-box me-1"></i>{{ vendor.service_type }}</span>
+            {% endif %}
+            {% if vendor.headquarters %}
+            <span class="tag-badge"><i class="bi bi-geo-alt me-1"></i>{{ vendor.headquarters }}</span>
+            {% endif %}
+        </div>
     </div>
     <div class="mt-3 mt-sm-0 d-flex gap-2">
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newAssessmentModal">
             <i class="bi bi-plus-lg me-2"></i>New Assessment
         </button>
         <a href="/vendors/{{ vendor.id }}/edit" class="btn btn-outline-secondary">
-            <i class="bi bi-pencil me-2"></i>Edit Vendor
+            <i class="bi bi-pencil me-2"></i>Edit
         </a>
     </div>
 </div>
 
+{# ==================== OVERVIEW CARD ==================== #}
 <div class="card mb-4">
-    <div class="card-header">
-        <h6 class="mb-0">Vendor Overview</h6>
-    </div>
+    <div class="card-header"><h6 class="mb-0">Overview</h6></div>
     <div class="card-body">
         <div class="row g-4">
             <div class="col-md-3">
@@ -62,6 +129,42 @@
                     <span class="text-muted">&mdash;</span>
                 {% endif %}
             </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Website</div>
+                {% if vendor.website %}
+                <a href="{{ vendor.website }}" target="_blank" rel="noopener">{{ vendor.website }}</a>
+                {% else %}
+                <span class="text-muted">&mdash;</span>
+                {% endif %}
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Industry</div>
+                {{ vendor.industry or '—' }}
+            </div>
+
+            {# Contract row #}
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Contract Start</div>
+                {{ vendor.contract_start_date.strftime('%Y-%m-%d') if vendor.contract_start_date else '—' }}
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Contract End</div>
+                {{ vendor.contract_end_date.strftime('%Y-%m-%d') if vendor.contract_end_date else '—' }}
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Contract Value</div>
+                {{ vendor.contract_value or '—' }}
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Auto-Renewal</div>
+                {% if vendor.auto_renewal %}
+                <span class="badge bg-info-subtle text-info border border-info-subtle">Yes</span>
+                {% else %}
+                <span class="text-muted">No</span>
+                {% endif %}
+            </div>
+
+            {# Assessment dates #}
             <div class="col-md-3">
                 <div class="text-muted small text-uppercase mb-1">First Assessed</div>
                 {% set first_date = namespace(val=None) %}
@@ -86,19 +189,305 @@
                 {% endfor %}
                 {% if last_submitted.date %}{{ last_submitted.date.strftime('%Y-%m-%d') }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}
             </div>
+
+            {% if vendor.notes %}
             <div class="col-12">
                 <div class="text-muted small text-uppercase mb-1">Notes</div>
-                <div>{{ vendor.notes if vendor.notes else '—' }}</div>
+                <div>{{ vendor.notes }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# ==================== RISK CLASSIFICATION & TIERING ==================== #}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Risk Classification & Tiering</h6></div>
+    <div class="card-body">
+        <div class="row g-4 mb-3">
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Data Classification</div>
+                {% if vendor.data_classification %}
+                    {% set dc_colors = {"Public": "#198754", "Internal": "#0d6efd", "Confidential": "#fd7e14", "Restricted": "#dc3545"} %}
+                    <span class="classification-badge" style="background: {{ dc_colors.get(vendor.data_classification, '#6c757d') }}20; color: {{ dc_colors.get(vendor.data_classification, '#6c757d') }}; border: 1px solid {{ dc_colors.get(vendor.data_classification, '#6c757d') }}40;">
+                        {{ vendor.data_classification }}
+                    </span>
+                {% else %}
+                <span class="text-muted">&mdash;</span>
+                {% endif %}
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Business Criticality</div>
+                {% if vendor.business_criticality %}
+                    {% set bc_colors = {"Low": "#198754", "Medium": "#0d6efd", "High": "#fd7e14", "Critical": "#dc3545"} %}
+                    <span class="classification-badge" style="background: {{ bc_colors.get(vendor.business_criticality, '#6c757d') }}20; color: {{ bc_colors.get(vendor.business_criticality, '#6c757d') }}; border: 1px solid {{ bc_colors.get(vendor.business_criticality, '#6c757d') }}40;">
+                        {{ vendor.business_criticality }}
+                    </span>
+                {% else %}
+                <span class="text-muted">&mdash;</span>
+                {% endif %}
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Access Level</div>
+                {% if vendor.access_level %}
+                    {% set al_colors = {"None": "#198754", "Limited": "#0d6efd", "Moderate": "#fd7e14", "Extensive": "#dc3545"} %}
+                    <span class="classification-badge" style="background: {{ al_colors.get(vendor.access_level, '#6c757d') }}20; color: {{ al_colors.get(vendor.access_level, '#6c757d') }}; border: 1px solid {{ al_colors.get(vendor.access_level, '#6c757d') }}40;">
+                        {{ vendor.access_level }}
+                    </span>
+                {% else %}
+                <span class="text-muted">&mdash;</span>
+                {% endif %}
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Effective Tier</div>
+                {% if effective_tier %}
+                <span class="tier-badge" style="background: {{ tier_colors.get(effective_tier, '#6c757d') }};">
+                    {{ effective_tier }}
+                </span>
+                <div class="text-muted small mt-1">{{ tier_labels.get(effective_tier, '') }}</div>
+                {% else %}
+                <span class="text-muted">&mdash;</span>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if vendor.inherent_risk_tier and vendor.tier_override %}
+        <div class="alert alert-info py-2 mb-3">
+            <small><i class="bi bi-info-circle me-1"></i>Auto-calculated tier: <strong>{{ vendor.inherent_risk_tier }}</strong> &rarr; Overridden to: <strong>{{ vendor.tier_override }}</strong></small>
+            {% if vendor.tier_notes %}
+            <br><small class="text-muted">Reason: {{ vendor.tier_notes }}</small>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# Tier override form #}
+        <div class="border-top pt-3">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#tierOverrideForm">
+                <i class="bi bi-sliders me-1"></i>Override Tier
+            </button>
+            <div class="collapse mt-3" id="tierOverrideForm">
+                <form method="post" action="/vendors/{{ vendor.id }}/tier-override">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label small">Override Tier</label>
+                            <select name="tier_override" class="form-select form-select-sm">
+                                <option value="">No override (use auto)</option>
+                                {% for t in inherent_risk_tiers %}
+                                <option value="{{ t }}" {% if vendor.tier_override == t %}selected{% endif %}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Reason</label>
+                            <input type="text" name="tier_notes" class="form-control form-control-sm"
+                                   value="{{ vendor.tier_notes or '' }}" placeholder="Why are you overriding?">
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-sm btn-primary w-100">Save Override</button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
-<div class="card">
+{# ==================== CONTACTS ==================== #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Contacts</h6>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addContactModal">
+            <i class="bi bi-plus-lg me-1"></i>Add Contact
+        </button>
+    </div>
+    {% if vendor.contacts %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Phone</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in vendor.contacts %}
+                <tr>
+                    <td>{{ c.name }}</td>
+                    <td>{% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
+                    <td>{{ c.role or '—' }}</td>
+                    <td>{{ c.phone or '—' }}</td>
+                    <td class="text-end">
+                        <form method="post" action="/vendors/{{ vendor.id }}/contacts/{{ c.id }}/delete" style="display:inline;"
+                              onsubmit="return confirm('Delete this contact?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-4 text-muted">
+        <i class="bi bi-people" style="font-size: 1.5rem;"></i>
+        <p class="mt-2 mb-0 small">No contacts added yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ==================== DOCUMENTS ==================== #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Documents</h6>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#uploadDocModal">
+            <i class="bi bi-upload me-1"></i>Upload Document
+        </button>
+    </div>
+    {% if vendor.documents %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Title</th>
+                    <th>File</th>
+                    <th>Size</th>
+                    <th>Expiry</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in vendor.documents %}
+                <tr>
+                    <td><span class="doc-type-badge">{{ document_type_labels.get(doc.document_type, doc.document_type) }}</span></td>
+                    <td>{{ doc.title }}</td>
+                    <td><small class="text-muted">{{ doc.original_filename }}</small></td>
+                    <td><small>{% if doc.size_bytes %}{{ "%.1f"|format(doc.size_bytes / 1024 / 1024) }} MB{% else %}&mdash;{% endif %}</small></td>
+                    <td>
+                        {% if doc.expiry_date %}
+                            {% set today = None %}
+                            {% set days_left = (doc.expiry_date - now()).days if now else 999 %}
+                            {% if doc.expiry_date.strftime('%Y-%m-%d') < current_date_str %}
+                                <span class="expiry-expired"><i class="bi bi-exclamation-triangle me-1"></i>{{ doc.expiry_date.strftime('%Y-%m-%d') }}</span>
+                            {% elif days_left is defined and days_left <= 30 %}
+                                <span class="expiry-warning"><i class="bi bi-clock me-1"></i>{{ doc.expiry_date.strftime('%Y-%m-%d') }}</span>
+                            {% else %}
+                                {{ doc.expiry_date.strftime('%Y-%m-%d') }}
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="/vendors/{{ vendor.id }}/documents/{{ doc.id }}/download" class="btn btn-sm btn-outline-secondary" title="Download">
+                            <i class="bi bi-download"></i>
+                        </a>
+                        <form method="post" action="/vendors/{{ vendor.id }}/documents/{{ doc.id }}/delete" style="display:inline;"
+                              onsubmit="return confirm('Delete this document?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-4 text-muted">
+        <i class="bi bi-file-earmark" style="font-size: 1.5rem;"></i>
+        <p class="mt-2 mb-0 small">No documents uploaded yet.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ==================== REMEDIATIONS ==================== #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">
+            Remediation Items
+            {% if remediation_stats.open > 0 %}
+            <span class="badge bg-danger ms-2">{{ remediation_stats.open }} open</span>
+            {% endif %}
+        </h6>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addRemediationModal">
+            <i class="bi bi-plus-lg me-1"></i>Add Item
+        </button>
+    </div>
+    {% if remediations %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Due Date</th>
+                    <th>Assigned To</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rem in remediations %}
+                <tr>
+                    <td>
+                        <a href="/remediations/{{ rem.id }}" class="text-decoration-none fw-semibold">{{ rem.title[:80] }}{% if rem.title|length > 80 %}...{% endif %}</a>
+                        {% if rem.category %}
+                        <br><small class="text-muted">{{ rem.category }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% set sev_colors = {"CRITICAL": "#dc3545", "HIGH": "#fd7e14", "MEDIUM": "#ffc107", "LOW": "#198754"} %}
+                        {% set sev_text = {"MEDIUM": "#000"} %}
+                        <span style="display:inline-block;padding:0.2rem 0.5rem;border-radius:4px;font-weight:600;font-size:0.7rem;color:{{ sev_text.get(rem.severity, '#fff') }};background:{{ sev_colors.get(rem.severity, '#6c757d') }};">
+                            {{ rem.severity }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="display:inline-block;padding:0.2rem 0.5rem;border-radius:4px;font-weight:600;font-size:0.7rem;color:#fff;background:{{ remediation_status_colors.get(rem.status, '#6c757d') }};">
+                            {{ remediation_status_labels.get(rem.status, rem.status) }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if rem.due_date %}
+                        {{ rem.due_date.strftime('%Y-%m-%d') }}
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ rem.assigned_to or '—' }}</td>
+                    <td class="text-end">
+                        <a href="/remediations/{{ rem.id }}" class="btn btn-sm btn-outline-secondary">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-4 text-muted">
+        <i class="bi bi-shield-check" style="font-size: 1.5rem;"></i>
+        <p class="mt-2 mb-0 small">No remediation items.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ==================== ASSESSMENTS ==================== #}
+<div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h6 class="mb-0">Assessments</h6>
+        {% if effective_tier %}
+        <small class="text-muted">
+            Recommended frequency:
+            {% if effective_tier == 'Tier 1' %}Annual (12 months)
+            {% elif effective_tier == 'Tier 2' %}18 months
+            {% else %}24 months{% endif %}
+        </small>
+        {% endif %}
     </div>
-    
+
     {% if assessments %}
     <div class="table-responsive">
         <table class="table table-hover mb-0">
@@ -184,6 +573,14 @@
                         <a href="/responses/{{ q.id }}" class="btn btn-sm btn-link">Review</a>
                         {% endif %}
                         <a href="/questionnaire/{{ q.id }}/share" class="btn btn-sm btn-link">Link</a>
+                        {% if decision and decision.status == 'FINAL' and loop.first %}
+                        <form method="post" action="/vendors/{{ vendor.id }}/reassess" style="display:inline;">
+                            <input type="hidden" name="previous_assessment_id" value="{{ q.id }}">
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Start reassessment based on this assessment">
+                                <i class="bi bi-arrow-repeat me-1"></i>Reassess
+                            </button>
+                        </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -202,6 +599,148 @@
     {% endif %}
 </div>
 
+{# ==================== MODALS ==================== #}
+
+{# Add Contact Modal #}
+<div class="modal fade" id="addContactModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/vendors/{{ vendor.id }}/contacts">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Add Contact</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <input type="text" name="contact_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="contact_email" class="form-control">
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Role</label>
+                            <select name="contact_role" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for r in contact_roles %}
+                                <option value="{{ r }}">{{ r }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input type="text" name="contact_phone" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Upload Document Modal #}
+<div class="modal fade" id="uploadDocModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/vendors/{{ vendor.id }}/documents" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Upload Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Document Type <span class="text-danger">*</span></label>
+                        <select name="document_type" class="form-select" required>
+                            {% for dt in document_types %}
+                            <option value="{{ dt }}">{{ document_type_labels.get(dt, dt) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="document_title" class="form-control" required placeholder="e.g., SOC 2 Type II 2025">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">File <span class="text-danger">*</span></label>
+                        <input type="file" name="file" class="form-control" required>
+                        <small class="text-muted">Max 25MB. Allowed: pdf, docx, xlsx, png, jpg, csv, txt, zip</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Expiry Date</label>
+                        <input type="date" name="expiry_date" class="form-control">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Notes</label>
+                        <textarea name="document_notes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Add Remediation Modal #}
+<div class="modal fade" id="addRemediationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/vendors/{{ vendor.id }}/remediations">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-shield-exclamation me-2"></i>Add Remediation Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required placeholder="e.g., Implement MFA for privileged accounts">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="Describe what needs to be remediated..."></textarea>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Category</label>
+                            <input type="text" name="category" class="form-control" placeholder="e.g., Access Control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Severity</label>
+                            <select name="severity" class="form-select">
+                                <option value="LOW">Low</option>
+                                <option value="MEDIUM" selected>Medium</option>
+                                <option value="HIGH">High</option>
+                                <option value="CRITICAL">Critical</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Assigned To</label>
+                            <input type="text" name="assigned_to" class="form-control" placeholder="e.g., John Smith">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Due Date</label>
+                            <input type="date" name="due_date" class="form-control">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# New Assessment Modal #}
 <div class="modal fade" id="newAssessmentModal" tabindex="-1" aria-labelledby="newAssessmentModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -213,7 +752,7 @@
             </div>
             <div class="modal-body">
                 <p class="text-muted mb-4">Choose how to create the assessment:</p>
-                
+
                 <div class="row g-3">
                     <div class="col-md-6">
                         <div class="card h-100">
@@ -230,7 +769,7 @@
                                         <option value="{{ t.id }}">{{ t.name }}</option>
                                         {% endfor %}
                                     </select>
-                                    <input type="text" name="title" class="form-control form-control-sm mb-2" 
+                                    <input type="text" name="title" class="form-control form-control-sm mb-2"
                                            placeholder="Assessment title" value="Security Assessment {{ vendor.name }}" required>
                                     <button type="submit" class="btn btn-primary btn-sm w-100">
                                         Create from Template
@@ -250,7 +789,7 @@
                                 <p class="text-muted small mb-3">Select questions from the curated question bank</p>
                                 <form action="/vendors/{{ vendor.id }}/create-assessment" method="post">
                                     <input type="hidden" name="source" value="blank">
-                                    <input type="text" name="title" class="form-control form-control-sm mb-2" 
+                                    <input type="text" name="title" class="form-control form-control-sm mb-2"
                                            placeholder="Assessment title" value="Security Assessment {{ vendor.name }}" required>
                                     <button type="submit" class="btn btn-success btn-sm w-100">
                                         Start from Question Bank

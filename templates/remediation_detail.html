@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Remediation: {{ item.title[:50] }} - RiskQ{% endblock %}
+
+{% block extra_head %}
+<style>
+    .severity-badge {
+        display: inline-block;
+        padding: 0.3rem 0.6rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.75rem;
+        color: #fff;
+    }
+    .severity-CRITICAL { background: #dc3545; }
+    .severity-HIGH { background: #fd7e14; }
+    .severity-MEDIUM { background: #ffc107; color: #000; }
+    .severity-LOW { background: #198754; }
+
+    .status-badge {
+        display: inline-block;
+        padding: 0.3rem 0.6rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.75rem;
+        color: #fff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="/vendors/{{ vendor.id }}" class="text-decoration-none text-muted">
+        <i class="bi bi-arrow-left me-1"></i>Back to {{ vendor.name }}
+    </a>
+</div>
+
+{% set msg = request.query_params.get('message') %}
+{% set msg_type = request.query_params.get('message_type', 'success') %}
+{% if msg %}
+<div class="alert alert-{{ msg_type }} alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h1 class="h3 mb-1">{{ item.title }}</h1>
+                <div class="d-flex gap-2 mt-2">
+                    <span class="severity-badge severity-{{ item.severity }}">{{ item.severity }}</span>
+                    <span class="status-badge" style="background: {{ status_colors.get(item.status, '#6c757d') }};">
+                        {{ status_labels.get(item.status, item.status) }}
+                    </span>
+                    {% if item.source == 'AUTO' %}
+                    <span class="badge bg-info-subtle text-info border border-info-subtle">Auto-generated</span>
+                    {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Manual</span>
+                    {% endif %}
+                </div>
+            </div>
+            <form method="post" action="/remediations/{{ item.id }}/delete"
+                  onsubmit="return confirm('Delete this remediation item?');">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash me-1"></i>Delete
+                </button>
+            </form>
+        </div>
+
+        {# Description card #}
+        {% if item.description %}
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0">Description / Remediation Guidance</h6></div>
+            <div class="card-body">
+                <p class="mb-0" style="white-space: pre-wrap;">{{ item.description }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Details card #}
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0">Details</h6></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="text-muted small text-uppercase mb-1">Vendor</div>
+                        <a href="/vendors/{{ vendor.id }}">{{ vendor.name }}</a>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-muted small text-uppercase mb-1">Category</div>
+                        {{ item.category or '—' }}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-muted small text-uppercase mb-1">Created</div>
+                        {{ item.created_at.strftime('%Y-%m-%d') }}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-muted small text-uppercase mb-1">Due Date</div>
+                        {% if item.due_date %}
+                        {{ item.due_date.strftime('%Y-%m-%d') }}
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-muted small text-uppercase mb-1">Completed</div>
+                        {% if item.completed_date %}
+                        {{ item.completed_date.strftime('%Y-%m-%d') }}
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-muted small text-uppercase mb-1">Assigned To</div>
+                        {{ item.assigned_to or '—' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Update form #}
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0">Update Status</h6></div>
+            <div class="card-body">
+                <form method="post" action="/remediations/{{ item.id }}">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select">
+                                {% for s in statuses %}
+                                <option value="{{ s }}" {% if item.status == s %}selected{% endif %}>
+                                    {{ status_labels.get(s, s) }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Assigned To</label>
+                            <input type="text" name="assigned_to" class="form-control"
+                                   value="{{ item.assigned_to or '' }}" placeholder="e.g., John Smith">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Due Date</label>
+                            <input type="date" name="due_date" class="form-control"
+                                   value="{{ item.due_date.strftime('%Y-%m-%d') if item.due_date else '' }}">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Evidence / Notes</label>
+                            <textarea name="evidence_notes" class="form-control" rows="4"
+                                      placeholder="Add evidence links, notes, or status updates...">{{ item.evidence_notes or '' }}</textarea>
+                        </div>
+                    </div>
+                    <div class="mt-3 d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

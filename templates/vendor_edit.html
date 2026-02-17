@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-6">
+    <div class="col-lg-8">
         <div class="mb-3">
             <a href="/vendors{% if vendor %}/{{ vendor.id }}{% endif %}" class="text-decoration-none text-muted">
                 <i class="bi bi-arrow-left me-1"></i>Back
@@ -21,7 +21,10 @@
         {% endif %}
 
         <form method="post" action="{% if vendor %}/vendors/{{ vendor.id }}/edit{% else %}/vendors/new{% endif %}">
-            <div class="card">
+
+            {# ==================== BASIC INFORMATION ==================== #}
+            <div class="card mb-4">
+                <div class="card-header"><h6 class="mb-0">Basic Information</h6></div>
                 <div class="card-body">
                     <div class="mb-3">
                         <label for="name" class="form-label">
@@ -33,35 +36,29 @@
                                placeholder="e.g., Acme Corporation">
                     </div>
 
-                    <div class="mb-3">
-                        <label for="primary_contact_name" class="form-label">
-                            Primary Contact Name
-                        </label>
-                        <input type="text" id="primary_contact_name" name="primary_contact_name"
-                               value="{{ vendor.primary_contact_name if vendor and vendor.primary_contact_name else '' }}"
-                               class="form-control"
-                               placeholder="e.g., John Smith">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="primary_contact_name" class="form-label">Primary Contact Name</label>
+                            <input type="text" id="primary_contact_name" name="primary_contact_name"
+                                   value="{{ vendor.primary_contact_name if vendor and vendor.primary_contact_name else '' }}"
+                                   class="form-control" placeholder="e.g., John Smith">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="primary_contact_email" class="form-label">Primary Contact Email</label>
+                            <input type="email" id="primary_contact_email" name="primary_contact_email"
+                                   value="{{ vendor.primary_contact_email if vendor and vendor.primary_contact_email else '' }}"
+                                   class="form-control" placeholder="e.g., john@acme.com">
+                        </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="primary_contact_email" class="form-label">
-                            Primary Contact Email
-                        </label>
-                        <input type="email" id="primary_contact_email" name="primary_contact_email"
-                               value="{{ vendor.primary_contact_email if vendor and vendor.primary_contact_email else '' }}"
-                               class="form-control"
-                               placeholder="e.g., john@acme.com">
-                    </div>
-
-                    <div class="mb-3">
+                    <div class="mt-3">
                         <label for="notes" class="form-label">Notes</label>
-                        <textarea id="notes" name="notes" rows="4"
-                                  class="form-control"
+                        <textarea id="notes" name="notes" rows="3" class="form-control"
                                   placeholder="Additional notes about this vendor...">{{ vendor.notes if vendor and vendor.notes else '' }}</textarea>
                     </div>
 
                     {% if vendor %}
-                    <div class="mb-0">
+                    <div class="mt-3">
                         <label for="status" class="form-label">Status</label>
                         <select id="status" name="status" class="form-select">
                             <option value="ACTIVE" {% if vendor.status == 'ACTIVE' %}selected{% endif %}>Active</option>
@@ -72,7 +69,127 @@
                 </div>
             </div>
 
-            <div class="mt-4 d-flex justify-content-end gap-2">
+            {# ==================== COMPANY DETAILS ==================== #}
+            <div class="card mb-4">
+                <div class="card-header"><h6 class="mb-0">Company Details</h6></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="industry" class="form-label">Industry</label>
+                            <select id="industry" name="industry" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for ind in industries %}
+                                <option value="{{ ind }}" {% if vendor and vendor.industry == ind %}selected{% endif %}>{{ ind }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="service_type" class="form-label">Service Type</label>
+                            <select id="service_type" name="service_type" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for st in service_types %}
+                                <option value="{{ st }}" {% if vendor and vendor.service_type == st %}selected{% endif %}>{{ st }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="website" class="form-label">Website</label>
+                            <input type="url" id="website" name="website"
+                                   value="{{ vendor.website if vendor and vendor.website else '' }}"
+                                   class="form-control" placeholder="https://example.com">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="headquarters" class="form-label">Headquarters</label>
+                            <input type="text" id="headquarters" name="headquarters"
+                                   value="{{ vendor.headquarters if vendor and vendor.headquarters else '' }}"
+                                   class="form-control" placeholder="e.g., San Francisco, CA">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ==================== RISK CLASSIFICATION ==================== #}
+            <div class="card mb-4">
+                <div class="card-header"><h6 class="mb-0">Risk Classification</h6></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="data_classification" class="form-label">Data Classification</label>
+                            <select id="data_classification" name="data_classification" class="form-select tier-input">
+                                <option value="">-- Select --</option>
+                                {% for dc in data_classifications %}
+                                <option value="{{ dc }}" {% if vendor and vendor.data_classification == dc %}selected{% endif %}>{{ dc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="business_criticality" class="form-label">Business Criticality</label>
+                            <select id="business_criticality" name="business_criticality" class="form-select tier-input">
+                                <option value="">-- Select --</option>
+                                {% for bc in business_criticalities %}
+                                <option value="{{ bc }}" {% if vendor and vendor.business_criticality == bc %}selected{% endif %}>{{ bc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="access_level" class="form-label">Access Level</label>
+                            <select id="access_level" name="access_level" class="form-select tier-input">
+                                <option value="">-- Select --</option>
+                                {% for al in access_levels %}
+                                <option value="{{ al }}" {% if vendor and vendor.access_level == al %}selected{% endif %}>{{ al }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label text-muted small">Computed Inherent Risk Tier</label>
+                        <div id="tierPreview" class="fw-semibold">
+                            {% if vendor and vendor.inherent_risk_tier %}
+                            {{ vendor.inherent_risk_tier }}
+                            {% else %}
+                            <span class="text-muted">Select classification fields above</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ==================== CONTRACT INFORMATION ==================== #}
+            <div class="card mb-4">
+                <div class="card-header"><h6 class="mb-0">Contract Information</h6></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="contract_start_date" class="form-label">Contract Start</label>
+                            <input type="date" id="contract_start_date" name="contract_start_date"
+                                   value="{{ vendor.contract_start_date.strftime('%Y-%m-%d') if vendor and vendor.contract_start_date else '' }}"
+                                   class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="contract_end_date" class="form-label">Contract End</label>
+                            <input type="date" id="contract_end_date" name="contract_end_date"
+                                   value="{{ vendor.contract_end_date.strftime('%Y-%m-%d') if vendor and vendor.contract_end_date else '' }}"
+                                   class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="contract_value" class="form-label">Contract Value</label>
+                            <input type="text" id="contract_value" name="contract_value"
+                                   value="{{ vendor.contract_value if vendor and vendor.contract_value else '' }}"
+                                   class="form-control" placeholder="e.g., $50,000/yr">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input type="checkbox" id="auto_renewal" name="auto_renewal"
+                                       class="form-check-input"
+                                       {% if vendor and vendor.auto_renewal %}checked{% endif %}>
+                                <label for="auto_renewal" class="form-check-label">Auto-renewal</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mb-4">
                 <a href="/vendors{% if vendor %}/{{ vendor.id }}{% endif %}" class="btn btn-outline-secondary">
                     Cancel
                 </a>
@@ -83,4 +200,46 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dc = document.getElementById('data_classification');
+    const bc = document.getElementById('business_criticality');
+    const al = document.getElementById('access_level');
+    const preview = document.getElementById('tierPreview');
+
+    const tierColors = {"Tier 1": "#dc3545", "Tier 2": "#fd7e14", "Tier 3": "#198754"};
+    const tierLabels = {"Tier 1": "Critical Risk", "Tier 2": "Elevated Risk", "Tier 3": "Standard Risk"};
+
+    function computeTier() {
+        const dcVal = dc.value;
+        const bcVal = bc.value;
+        const alVal = al.value;
+
+        if (!dcVal && !bcVal && !alVal) {
+            preview.innerHTML = '<span class="text-muted">Select classification fields above</span>';
+            return;
+        }
+
+        let tier;
+        if (dcVal === 'Restricted' || bcVal === 'Critical') {
+            tier = 'Tier 1';
+        } else if (dcVal === 'Confidential' || bcVal === 'High' || alVal === 'Extensive') {
+            tier = 'Tier 2';
+        } else {
+            tier = 'Tier 3';
+        }
+
+        const color = tierColors[tier];
+        const label = tierLabels[tier];
+        preview.innerHTML = '<span class="badge" style="background:' + color + ';color:#fff;font-size:0.85rem;padding:0.4rem 0.8rem;">' + tier + '</span> <span class="text-muted ms-1">' + label + '</span>';
+    }
+
+    dc.addEventListener('change', computeTier);
+    bc.addEventListener('change', computeTier);
+    al.addEventListener('change', computeTier);
+});
+</script>
 {% endblock %}

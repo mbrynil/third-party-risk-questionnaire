@@ -102,6 +102,15 @@
         color: #2563eb;
     }
 
+    .tier-badge-sm {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.7rem;
+        color: #fff;
+    }
+
     .badge-risk {
         padding: 0.3rem 0.6rem;
         border-radius: 6px;
@@ -196,6 +205,21 @@
     </div>
 </div>
 
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card kpi-amber">
+            <div class="kpi-value">{{ kpis.open_remediations }}</div>
+            <div class="kpi-label">Open Remediations</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card" style="border-left: 4px solid #0d6efd;">
+            <div class="kpi-value" style="color: #0d6efd;">{{ kpis.upcoming_reviews }}</div>
+            <div class="kpi-label">Reviews Due (30 Days)</div>
+        </div>
+    </div>
+</div>
+
 {# ==================== CHARTS ROW 1 ==================== #}
 <div class="row g-3 mb-4">
     <div class="col-lg-4">
@@ -239,6 +263,14 @@
 {# ==================== FILTER BAR ==================== #}
 <div class="filter-bar mb-3">
     <div class="row g-2 align-items-center">
+        <div class="col-auto">
+            <select id="filterTier" class="form-select form-select-sm">
+                <option value="">All Tiers</option>
+                <option value="Tier 1">Tier 1</option>
+                <option value="Tier 2">Tier 2</option>
+                <option value="Tier 3">Tier 3</option>
+            </select>
+        </div>
         <div class="col-auto">
             <select id="filterRisk" class="form-select form-select-sm">
                 <option value="">All Risk Levels</option>
@@ -284,6 +316,7 @@
         <thead>
             <tr>
                 <th class="sortable-header" data-sort="name">Vendor <i class="bi bi-chevron-expand sort-icon"></i></th>
+                <th class="sortable-header" data-sort="tier">Tier <i class="bi bi-chevron-expand sort-icon"></i></th>
                 <th class="sortable-header" data-sort="risk">Risk <i class="bi bi-chevron-expand sort-icon"></i></th>
                 <th class="sortable-header" data-sort="outcome">Decision <i class="bi bi-chevron-expand sort-icon"></i></th>
                 <th class="sortable-header" data-sort="score">Score <i class="bi bi-chevron-expand sort-icon"></i></th>
@@ -298,6 +331,7 @@
                 data-risk="{{ v.risk_rating or '' }}"
                 data-outcome="{{ v.decision_outcome or '' }}"
                 data-status="{{ v.status }}"
+                data-tier="{{ v.inherent_risk_tier or '' }}"
                 data-name="{{ v.name|lower }}"
                 data-score="{{ v.overall_score if v.overall_score is not none else '' }}"
                 data-assessed="{{ v.last_assessed_date or '' }}"
@@ -306,6 +340,13 @@
                     <strong>{{ v.name }}</strong>
                     {% if v.assessment_count > 0 %}
                     <span class="badge-count ms-1" style="font-size: 0.7rem;">{{ v.assessment_count }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if v.inherent_risk_tier %}
+                    <span class="tier-badge-sm" style="background: {{ v.tier_color or '#6c757d' }};">{{ v.tier_display }}</span>
+                    {% else %}
+                    <span class="text-muted">—</span>
                     {% endif %}
                 </td>
                 <td>
@@ -501,6 +542,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ==================== FILTERING ====================
+    const filterTier = document.getElementById('filterTier');
     const filterRisk = document.getElementById('filterRisk');
     const filterOutcome = document.getElementById('filterOutcome');
     const filterStatus = document.getElementById('filterStatus');
@@ -511,6 +553,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalRows = rows.length;
 
     function applyFilters() {
+        const tier = filterTier.value;
         const risk = filterRisk.value;
         const outcome = filterOutcome.value;
         const status = filterStatus.value;
@@ -519,6 +562,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         rows.forEach(function(row) {
             let show = true;
+            if (tier && row.dataset.tier !== tier) show = false;
             if (risk && row.dataset.risk !== risk) show = false;
             if (outcome && row.dataset.outcome !== outcome) show = false;
             if (status && row.dataset.status !== status) show = false;
@@ -530,12 +574,14 @@ document.addEventListener('DOMContentLoaded', function() {
         filterCount.textContent = 'Showing ' + visible + ' of ' + totalRows;
     }
 
+    if (filterTier) filterTier.addEventListener('change', applyFilters);
     if (filterRisk) filterRisk.addEventListener('change', applyFilters);
     if (filterOutcome) filterOutcome.addEventListener('change', applyFilters);
     if (filterStatus) filterStatus.addEventListener('change', applyFilters);
     if (filterSearch) filterSearch.addEventListener('input', applyFilters);
     if (filterClear) {
         filterClear.addEventListener('click', function() {
+            filterTier.value = '';
             filterRisk.value = '';
             filterOutcome.value = '';
             filterStatus.value = '';
@@ -576,6 +622,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     case 'name':
                         va = a.dataset.name; vb = b.dataset.name;
                         break;
+                    case 'tier':
+                        const tierOrder = {'Tier 1':0,'Tier 2':1,'Tier 3':2,'':3};
+                        va = tierOrder[a.dataset.tier] ?? 3;
+                        vb = tierOrder[b.dataset.tier] ?? 3;
+                        return currentDir === 'asc' ? va - vb : vb - va;
                     case 'risk':
                         const riskOrder = {'VERY_HIGH':0,'HIGH':1,'MODERATE':2,'LOW':3,'VERY_LOW':4,'':5};
                         va = riskOrder[a.dataset.risk] ?? 5;

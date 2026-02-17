@@ -25,6 +25,25 @@ VENDOR_STATUS_ACTIVE = "ACTIVE"
 VENDOR_STATUS_ARCHIVED = "ARCHIVED"
 VALID_VENDOR_STATUSES = [VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED]
 
+VALID_INDUSTRIES = ["Technology", "Healthcare", "Finance", "Manufacturing", "Retail", "Energy", "Telecommunications", "Government", "Education", "Legal", "Consulting", "Other"]
+VALID_SERVICE_TYPES = ["SaaS", "Infrastructure", "BPO", "Consulting", "Hardware", "Other"]
+VALID_DATA_CLASSIFICATIONS = ["Public", "Internal", "Confidential", "Restricted"]
+VALID_BUSINESS_CRITICALITIES = ["Low", "Medium", "High", "Critical"]
+VALID_ACCESS_LEVELS = ["None", "Limited", "Moderate", "Extensive"]
+VALID_INHERENT_RISK_TIERS = ["Tier 1", "Tier 2", "Tier 3"]
+VALID_CONTACT_ROLES = ["Primary", "Security", "Legal", "Executive", "Technical", "Other"]
+VALID_DOCUMENT_TYPES = ["SOC2_REPORT", "ISO_CERT", "INSURANCE", "CONTRACT", "NDA", "POLICY", "PENTEST_REPORT", "OTHER"]
+DOCUMENT_TYPE_LABELS = {
+    "SOC2_REPORT": "SOC 2 Report",
+    "ISO_CERT": "ISO Certification",
+    "INSURANCE": "Insurance Certificate",
+    "CONTRACT": "Contract",
+    "NDA": "NDA",
+    "POLICY": "Policy Document",
+    "PENTEST_REPORT": "Pentest Report",
+    "OTHER": "Other",
+}
+
 
 class Vendor(Base):
     __tablename__ = "vendors"
@@ -38,7 +57,64 @@ class Vendor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Enrichment fields
+    industry = Column(String(100), nullable=True)
+    website = Column(String(500), nullable=True)
+    headquarters = Column(String(255), nullable=True)
+    service_type = Column(String(50), nullable=True)
+
+    # Risk classification
+    data_classification = Column(String(50), nullable=True)
+    business_criticality = Column(String(20), nullable=True)
+    access_level = Column(String(50), nullable=True)
+
+    # Inherent risk tiering
+    inherent_risk_tier = Column(String(20), nullable=True)
+    tier_override = Column(String(20), nullable=True)
+    tier_notes = Column(Text, nullable=True)
+
+    # Contract information
+    contract_start_date = Column(DateTime, nullable=True)
+    contract_end_date = Column(DateTime, nullable=True)
+    contract_value = Column(String(100), nullable=True)
+    auto_renewal = Column(Boolean, default=False)
+
     assessments = relationship("Assessment", back_populates="vendor")
+    contacts = relationship("VendorContact", back_populates="vendor", cascade="all, delete-orphan")
+    documents = relationship("VendorDocument", back_populates="vendor", cascade="all, delete-orphan")
+
+
+class VendorContact(Base):
+    __tablename__ = "vendor_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=True)
+    role = Column(String(50), nullable=True)
+    phone = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    vendor = relationship("Vendor", back_populates="contacts")
+
+
+class VendorDocument(Base):
+    __tablename__ = "vendor_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    document_type = Column(String(50), nullable=False)
+    title = Column(String(255), nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    stored_filename = Column(String(255), nullable=False)
+    stored_path = Column(String(512), nullable=False)
+    content_type = Column(String(100), nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    expiry_date = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    vendor = relationship("Vendor", back_populates="documents")
 
 
 # ==================== ASSESSMENT TEMPLATE ====================
@@ -123,12 +199,14 @@ class Assessment(Base):
     submitted_at = Column(DateTime, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    previous_assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
 
     vendor = relationship("Vendor", back_populates="assessments")
     template = relationship("AssessmentTemplate")
     questions = relationship("Question", back_populates="assessment", cascade="all, delete-orphan")
     responses = relationship("Response", back_populates="assessment", cascade="all, delete-orphan")
     conditional_rules = relationship("ConditionalRule", back_populates="assessment", cascade="all, delete-orphan")
+    previous_assessment = relationship("Assessment", remote_side="Assessment.id", uselist=False)
 
 
 WEIGHT_LOW = "LOW"
@@ -296,6 +374,67 @@ class AssessmentDecision(Base):
 
     vendor = relationship("Vendor")
     assessment = relationship("Assessment")
+
+
+# ==================== REMEDIATION ====================
+
+REMEDIATION_SOURCE_AUTO = "AUTO"
+REMEDIATION_SOURCE_MANUAL = "MANUAL"
+VALID_REMEDIATION_SOURCES = [REMEDIATION_SOURCE_AUTO, REMEDIATION_SOURCE_MANUAL]
+
+REMEDIATION_STATUS_OPEN = "OPEN"
+REMEDIATION_STATUS_IN_PROGRESS = "IN_PROGRESS"
+REMEDIATION_STATUS_EVIDENCE_SUBMITTED = "EVIDENCE_SUBMITTED"
+REMEDIATION_STATUS_VERIFIED = "VERIFIED"
+REMEDIATION_STATUS_CLOSED = "CLOSED"
+VALID_REMEDIATION_STATUSES = [
+    REMEDIATION_STATUS_OPEN, REMEDIATION_STATUS_IN_PROGRESS,
+    REMEDIATION_STATUS_EVIDENCE_SUBMITTED, REMEDIATION_STATUS_VERIFIED,
+    REMEDIATION_STATUS_CLOSED,
+]
+
+REMEDIATION_STATUS_LABELS = {
+    REMEDIATION_STATUS_OPEN: "Open",
+    REMEDIATION_STATUS_IN_PROGRESS: "In Progress",
+    REMEDIATION_STATUS_EVIDENCE_SUBMITTED: "Evidence Submitted",
+    REMEDIATION_STATUS_VERIFIED: "Verified",
+    REMEDIATION_STATUS_CLOSED: "Closed",
+}
+
+REMEDIATION_STATUS_COLORS = {
+    REMEDIATION_STATUS_OPEN: "#dc3545",
+    REMEDIATION_STATUS_IN_PROGRESS: "#fd7e14",
+    REMEDIATION_STATUS_EVIDENCE_SUBMITTED: "#0dcaf0",
+    REMEDIATION_STATUS_VERIFIED: "#198754",
+    REMEDIATION_STATUS_CLOSED: "#6c757d",
+}
+
+
+class RemediationItem(Base):
+    __tablename__ = "remediation_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+    decision_id = Column(Integer, ForeignKey("assessment_decisions.id"), nullable=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    source = Column(String(20), default=REMEDIATION_SOURCE_MANUAL, nullable=False)
+    risk_statement_id = Column(Integer, ForeignKey("risk_statements.id"), nullable=True)
+    category = Column(String(100), nullable=True)
+    severity = Column(String(20), default="MEDIUM", nullable=False)
+    status = Column(String(30), default=REMEDIATION_STATUS_OPEN, nullable=False)
+    assigned_to = Column(String(255), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    completed_date = Column(DateTime, nullable=True)
+    evidence_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    vendor = relationship("Vendor")
+    assessment = relationship("Assessment")
+    decision = relationship("AssessmentDecision")
+    risk_statement = relationship("RiskStatement")
 
 
 # ==================== RISK STATEMENT LIBRARY ====================
@@ -867,6 +1006,54 @@ def backfill_question_bank_item_ids():
             db.commit()
     finally:
         db.close()
+
+
+def backfill_vendor_new_columns():
+    """Add new vendor columns to existing database using raw ALTER TABLE.
+    New tables (vendor_contacts, vendor_documents) are auto-created by init_db().
+    """
+    import sqlite3
+    conn = sqlite3.connect("./questionnaires.db")
+    cursor = conn.cursor()
+
+    new_columns = [
+        ("industry", "VARCHAR(100)"),
+        ("website", "VARCHAR(500)"),
+        ("headquarters", "VARCHAR(255)"),
+        ("service_type", "VARCHAR(50)"),
+        ("data_classification", "VARCHAR(50)"),
+        ("business_criticality", "VARCHAR(20)"),
+        ("access_level", "VARCHAR(50)"),
+        ("inherent_risk_tier", "VARCHAR(20)"),
+        ("tier_override", "VARCHAR(20)"),
+        ("tier_notes", "TEXT"),
+        ("contract_start_date", "DATETIME"),
+        ("contract_end_date", "DATETIME"),
+        ("contract_value", "VARCHAR(100)"),
+        ("auto_renewal", "BOOLEAN DEFAULT 0"),
+    ]
+
+    cursor.execute("PRAGMA table_info(vendors)")
+    existing = {row[1] for row in cursor.fetchall()}
+
+    for col_name, col_type in new_columns:
+        if col_name not in existing:
+            try:
+                cursor.execute(f"ALTER TABLE vendors ADD COLUMN {col_name} {col_type}")
+            except sqlite3.OperationalError:
+                pass
+
+    # Also backfill assessments table
+    cursor.execute("PRAGMA table_info(assessments)")
+    existing_assessment_cols = {row[1] for row in cursor.fetchall()}
+    if "previous_assessment_id" not in existing_assessment_cols:
+        try:
+            cursor.execute("ALTER TABLE assessments ADD COLUMN previous_assessment_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+    conn.commit()
+    conn.close()
 
 
 def get_db():

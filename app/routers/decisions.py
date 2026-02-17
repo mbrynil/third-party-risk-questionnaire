@@ -16,6 +16,9 @@ from app.services.scoring import compute_assessment_scores
 from app.services.risk_statements import match_risk_statements
 from app.services.lifecycle import transition_to_reviewed
 from app.services.draft_generator import generate_draft
+from app.services.remediation_service import auto_generate_remediations
+from app.services.reassessment_service import suggest_next_review_date, compute_assessment_delta
+from app.services.tiering import get_effective_tier
 
 router = APIRouter()
 
@@ -73,11 +76,39 @@ def _load_decision_context(db: Session, assessment_id: int):
 async def assessment_decision_page(request: Request, assessment_id: int, db: Session = Depends(get_db)):
     ctx = _load_decision_context(db, assessment_id)
     scores = ctx["scores"]
+    assessment = ctx["assessment"]
+    vendor = ctx["vendor"]
+
+    # Auto-suggest next review date based on vendor tier
+    effective_tier = get_effective_tier(vendor)
+    suggested_review_date = None
+    if effective_tier:
+        # Use now as placeholder for suggestion (actual finalized_at may not exist yet)
+        suggested_review_date = suggest_next_review_date(effective_tier, datetime.utcnow())
+
+    # Delta comparison for reassessments
+    delta = None
+    if assessment.previous_assessment_id:
+        prev_assessment = db.query(Assessment).filter(
+            Assessment.id == assessment.previous_assessment_id
+        ).first()
+        if prev_assessment:
+            prev_questions = db.query(Question).filter(
+                Question.assessment_id == prev_assessment.id
+            ).order_by(Question.order).all()
+            prev_response = db.query(Response).filter(
+                Response.assessment_id == prev_assessment.id,
+                Response.status == RESPONSE_STATUS_SUBMITTED
+            ).order_by(Response.submitted_at.desc()).first()
+
+            if prev_questions and prev_response:
+                prev_scores = compute_assessment_scores(prev_questions, prev_response)
+                delta = compute_assessment_delta(scores, prev_scores)
 
     return templates.TemplateResponse("assessment_decision.html", {
         "request": request,
-        "assessment": ctx["assessment"],
-        "vendor": ctx["vendor"],
+        "assessment": assessment,
+        "vendor": vendor,
         "decision": ctx["decision"],
         "response": ctx["response"],
         "total_questions": len(ctx["questions"]),
@@ -91,6 +122,9 @@ async def assessment_decision_page(request: Request, assessment_id: int, db: Ses
         "risk_levels": VALID_RISK_LEVELS,
         "decision_outcomes": VALID_DECISION_OUTCOMES,
         "risk_suggestions": ctx["risk_suggestions"],
+        "effective_tier": effective_tier,
+        "suggested_review_date": suggested_review_date.strftime("%Y-%m-%d") if suggested_review_date else None,
+        "delta": delta,
     })
 
 
@@ -207,11 +241,28 @@ async def save_assessment_decision(
     if action == "finalize" and success:
         transition_to_reviewed(db, assessment)
 
+        # Auto-generate remediation items from risk statements
+        ctx = _load_decision_context(db, assessment_id)
+        risk_suggestions = ctx["risk_suggestions"]
+        remediation_data = []
+        for rs in risk_suggestions:
+            remediation_data.append({
+                "risk_statement_id": rs.get("id"),
+                "severity": rs.get("severity", "MEDIUM"),
+                "category": rs.get("category", ""),
+                "finding": rs.get("finding_text", ""),
+                "remediation": rs.get("remediation_text", ""),
+            })
+        rem_count = auto_generate_remediations(db, decision, remediation_data)
+
     db.commit()
 
     if action == "finalize":
+        msg = "Assessment finalized successfully"
+        if rem_count > 0:
+            msg += f" — {rem_count} remediation items created"
         return RedirectResponse(
-            url=f"/vendors/{assessment.vendor_id}?message=Assessment finalized successfully&message_type=success",
+            url=f"/vendors/{assessment.vendor_id}?message={msg}&message_type=success",
             status_code=303
         )
     else:

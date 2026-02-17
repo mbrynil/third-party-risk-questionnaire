@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 
 from models import (
@@ -14,6 +14,8 @@ from models import (
     RISK_LEVEL_HIGH, RISK_LEVEL_VERY_HIGH,
 )
 from app.services.scoring import compute_assessment_scores, suggest_risk_level
+from app.services.tiering import get_effective_tier, TIER_COLORS, TIER_LABELS
+from app.services.remediation_service import get_open_remediation_count
 
 
 RISK_LABELS = {
@@ -136,6 +138,15 @@ def get_portfolio_data(db: Session) -> dict:
         if d.next_review_date and d.next_review_date.date() < today
     )
 
+    open_remediations = get_open_remediation_count(db)
+
+    upcoming_threshold = today + timedelta(days=30)
+    upcoming_reviews = sum(
+        1
+        for d in latest_decision_by_vendor.values()
+        if d.next_review_date and today <= d.next_review_date.date() <= upcoming_threshold
+    )
+
     # --- Risk Distribution (donut) ---
     risk_order = [
         RISK_LEVEL_VERY_LOW, RISK_LEVEL_LOW, RISK_LEVEL_MODERATE,
@@ -237,10 +248,16 @@ def get_portfolio_data(db: Session) -> dict:
             if decision.finalized_at:
                 last_assessed_date = decision.finalized_at.strftime("%Y-%m-%d")
 
+        eff_tier = get_effective_tier(v)
+
         vendor_rows.append({
             "id": v.id,
             "name": v.name,
             "status": v.status,
+            "inherent_risk_tier": eff_tier,
+            "tier_display": eff_tier or None,
+            "tier_color": TIER_COLORS.get(eff_tier, "#6c757d") if eff_tier else None,
+            "tier_label": TIER_LABELS.get(eff_tier, "") if eff_tier else None,
             "risk_rating": decision.overall_risk_rating if decision else None,
             "risk_rating_display": (
                 RISK_LABELS.get(decision.overall_risk_rating)
@@ -266,6 +283,8 @@ def get_portfolio_data(db: Session) -> dict:
             "average_risk_score": average_risk_score,
             "pending_assessments": pending_assessments,
             "overdue_reviews": overdue_reviews,
+            "open_remediations": open_remediations,
+            "upcoming_reviews": upcoming_reviews,
         },
         "risk_distribution": risk_distribution,
         "decision_outcomes": decision_outcomes,

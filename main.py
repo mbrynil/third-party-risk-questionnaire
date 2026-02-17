@@ -3,16 +3,18 @@ from datetime import datetime
 
 from models import (
     init_db, get_db, seed_question_bank, seed_risk_statements,
-    backfill_question_categories, backfill_question_bank_item_ids, SessionLocal,
+    backfill_question_categories, backfill_question_bank_item_ids,
+    backfill_vendor_new_columns, SessionLocal,
     Assessment, Response,
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
 )
-from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank
+from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations
 
 app = FastAPI(title="Third-Party Risk Questionnaire System")
 
 init_db()
+backfill_vendor_new_columns()
 seed_question_bank()
 seed_risk_statements()
 backfill_question_categories()
@@ -49,6 +51,7 @@ app.include_router(vendors.router)
 app.include_router(decisions.router)
 app.include_router(risk_library.router)
 app.include_router(question_bank.router)
+app.include_router(remediations.router)
 
 if __name__ == "__main__":
     import uvicorn
