@@ -771,6 +771,31 @@ def seed_risk_statements():
         db.close()
 
 
+def backfill_question_categories():
+    """Backfill categories on assessment questions by matching text to question bank."""
+    db = SessionLocal()
+    try:
+        uncategorized = db.query(Question).filter(
+            (Question.category == None) | (Question.category == "")
+        ).all()
+        if not uncategorized:
+            return
+
+        bank_map = {item.text: item.category for item in db.query(QuestionBankItem).all()}
+
+        updated = 0
+        for q in uncategorized:
+            cat = bank_map.get(q.question_text)
+            if cat:
+                q.category = cat
+                updated += 1
+
+        if updated > 0:
+            db.commit()
+    finally:
+        db.close()
+
+
 def get_db():
     db = SessionLocal()
     try:

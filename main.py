@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from datetime import datetime
 
 from models import (
-    init_db, get_db, seed_question_bank, seed_risk_statements, SessionLocal,
+    init_db, get_db, seed_question_bank, seed_risk_statements, backfill_question_categories, SessionLocal,
     Assessment, Response,
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
@@ -14,6 +14,7 @@ app = FastAPI(title="Third-Party Risk Questionnaire System")
 init_db()
 seed_question_bank()
 seed_risk_statements()
+backfill_question_categories()
 
 
 def fix_stuck_assessment_statuses():

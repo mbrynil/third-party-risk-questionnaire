@@ -105,7 +105,8 @@ async def create_assessment(
                 expected_value=expected_value_single,
                 expected_values=expected_values_json,
                 expected_value_type="CHOICE",
-                answer_mode=answer_mode
+                answer_mode=answer_mode,
+                category=bank_item.category
             )
             db.add(question)
             order += 1
