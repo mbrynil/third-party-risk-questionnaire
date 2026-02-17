@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assessment Report - {{ vendor.name }} - {{ assessment.title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #fff;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .report-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .report-header {
+            border-bottom: 3px solid #1e3a5f;
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .report-header h1 {
+            color: #1e3a5f;
+            font-weight: 700;
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+        }
+        .report-header .company-name {
+            color: #6b7280;
+            font-size: 1rem;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .meta-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+        .meta-value {
+            font-size: 0.95rem;
+            color: #111827;
+            font-weight: 500;
+        }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e3a5f;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            margin-top: 2rem;
+        }
+        .decision-badge {
+            display: inline-block;
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        .badge-risk-very-high { background: #f8d7da; color: #dc3545; }
+        .badge-risk-high { background: #fff3cd; color: #fd7e14; }
+        .badge-risk-moderate { background: #fff9e6; color: #b8860b; }
+        .badge-risk-low { background: #d1e7dd; color: #198754; }
+        .badge-risk-very-low { background: #d1e7dd; color: #198754; }
+        .badge-outcome-approve { background: #d1e7dd; color: #198754; }
+        .badge-outcome-approve_with_conditions { background: #fff3cd; color: #fd7e14; }
+        .badge-outcome-needs_follow_up { background: #fff3cd; color: #b8860b; }
+        .badge-outcome-reject { background: #f8d7da; color: #dc3545; }
+        .impact-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .impact-item {
+            background: #f9fafb;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+        }
+        .impact-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        .impact-value {
+            font-size: 0.95rem;
+            color: #111827;
+            font-weight: 600;
+        }
+        .stat-row {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            min-width: 80px;
+        }
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        .findings-block {
+            background: #f9fafb;
+            border-left: 3px solid #2563eb;
+            padding: 0.75rem 1rem;
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 1.5rem;
+            white-space: pre-wrap;
+            color: #374151;
+        }
+        .remediation-block {
+            background: #fff9e6;
+            border-left: 3px solid #fd7e14;
+            padding: 0.75rem 1rem;
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 1.5rem;
+            white-space: pre-wrap;
+            color: #374151;
+        }
+        .rationale-block {
+            background: #f9fafb;
+            border-left: 3px solid #6c757d;
+            padding: 0.75rem 1rem;
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 1.5rem;
+            white-space: pre-wrap;
+            color: #374151;
+        }
+        .category-block {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            page-break-inside: avoid;
+        }
+        .category-bar-track {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .category-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+        .bar-success { background: #198754; }
+        .bar-info { background: #0dcaf0; }
+        .bar-warning { background: #ffc107; }
+        .bar-danger { background: #dc3545; }
+        .weight-badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.7rem;
+        }
+        .weight-critical { background: #f8d7da; color: #dc3545; }
+        .weight-high { background: #fff3cd; color: #92400e; }
+        .weight-medium { background: #d1ecf1; color: #0c5460; }
+        .weight-low { background: #e2e3e5; color: #6c757d; }
+        .eval-badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.7rem;
+        }
+        .eval-meets { background: #d1e7dd; color: #166534; }
+        .eval-partial { background: #fff3cd; color: #92400e; }
+        .eval-dnm { background: #f8d7da; color: #991b1b; }
+        .eval-na { background: #f3f4f6; color: #6b7280; }
+        .evidence-item, .followup-item {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            page-break-inside: avoid;
+        }
+        .followup-response {
+            background: #ecfdf5;
+            border-left: 3px solid #10b981;
+            padding: 0.5rem 0.75rem;
+            margin-top: 0.5rem;
+        }
+        .no-data {
+            color: #9ca3af;
+            font-style: italic;
+        }
+        .print-btn {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+        }
+
+        @media print {
+            .print-btn, .no-print {
+                display: none !important;
+            }
+            body {
+                font-size: 12px;
+                background: #fff;
+            }
+            .report-container {
+                max-width: 100%;
+                padding: 0;
+            }
+            .category-block, .evidence-item, .followup-item {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .section-title {
+                page-break-after: avoid;
+            }
+            .meta-grid, .impact-grid, .impact-item, .stat-item {
+                background: #f9fafb !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .decision-badge, .weight-badge, .eval-badge,
+            .category-bar-fill, .findings-block, .remediation-block, .rationale-block {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            svg {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="btn btn-primary print-btn no-print" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Print / Save PDF
+    </button>
+
+    <div class="report-container">
+
+        {# ==================== HEADER ==================== #}
+        <div class="report-header">
+            <p class="company-name mb-1">{{ assessment.company_name }}</p>
+            <h1>{{ assessment.title }}</h1>
+            <p class="text-muted mb-0">Vendor Risk Assessment Report</p>
+        </div>
+
+        {# ==================== META GRID ==================== #}
+        <div class="meta-grid">
+            <div class="meta-item">
+                <span class="meta-label">Vendor</span>
+                <span class="meta-value">{{ vendor.name }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Contact</span>
+                <span class="meta-value">{{ response.vendor_email if response else 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Assessment Date</span>
+                <span class="meta-value">{{ response.submitted_at.strftime('%Y-%m-%d %H:%M UTC') if response and response.submitted_at else 'N/A' }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">Report Date</span>
+                <span class="meta-value">{{ now.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+            </div>
+        </div>
+
+        {# ==================== EXECUTIVE SUMMARY ==================== #}
+        <h2 class="section-title"><i class="bi bi-clipboard-data me-2"></i>Executive Summary</h2>
+
+        <div class="text-center mb-4">
+            {# Decision badges #}
+            <div class="d-flex justify-content-center gap-3 flex-wrap mb-4">
+                {% if decision.overall_risk_rating %}
+                <span class="decision-badge badge-risk-{{ decision.overall_risk_rating|lower }}">
+                    {{ decision.overall_risk_rating.replace('_', ' ').title() }} Risk
+                </span>
+                {% endif %}
+                {% if decision.decision_outcome %}
+                <span class="decision-badge badge-outcome-{{ decision.decision_outcome|lower }}">
+                    {{ decision.decision_outcome.replace('_', ' ').title() }}
+                </span>
+                {% endif %}
+            </div>
+
+            {# Score circle #}
+            {% set score = scores.overall_score %}
+            {% if score is not none %}
+                {% if score >= 90 %}
+                    {% set score_hex = "#198754" %}
+                {% elif score >= 70 %}
+                    {% set score_hex = "#0dcaf0" %}
+                {% elif score >= 50 %}
+                    {% set score_hex = "#ffc107" %}
+                {% else %}
+                    {% set score_hex = "#dc3545" %}
+                {% endif %}
+                <svg width="140" height="140" viewBox="0 0 160 160" style="display: inline-block;">
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="#e9ecef" stroke-width="12"/>
+                    {% set circumference = 439.82 %}
+                    {% set offset = circumference * (1 - score / 100) %}
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="{{ score_hex }}" stroke-width="12"
+                            stroke-linecap="round"
+                            stroke-dasharray="{{ circumference }}"
+                            stroke-dashoffset="{{ offset }}"
+                            transform="rotate(-90 80 80)"/>
+                    <text x="80" y="72" text-anchor="middle" font-size="36" font-weight="bold" fill="{{ score_hex }}">{{ score|int }}</text>
+                    <text x="80" y="94" text-anchor="middle" font-size="13" fill="#6c757d">out of 100</text>
+                </svg>
+
+                {# Stats row #}
+                <div class="stat-row">
+                    <div class="stat-item" style="background: #f8f9fa;">
+                        <div class="stat-value text-primary">{{ total_questions }}</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                    <div class="stat-item" style="background: #d1e7dd;">
+                        <div class="stat-value text-success">{{ meets_count }}</div>
+                        <div class="stat-label">Meets</div>
+                    </div>
+                    <div class="stat-item" style="background: #fff3cd;">
+                        <div class="stat-value" style="color: #92400e;">{{ partial_count }}</div>
+                        <div class="stat-label">Partial</div>
+                    </div>
+                    <div class="stat-item" style="background: #f8d7da;">
+                        <div class="stat-value text-danger">{{ does_not_meet_count }}</div>
+                        <div class="stat-label">Does Not Meet</div>
+                    </div>
+                </div>
+            {% else %}
+                <p class="no-data">No scorable questions in this assessment.</p>
+            {% endif %}
+
+            {% if decision.next_review_date %}
+            <div class="mt-3">
+                <span class="text-muted"><i class="bi bi-calendar3 me-1"></i>Next Review: {{ decision.next_review_date.strftime('%Y-%m-%d') }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+        {# ==================== IMPACT ASSESSMENT ==================== #}
+        <h2 class="section-title"><i class="bi bi-graph-up me-2"></i>Impact Assessment</h2>
+        <div class="impact-grid">
+            <div class="impact-item">
+                <div class="impact-label">Data Sensitivity</div>
+                <div class="impact-value">{{ decision.data_sensitivity.replace('_', ' ').title() if decision.data_sensitivity else 'Not Set' }}</div>
+            </div>
+            <div class="impact-item">
+                <div class="impact-label">Business Criticality</div>
+                <div class="impact-value">{{ decision.business_criticality.replace('_', ' ').title() if decision.business_criticality else 'Not Set' }}</div>
+            </div>
+            <div class="impact-item">
+                <div class="impact-label">Impact Rating</div>
+                <div class="impact-value">{{ decision.impact_rating.replace('_', ' ').title() if decision.impact_rating else 'Not Set' }}</div>
+            </div>
+            <div class="impact-item">
+                <div class="impact-label">Likelihood</div>
+                <div class="impact-value">{{ decision.likelihood_rating.replace('_', ' ').title() if decision.likelihood_rating else 'Not Set' }}</div>
+            </div>
+        </div>
+
+        {# ==================== CATEGORY BREAKDOWN ==================== #}
+        {% if scores.category_scores %}
+        <h2 class="section-title"><i class="bi bi-bar-chart me-2"></i>Category Breakdown</h2>
+        {% for cat in scores.category_scores %}
+        {% if cat.score is not none %}
+            {% if cat.score >= 90 %}
+                {% set cat_bar = "bar-success" %}
+                {% set cat_risk_color = "#198754" %}
+            {% elif cat.score >= 70 %}
+                {% set cat_bar = "bar-info" %}
+                {% set cat_risk_color = "#0dcaf0" %}
+            {% elif cat.score >= 50 %}
+                {% set cat_bar = "bar-warning" %}
+                {% set cat_risk_color = "#ffc107" %}
+            {% else %}
+                {% set cat_bar = "bar-danger" %}
+                {% set cat_risk_color = "#dc3545" %}
+            {% endif %}
+        <div class="category-block">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                    <strong>{{ cat.category }}</strong>
+                    <span class="eval-badge ms-1" style="background: {{ cat_risk_color }}20; color: {{ cat_risk_color }};">{{ cat.risk_level.replace('_', ' ').title() }} Risk</span>
+                </div>
+                <span class="text-muted" style="font-size: 0.85rem;">{{ cat.score }}% &middot; {{ cat.count }} questions</span>
+            </div>
+            <div class="category-bar-track mb-2">
+                <div class="category-bar-fill {{ cat_bar }}" style="width: {{ cat.score }}%;"></div>
+            </div>
+            <table class="table table-sm table-borderless mb-0" style="font-size: 0.85rem;">
+                <tbody>
+                    {% for q in cat.questions %}
+                    <tr>
+                        <td style="width:80px">
+                            {% if q.weight == 'CRITICAL' %}
+                            <span class="weight-badge weight-critical">CRITICAL</span>
+                            {% elif q.weight == 'HIGH' %}
+                            <span class="weight-badge weight-high">HIGH</span>
+                            {% elif q.weight == 'MEDIUM' %}
+                            <span class="weight-badge weight-medium">MEDIUM</span>
+                            {% else %}
+                            <span class="weight-badge weight-low">LOW</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ q.question_text[:120] }}{% if q.question_text|length > 120 %}...{% endif %}</td>
+                        <td style="width:110px" class="text-end">
+                            {% if q.eval_status == 'MEETS_EXPECTATION' %}
+                            <span class="eval-badge eval-meets">Meets</span>
+                            {% elif q.eval_status == 'PARTIALLY_MEETS_EXPECTATION' %}
+                            <span class="eval-badge eval-partial">Partial</span>
+                            {% elif q.eval_status == 'DOES_NOT_MEET_EXPECTATION' %}
+                            <span class="eval-badge eval-dnm">Does Not Meet</span>
+                            {% else %}
+                            <span class="eval-badge eval-na">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td style="width:60px" class="text-muted text-end">{{ q.answer_choice or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+
+        {# ==================== FLAGGED ITEMS ==================== #}
+        {% if scores.flagged_items %}
+        <h2 class="section-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Flagged Items ({{ scores.flagged_items|length }})</h2>
+        <table class="table table-sm" style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="width:80px">Weight</th>
+                    <th style="width:140px">Category</th>
+                    <th>Question</th>
+                    <th style="width:110px">Status</th>
+                    <th style="width:70px">Answer</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in scores.flagged_items %}
+                <tr>
+                    <td>
+                        {% if item.weight == 'CRITICAL' %}
+                        <span class="weight-badge weight-critical">CRITICAL</span>
+                        {% elif item.weight == 'HIGH' %}
+                        <span class="weight-badge weight-high">HIGH</span>
+                        {% elif item.weight == 'MEDIUM' %}
+                        <span class="weight-badge weight-medium">MEDIUM</span>
+                        {% else %}
+                        <span class="weight-badge weight-low">LOW</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted">{{ item.category }}</td>
+                    <td>{{ item.question_text[:120] }}{% if item.question_text|length > 120 %}...{% endif %}</td>
+                    <td>
+                        {% if item.eval_status == 'DOES_NOT_MEET_EXPECTATION' %}
+                        <span class="eval-badge eval-dnm">Does Not Meet</span>
+                        {% elif item.eval_status == 'PARTIALLY_MEETS_EXPECTATION' %}
+                        <span class="eval-badge eval-partial">Partial</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted">{{ item.answer_choice or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {# ==================== KEY FINDINGS ==================== #}
+        {% if decision.key_findings %}
+        <h2 class="section-title"><i class="bi bi-search me-2"></i>Key Findings</h2>
+        <div class="findings-block">{{ decision.key_findings }}</div>
+        {% endif %}
+
+        {# ==================== REMEDIATION ==================== #}
+        {% if decision.remediation_required %}
+        <h2 class="section-title"><i class="bi bi-tools me-2"></i>Remediation Requirements</h2>
+        <div class="remediation-block">{{ decision.remediation_required }}</div>
+        {% endif %}
+
+        {# ==================== RATIONALE ==================== #}
+        {% if decision.rationale %}
+        <h2 class="section-title"><i class="bi bi-card-text me-2"></i>Rationale</h2>
+        <div class="rationale-block">{{ decision.rationale }}</div>
+        {% endif %}
+
+        {# ==================== EVIDENCE FILES ==================== #}
+        <h2 class="section-title"><i class="bi bi-paperclip me-2"></i>Evidence Files</h2>
+        {% if evidence_files %}
+            {% for file in evidence_files %}
+            <div class="evidence-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-file-earmark me-2"></i>
+                        <strong>{{ file.original_filename }}</strong>
+                    </div>
+                    <small class="text-muted">{{ file.uploaded_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="no-data">No evidence files uploaded.</p>
+        {% endif %}
+
+        {# ==================== FOLLOW-UPS ==================== #}
+        <h2 class="section-title"><i class="bi bi-chat-left-text me-2"></i>Follow-up Requests</h2>
+        {% if follow_ups %}
+            {% for followup in follow_ups %}
+            <div class="followup-item">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <strong>{{ followup.message }}</strong>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-muted d-block">{{ followup.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                        {% if followup.response_text %}
+                        <span class="eval-badge eval-meets">Answered</span>
+                        {% else %}
+                        <span class="eval-badge eval-partial">Open</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if followup.response_text %}
+                <div class="followup-response">
+                    <span style="font-weight: 600; font-size: 0.75rem; color: #6b7280; text-transform: uppercase;">Vendor Response</span>
+                    <p class="mb-0">{{ followup.response_text }}</p>
+                    {% if followup.responded_at %}
+                    <small class="text-muted">Responded: {{ followup.responded_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p class="no-data">No follow-up requests.</p>
+        {% endif %}
+
+        {# ==================== FOOTER ==================== #}
+        <div class="text-center text-muted mt-5 pt-3 border-top">
+            <small>Generated by RiskQ on {{ now.strftime('%Y-%m-%d %H:%M UTC') }}</small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

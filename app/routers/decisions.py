@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -17,8 +19,8 @@ from app.services.lifecycle import transition_to_reviewed
 router = APIRouter()
 
 
-@router.get("/assessments/{assessment_id}/decision", response_class=HTMLResponse)
-async def assessment_decision_page(request: Request, assessment_id: int, db: Session = Depends(get_db)):
+def _load_decision_context(db: Session, assessment_id: int):
+    """Load all shared data needed by the decision page and report page."""
     assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
@@ -44,25 +46,77 @@ async def assessment_decision_page(request: Request, assessment_id: int, db: Ses
     scores = compute_assessment_scores(questions, response)
     risk_suggestions = match_risk_statements(db, scores)
 
-    evidence_count = len(response.evidence_files) if response else 0
-    followup_total = len(response.follow_ups) if response else 0
-    followup_open = sum(1 for f in response.follow_ups if not f.response_text) if response else 0
+    evidence_files = response.evidence_files if response else []
+    follow_ups = response.follow_ups if response else []
+    evidence_count = len(evidence_files)
+    followup_total = len(follow_ups)
+    followup_open = sum(1 for f in follow_ups if not f.response_text)
 
-    return templates.TemplateResponse("assessment_decision.html", {
-        "request": request,
+    return {
         "assessment": assessment,
         "vendor": vendor,
         "decision": decision,
         "response": response,
-        "total_questions": len(questions),
+        "questions": questions,
         "scores": scores,
-        **{k: scores[k] for k in ("meets_count", "partial_count", "does_not_meet_count", "no_expectation_count")},
+        "risk_suggestions": risk_suggestions,
+        "evidence_files": evidence_files,
+        "follow_ups": follow_ups,
         "evidence_count": evidence_count,
         "followup_total": followup_total,
         "followup_open": followup_open,
+    }
+
+
+@router.get("/assessments/{assessment_id}/decision", response_class=HTMLResponse)
+async def assessment_decision_page(request: Request, assessment_id: int, db: Session = Depends(get_db)):
+    ctx = _load_decision_context(db, assessment_id)
+    scores = ctx["scores"]
+
+    return templates.TemplateResponse("assessment_decision.html", {
+        "request": request,
+        "assessment": ctx["assessment"],
+        "vendor": ctx["vendor"],
+        "decision": ctx["decision"],
+        "response": ctx["response"],
+        "total_questions": len(ctx["questions"]),
+        "scores": scores,
+        **{k: scores[k] for k in ("meets_count", "partial_count", "does_not_meet_count", "no_expectation_count")},
+        "evidence_files": ctx["evidence_files"],
+        "follow_ups": ctx["follow_ups"],
+        "evidence_count": ctx["evidence_count"],
+        "followup_total": ctx["followup_total"],
+        "followup_open": ctx["followup_open"],
         "risk_levels": VALID_RISK_LEVELS,
         "decision_outcomes": VALID_DECISION_OUTCOMES,
-        "risk_suggestions": risk_suggestions,
+        "risk_suggestions": ctx["risk_suggestions"],
+    })
+
+
+@router.get("/assessments/{assessment_id}/report", response_class=HTMLResponse)
+async def assessment_report_page(request: Request, assessment_id: int, db: Session = Depends(get_db)):
+    ctx = _load_decision_context(db, assessment_id)
+
+    if ctx["decision"].status != DECISION_STATUS_FINAL:
+        return RedirectResponse(
+            url=f"/assessments/{assessment_id}/decision?message=Report is only available for finalized assessments&message_type=warning",
+            status_code=303
+        )
+
+    scores = ctx["scores"]
+
+    return templates.TemplateResponse("assessment_report.html", {
+        "request": request,
+        "assessment": ctx["assessment"],
+        "vendor": ctx["vendor"],
+        "decision": ctx["decision"],
+        "response": ctx["response"],
+        "total_questions": len(ctx["questions"]),
+        "scores": scores,
+        **{k: scores[k] for k in ("meets_count", "partial_count", "does_not_meet_count", "no_expectation_count")},
+        "evidence_files": ctx["evidence_files"],
+        "follow_ups": ctx["follow_ups"],
+        "now": datetime.utcnow(),
     })
 
 
