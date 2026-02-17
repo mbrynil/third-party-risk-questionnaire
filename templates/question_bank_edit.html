@@ -74,14 +74,39 @@
 
                     <div class="mb-3" id="custom-options-section"
                          style="display: {% if item and has_custom_answer_options(item) %}block{% else %}none{% endif %};">
-                        <label for="custom_options" class="form-label">
-                            Custom Answer Options <span class="text-muted">(one per line, minimum 2)</span>
+                        <label class="form-label">
+                            Custom Answer Options <span class="text-muted">(minimum 2)</span>
                         </label>
-                        <textarea id="custom_options" name="custom_options" rows="5"
-                                  class="form-control"
-                                  placeholder="< 6 hours&#10;< 12 hours&#10;< 24 hours&#10;< 48 hours">{% if item and has_custom_answer_options(item) %}{% for opt in get_answer_options(item) %}{{ opt }}{% if not loop.last %}
-{% endif %}{% endfor %}{% endif %}</textarea>
-                        <div class="form-text">Enter each answer option on a new line. Scoring will be binary (meets / does not meet).</div>
+                        <div id="options-list">
+                            {% if item and has_custom_answer_options(item) %}
+                                {% for opt in get_answer_options(item) %}
+                                <div class="input-group mb-2 option-row">
+                                    <input type="text" class="form-control option-input" placeholder="Answer option" value="{{ opt }}">
+                                    <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)" title="Remove">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="input-group mb-2 option-row">
+                                    <input type="text" class="form-control option-input" placeholder="Answer option">
+                                    <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)" title="Remove">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                                <div class="input-group mb-2 option-row">
+                                    <input type="text" class="form-control option-input" placeholder="Answer option">
+                                    <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)" title="Remove">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addOption()">
+                            <i class="bi bi-plus-lg me-1"></i>Add Option
+                        </button>
+                        <div class="form-text mt-2">Scoring will be binary (meets / does not meet).</div>
+                        <input type="hidden" id="custom_options" name="custom_options" value="">
                     </div>
 
                     {% if item %}
@@ -110,5 +135,36 @@ function toggleCustomOptions() {
     var isCustom = document.getElementById('answer_custom').checked;
     document.getElementById('custom-options-section').style.display = isCustom ? 'block' : 'none';
 }
+
+function addOption() {
+    var list = document.getElementById('options-list');
+    var div = document.createElement('div');
+    div.className = 'input-group mb-2 option-row';
+    div.innerHTML = '<input type="text" class="form-control option-input" placeholder="Answer option">' +
+        '<button type="button" class="btn btn-outline-danger" onclick="removeOption(this)" title="Remove">' +
+        '<i class="bi bi-x-lg"></i></button>';
+    list.appendChild(div);
+    div.querySelector('input').focus();
+}
+
+function removeOption(btn) {
+    var rows = document.querySelectorAll('.option-row');
+    if (rows.length <= 2) {
+        btn.closest('.option-row').querySelector('input').value = '';
+        return;
+    }
+    btn.closest('.option-row').remove();
+}
+
+// Serialize option inputs into hidden field before submit
+document.querySelector('form').addEventListener('submit', function() {
+    var inputs = document.querySelectorAll('.option-input');
+    var values = [];
+    inputs.forEach(function(input) {
+        var v = input.value.trim();
+        if (v) values.push(v);
+    });
+    document.getElementById('custom_options').value = values.join('\n');
+});
 </script>
 {% endblock %}
