@@ -15,6 +15,7 @@ from app.services.decision_service import get_or_create_decision, save_decision
 from app.services.scoring import compute_assessment_scores
 from app.services.risk_statements import match_risk_statements
 from app.services.lifecycle import transition_to_reviewed
+from app.services.draft_generator import generate_draft
 
 router = APIRouter()
 
@@ -118,6 +119,35 @@ async def assessment_report_page(request: Request, assessment_id: int, db: Sessi
         "follow_ups": ctx["follow_ups"],
         "now": datetime.utcnow(),
     })
+
+
+@router.post("/assessments/{assessment_id}/decision/generate")
+async def auto_generate_draft(assessment_id: int, db: Session = Depends(get_db)):
+    ctx = _load_decision_context(db, assessment_id)
+    decision = ctx["decision"]
+
+    if decision.status == DECISION_STATUS_FINAL:
+        return RedirectResponse(
+            url=f"/assessments/{assessment_id}/decision?message=Cannot generate draft — assessment already finalized&message_type=warning",
+            status_code=303
+        )
+
+    generated = generate_draft(ctx["scores"], ctx["risk_suggestions"])
+
+    save_decision(
+        db, decision, "draft",
+        overall_risk_rating=generated["overall_risk_rating"],
+        decision_outcome=generated["decision_outcome"],
+        key_findings=generated["key_findings"],
+        remediation_required=generated["remediation_required"],
+        rationale=generated["rationale"],
+    )
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/assessments/{assessment_id}/decision?message=Draft auto-generated. Review and edit before finalizing.&message_type=success",
+        status_code=303
+    )
 
 
 @router.post("/assessments/{assessment_id}/decision", response_class=HTMLResponse)

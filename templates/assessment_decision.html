@@ -552,10 +552,14 @@
 
 {% else %}
 {# ==================== DRAFT: EDITABLE DECISION FORM ==================== #}
+<form id="generate-form" method="post" action="/assessments/{{ assessment.id }}/decision/generate" style="display:none"></form>
 <form method="post">
 <div class="card mb-4">
-    <div class="card-header">
-        <i class="bi bi-shield-check me-2"></i>Assessment Decision
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div><i class="bi bi-shield-check me-2"></i>Assessment Decision</div>
+        <button type="submit" form="generate-form" class="btn btn-sm btn-outline-primary" title="Pre-fill findings, remediation, rationale, risk rating, and outcome from assessment scores">
+            <i class="bi bi-magic me-1"></i>Auto-Generate Draft
+        </button>
     </div>
     <div class="card-body">
 
