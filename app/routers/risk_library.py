@@ -4,10 +4,12 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from app import templates
+import json as json_lib
+
 from models import (
     get_db, RiskStatement, QuestionBankItem,
     VALID_TRIGGER_CONDITIONS, VALID_SEVERITIES, TRIGGER_LABELS,
-    TRIGGER_QUESTION_ANSWERED, VALID_CHOICES,
+    TRIGGER_QUESTION_ANSWERED, VALID_CHOICES, get_answer_options,
 )
 
 router = APIRouter()
@@ -29,14 +31,20 @@ def _get_question_bank_items(db: Session) -> list[dict]:
 
 def _form_context(db: Session, statement=None, error=None):
     """Build common template context for the risk library edit form."""
+    items = db.query(QuestionBankItem).filter(
+        QuestionBankItem.is_active == True
+    ).order_by(QuestionBankItem.category, QuestionBankItem.id).all()
+    question_bank_items = [{"id": item.id, "text": item.text, "category": item.category} for item in items]
+    answer_options_map = {item.id: get_answer_options(item) for item in items}
     return {
         "statement": statement,
         "categories": _get_categories(db),
         "trigger_conditions": VALID_TRIGGER_CONDITIONS,
         "trigger_labels": TRIGGER_LABELS,
         "severities": VALID_SEVERITIES,
-        "question_bank_items": _get_question_bank_items(db),
+        "question_bank_items": question_bank_items,
         "answer_choices": VALID_CHOICES,
+        "answer_options_map": json_lib.dumps(answer_options_map),
         "error": error,
     }
 

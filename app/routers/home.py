@@ -6,7 +6,7 @@ import json
 from app import templates
 from models import (
     get_db, Assessment, Question, QuestionBankItem, ConditionalRule,
-    VALID_CHOICES,
+    VALID_CHOICES, get_answer_options,
 )
 from app.services.token import generate_unique_token
 from app.services.vendor_service import find_or_create_vendor
@@ -31,9 +31,12 @@ async def create_assessment_page(request: Request, db: Session = Depends(get_db)
             categories[item.category] = []
         categories[item.category].append(item)
 
+    bank_item_options = {str(item.id): get_answer_options(item) for item in question_bank}
+
     return templates.TemplateResponse("create.html", {
         "request": request,
-        "categories": categories
+        "categories": categories,
+        "bank_item_options_json": json.dumps(bank_item_options),
     })
 
 
@@ -57,9 +60,14 @@ async def create_assessment(
             if item.category not in categories:
                 categories[item.category] = []
             categories[item.category].append(item)
+        bank_item_options = {}
+        for cat_items in categories.values():
+            for item in cat_items:
+                bank_item_options[str(item.id)] = get_answer_options(item)
         return templates.TemplateResponse("create.html", {
             "request": request,
             "categories": categories,
+            "bank_item_options_json": json.dumps(bank_item_options),
             "error": "Please select at least one question from the bank or add custom questions."
         })
 
@@ -89,7 +97,8 @@ async def create_assessment(
             expected_values_json = None
             expected_value_single = None
             if expected_list:
-                valid_expected = [v for v in expected_list if v in VALID_CHOICES]
+                valid_opts = get_answer_options(bank_item)
+                valid_expected = [v for v in expected_list if v in valid_opts]
                 if valid_expected:
                     expected_values_json = json.dumps(valid_expected)
                     expected_value_single = valid_expected[0]
@@ -107,7 +116,8 @@ async def create_assessment(
                 expected_value_type="CHOICE",
                 answer_mode=answer_mode,
                 category=bank_item.category,
-                question_bank_item_id=bank_item.id
+                question_bank_item_id=bank_item.id,
+                answer_options=bank_item.answer_options,
             )
             db.add(question)
             order += 1

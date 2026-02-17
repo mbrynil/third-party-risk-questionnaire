@@ -307,6 +307,8 @@
                                 <span class="answer-choice answer-partial">Partial</span>
                                 {% elif choice == 'na' %}
                                 <span class="answer-choice answer-na">N/A</span>
+                                {% else %}
+                                <span class="answer-choice" style="background:#d1ecf1;color:#0c5460;">{{ choice }}</span>
                                 {% endif %}
                             {% endfor %}
                         {% else %}
@@ -318,6 +320,8 @@
                             <span class="answer-choice answer-partial">Partial</span>
                             {% elif answer.answer_choice == 'na' %}
                             <span class="answer-choice answer-na">N/A</span>
+                            {% else %}
+                            <span class="answer-choice" style="background:#d1ecf1;color:#0c5460;">{{ answer.answer_choice }}</span>
                             {% endif %}
                         {% endif %}
                     {% else %}

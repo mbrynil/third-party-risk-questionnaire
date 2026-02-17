@@ -4,8 +4,11 @@ from sqlalchemy.orm import Session
 import json
 
 from app import templates
+import json as json_lib
+
 from models import (
     get_db, Assessment, Question, QuestionBankItem, ConditionalRule,
+    get_answer_options, has_custom_answer_options,
 )
 from app.services.lifecycle import transition_to_sent, transition_to_reviewed
 
@@ -38,12 +41,15 @@ async def edit_assessment_page(request: Request, assessment_id: int, db: Session
             categories[item.category] = []
         categories[item.category].append(item)
 
+    question_options = {str(q.id): get_answer_options(q) for q in questions}
+
     return templates.TemplateResponse("edit.html", {
         "request": request,
         "assessment": assessment,
         "questions": questions,
         "rules": rules,
-        "categories": categories
+        "categories": categories,
+        "question_options_json": json_lib.dumps(question_options),
     })
 
 
@@ -81,7 +87,8 @@ async def update_assessment(
 
         expected_list = form_data.getlist(f"expected_{q.id}[]")
         if expected_list:
-            valid_expected = [v for v in expected_list if v in ["yes", "no", "partial", "na"]]
+            valid_opts = get_answer_options(q)
+            valid_expected = [v for v in expected_list if v in valid_opts]
             if valid_expected:
                 q.expected_values = json.dumps(valid_expected)
                 q.expected_value = valid_expected[0]
@@ -155,7 +162,8 @@ async def add_questions_to_assessment(
                         expected_value_type="CHOICE",
                         answer_mode="SINGLE",
                         category=bank_item.category,
-                        question_bank_item_id=bank_item.id
+                        question_bank_item_id=bank_item.id,
+                        answer_options=bank_item.answer_options,
                     )
                     db.add(question)
                     order += 1

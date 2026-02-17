@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from models import (
     Question, Response, Answer,
     VALID_CHOICES, RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED,
+    get_answer_options,
 )
 
 
@@ -21,7 +22,7 @@ def validate_answers(questions: list, form_data, action: str) -> list[str]:
         else:
             choice_key = f"choice_{question.id}"
             choice_value = form_data.get(choice_key, "")
-            if not choice_value or choice_value not in VALID_CHOICES:
+            if not choice_value or choice_value not in get_answer_options(question):
                 missing.append(question)
 
     if missing:
@@ -65,12 +66,14 @@ def save_or_update_response(
         if question.answer_mode == "MULTI":
             multi_key = f"multi_{question.id}[]"
             multi_values = form_data.getlist(multi_key)
-            valid_multi = [v for v in multi_values if v in VALID_CHOICES]
+            opts = get_answer_options(question)
+            valid_multi = [v for v in multi_values if v in opts]
             choice_value = ",".join(valid_multi) if valid_multi else None
         else:
             choice_key = f"choice_{question.id}"
             choice_value = form_data.get(choice_key, "") or None
-            choice_value = choice_value if choice_value in VALID_CHOICES else None
+            opts = get_answer_options(question)
+            choice_value = choice_value if choice_value in opts else None
 
         answer = Answer(
             response_id=response.id,

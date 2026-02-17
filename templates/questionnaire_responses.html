@@ -281,6 +281,8 @@
                                         <span class="badge bg-warning text-dark"><i class="bi bi-dash-circle me-1"></i>Partial</span>
                                         {% elif choice == 'na' %}
                                         <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>N/A</span>
+                                        {% else %}
+                                        <span class="badge bg-info text-dark">{{ choice }}</span>
                                         {% endif %}
                                     {% endfor %}
                                 {% else %}
@@ -292,6 +294,8 @@
                                     <span class="badge bg-warning text-dark"><i class="bi bi-dash-circle me-1"></i>Partial</span>
                                     {% elif answer.answer_choice == 'na' %}
                                     <span class="badge bg-secondary"><i class="bi bi-slash-circle me-1"></i>N/A</span>
+                                    {% else %}
+                                    <span class="badge bg-info text-dark">{{ answer.answer_choice }}</span>
                                     {% endif %}
                                 {% endif %}
                             {% else %}

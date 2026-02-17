@@ -101,12 +101,9 @@
                             </label>
                             <select id="trigger_answer_value" name="trigger_answer_value" class="form-select">
                                 <option value="">-- Select --</option>
-                                {% for choice in answer_choices %}
-                                <option value="{{ choice }}"
-                                        {% if statement and statement.trigger_answer_value == choice %}selected{% endif %}>
-                                    {{ choice }}
-                                </option>
-                                {% endfor %}
+                                {% if statement and statement.trigger_answer_value %}
+                                <option value="{{ statement.trigger_answer_value }}" selected>{{ statement.trigger_answer_value }}</option>
+                                {% endif %}
                             </select>
                         </div>
                     </div>
@@ -159,6 +156,9 @@
     var categoryInput = document.getElementById('category');
     var categoryHelp = document.getElementById('category-help-text');
     var questionSelect = document.getElementById('trigger_question_id');
+    var answerSelect = document.getElementById('trigger_answer_value');
+    var answerOptionsMap = {{ answer_options_map|safe }};
+    var currentAnswerValue = '{{ statement.trigger_answer_value if statement and statement.trigger_answer_value else '' }}';
 
     function toggleQuestionFields() {
         var isQuestion = triggerSelect.value === 'QUESTION_ANSWERED';
@@ -167,8 +167,8 @@
         if (isQuestion) {
             categoryInput.readOnly = true;
             categoryHelp.textContent = 'Auto-filled from selected question.';
-            // Auto-fill category from selected question
             updateCategoryFromQuestion();
+            updateAnswerOptions();
         } else {
             categoryInput.readOnly = false;
             categoryHelp.textContent = 'Select from existing categories or type a new one.';
@@ -182,10 +182,25 @@
         }
     }
 
+    function updateAnswerOptions() {
+        var qid = questionSelect.value;
+        var opts = answerOptionsMap[qid] || ['yes','no','partial','na'];
+        answerSelect.innerHTML = '<option value="">-- Select --</option>';
+        opts.forEach(function(opt) {
+            var option = document.createElement('option');
+            option.value = opt;
+            option.textContent = opt;
+            if (opt === currentAnswerValue) option.selected = true;
+            answerSelect.appendChild(option);
+        });
+    }
+
     triggerSelect.addEventListener('change', toggleQuestionFields);
     questionSelect.addEventListener('change', function() {
         if (triggerSelect.value === 'QUESTION_ANSWERED') {
             updateCategoryFromQuestion();
+            currentAnswerValue = '';
+            updateAnswerOptions();
         }
     });
 

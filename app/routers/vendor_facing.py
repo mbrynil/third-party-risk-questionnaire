@@ -11,6 +11,7 @@ from models import (
     get_db, Assessment, Question, Response, EvidenceFile, FollowUp, ConditionalRule,
     RESPONSE_STATUS_DRAFT, RESPONSE_STATUS_SUBMITTED, RESPONSE_STATUS_NEEDS_INFO,
     ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED,
+    get_answer_options, has_custom_answer_options,
 )
 from app.services.response_service import validate_answers, save_or_update_response
 from app.services.evidence_service import validate_upload, store_file
@@ -55,6 +56,9 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
             Response.vendor_email == email
         ).order_by(Response.last_saved_at.desc()).first()
 
+    question_options = {q.id: get_answer_options(q) for q in questions}
+    question_has_custom = {q.id: has_custom_answer_options(q) for q in questions}
+
     return templates.TemplateResponse("vendor_form.html", {
         "request": request,
         "assessment": assessment,
@@ -64,7 +68,9 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
         "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
         "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
         "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
-        "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED
+        "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED,
+        "question_options": question_options,
+        "question_has_custom": question_has_custom,
     })
 
 
@@ -95,6 +101,8 @@ async def submit_vendor_response(
             "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
             "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
             "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED,
+            "question_options": {q.id: get_answer_options(q) for q in questions},
+            "question_has_custom": {q.id: has_custom_answer_options(q) for q in questions},
             "error": "This assessment has already been submitted and cannot be edited."
         })
 
@@ -128,6 +136,8 @@ async def submit_vendor_response(
             "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
             "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
             "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED,
+            "question_options": {q.id: get_answer_options(q) for q in questions},
+            "question_has_custom": {q.id: has_custom_answer_options(q) for q in questions},
             "error": "You have already submitted this questionnaire. Editing is no longer allowed."
         })
 
@@ -142,7 +152,9 @@ async def submit_vendor_response(
             "error": " ".join(errors),
             "form_data": dict(form_data),
             "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
-            "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO
+            "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
+            "question_options": {q.id: get_answer_options(q) for q in questions},
+            "question_has_custom": {q.id: has_custom_answer_options(q) for q in questions},
         })
 
     response = save_or_update_response(
@@ -170,6 +182,8 @@ async def submit_vendor_response(
             "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
             "ASSESSMENT_STATUS_SUBMITTED": ASSESSMENT_STATUS_SUBMITTED,
             "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED,
+            "question_options": {q.id: get_answer_options(q) for q in questions},
+            "question_has_custom": {q.id: has_custom_answer_options(q) for q in questions},
             "success": f"Draft saved at {response.last_saved_at.strftime('%Y-%m-%d %H:%M:%S')} UTC"
         })
 

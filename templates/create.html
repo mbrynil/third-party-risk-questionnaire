@@ -94,22 +94,6 @@
                             </select>
                             <div class="expected-checkboxes ms-2 d-flex gap-1 flex-wrap" style="display: none;" data-qid="{{ item.id }}">
                                 <span class="text-muted small me-1" style="line-height: 1.8;">Expected:</span>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="checkbox" name="expected_{{ item.id }}[]" value="yes" id="exp_yes_{{ item.id }}">
-                                    <label class="form-check-label small" for="exp_yes_{{ item.id }}">Yes</label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="checkbox" name="expected_{{ item.id }}[]" value="no" id="exp_no_{{ item.id }}">
-                                    <label class="form-check-label small" for="exp_no_{{ item.id }}">No</label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="checkbox" name="expected_{{ item.id }}[]" value="partial" id="exp_partial_{{ item.id }}">
-                                    <label class="form-check-label small" for="exp_partial_{{ item.id }}">Partial</label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="checkbox" name="expected_{{ item.id }}[]" value="na" id="exp_na_{{ item.id }}">
-                                    <label class="form-check-label small" for="exp_na_{{ item.id }}">N/A</label>
-                                </div>
                             </div>
                             <select class="form-select form-select-sm answer-mode-select ms-2" 
                                     name="answer_mode_{{ item.id }}" style="width: 120px; display: none;"
@@ -213,16 +197,18 @@
 </form>
 
 <script>
+var bankItemOptions = {{ bank_item_options_json|safe }};
+
 document.addEventListener('DOMContentLoaded', function() {
     updateSelectedCount();
-    
+
     document.querySelectorAll('.question-checkbox').forEach(function(checkbox) {
         checkbox.addEventListener('change', function() {
             updateSelectedCount();
             toggleWeightSelect(this);
         });
     });
-    
+
     document.getElementById('searchQuestions').addEventListener('input', function(e) {
         const searchTerm = e.target.value.toLowerCase();
         document.querySelectorAll('.question-item').forEach(function(item) {
@@ -233,7 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 item.style.display = 'none';
             }
         });
-        
+
         document.querySelectorAll('.category-section').forEach(function(section) {
             const visibleItems = section.querySelectorAll('.question-item:not([style*="display: none"])');
             if (visibleItems.length === 0) {
@@ -263,13 +249,31 @@ function selectCategory(category) {
 function toggleWeightSelect(checkbox) {
     const qid = checkbox.dataset.qid;
     const weightSelect = document.querySelector('.weight-select[data-qid="' + qid + '"]');
-    const expectedCheckboxes = document.querySelector('.expected-checkboxes[data-qid="' + qid + '"]');
+    const expectedContainer = document.querySelector('.expected-checkboxes[data-qid="' + qid + '"]');
     const answerModeSelect = document.querySelector('.answer-mode-select[data-qid="' + qid + '"]');
     if (weightSelect) {
         weightSelect.style.display = checkbox.checked ? 'block' : 'none';
     }
-    if (expectedCheckboxes) {
-        expectedCheckboxes.style.display = checkbox.checked ? 'flex' : 'none';
+    if (expectedContainer) {
+        if (checkbox.checked) {
+            expectedContainer.style.display = 'flex';
+            // Populate expected checkboxes from bankItemOptions
+            var opts = bankItemOptions[qid] || ['yes','no','partial','na'];
+            // Keep the label, remove old checkboxes
+            var label = expectedContainer.querySelector('span');
+            expectedContainer.innerHTML = '';
+            if (label) expectedContainer.appendChild(label);
+            opts.forEach(function(opt, idx) {
+                var div = document.createElement('div');
+                div.className = 'form-check form-check-inline';
+                var cbId = 'exp_' + qid + '_' + idx;
+                div.innerHTML = '<input class="form-check-input" type="checkbox" name="expected_' + qid + '[]" value="' + opt + '" id="' + cbId + '">' +
+                    '<label class="form-check-label small" for="' + cbId + '">' + opt + '</label>';
+                expectedContainer.appendChild(div);
+            });
+        } else {
+            expectedContainer.style.display = 'none';
+        }
     }
     if (answerModeSelect) {
         answerModeSelect.style.display = checkbox.checked ? 'block' : 'none';
@@ -340,24 +344,14 @@ document.addEventListener('DOMContentLoaded', function() {
             container.innerHTML = '<span class="text-muted small">Select trigger first</span>';
             return;
         }
-        container.innerHTML = `
-            <div class="form-check form-check-inline">
-                <input class="form-check-input trigger-value-cb" type="checkbox" value="yes" id="tv_yes">
-                <label class="form-check-label small" for="tv_yes">Yes</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input trigger-value-cb" type="checkbox" value="no" id="tv_no">
-                <label class="form-check-label small" for="tv_no">No</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input trigger-value-cb" type="checkbox" value="partial" id="tv_partial">
-                <label class="form-check-label small" for="tv_partial">Partial</label>
-            </div>
-            <div class="form-check form-check-inline">
-                <input class="form-check-input trigger-value-cb" type="checkbox" value="na" id="tv_na">
-                <label class="form-check-label small" for="tv_na">N/A</label>
-            </div>
-        `;
+        var opts = bankItemOptions[this.value] || ['yes','no','partial','na'];
+        var html = '';
+        opts.forEach(function(opt, idx) {
+            html += '<div class="form-check form-check-inline">' +
+                '<input class="form-check-input trigger-value-cb" type="checkbox" value="' + opt + '" id="tv_' + idx + '">' +
+                '<label class="form-check-label small" for="tv_' + idx + '">' + opt + '</label></div>';
+        });
+        container.innerHTML = html;
     });
 });
 

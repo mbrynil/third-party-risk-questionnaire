@@ -17,6 +17,7 @@ class QuestionBankItem(Base):
     category = Column(String(100), nullable=False, index=True)
     text = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
+    answer_options = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -71,6 +72,7 @@ class TemplateQuestion(Base):
     expected_value_type = Column(String(20), default="CHOICE", nullable=False)
     answer_mode = Column(String(20), default="SINGLE", nullable=False)
     category = Column(String(100), nullable=True, index=True)
+    answer_options = Column(Text, nullable=True)
 
     template = relationship("AssessmentTemplate", back_populates="template_questions")
 
@@ -163,6 +165,7 @@ class Question(Base):
     answer_mode = Column(String(20), default=ANSWER_MODE_SINGLE, nullable=False)
     category = Column(String(100), nullable=True, index=True)
     question_bank_item_id = Column(Integer, ForeignKey("question_bank_items.id"), nullable=True)
+    answer_options = Column(Text, nullable=True)
 
     assessment = relationship("Assessment", back_populates="questions")
     question_bank_item = relationship("QuestionBankItem")
@@ -196,7 +199,7 @@ class Answer(Base):
     id = Column(Integer, primary_key=True, index=True)
     response_id = Column(Integer, ForeignKey("responses.id"), nullable=False)
     question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
-    answer_choice = Column(String(20), nullable=True)
+    answer_choice = Column(String(255), nullable=True)
     answer_text = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
 
@@ -329,7 +332,7 @@ class RiskStatement(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     trigger_question_id = Column(Integer, ForeignKey("question_bank_items.id"), nullable=True)
-    trigger_answer_value = Column(String(20), nullable=True)
+    trigger_answer_value = Column(String(255), nullable=True)
 
     trigger_question = relationship("QuestionBankItem")
 
@@ -342,12 +345,49 @@ EVAL_DOES_NOT_MEET = "DOES_NOT_MEET_EXPECTATION"
 EVAL_NO_EXPECTATION = "NO_EXPECTATION_DEFINED"
 
 
-def compute_expectation_status(expected_value, answer_choice, expected_values=None, answer_mode="SINGLE"):
+def get_answer_options(obj):
+    """Parse answer_options JSON from a Question/TemplateQuestion/QuestionBankItem, or return VALID_CHOICES as default."""
+    import json
+    if obj and getattr(obj, 'answer_options', None):
+        try:
+            parsed = json.loads(obj.answer_options)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return list(VALID_CHOICES)
+
+
+def has_custom_answer_options(obj):
+    """True if obj uses non-default (custom) answer options."""
+    import json
+    if obj and getattr(obj, 'answer_options', None):
+        try:
+            parsed = json.loads(obj.answer_options)
+            if isinstance(parsed, list) and len(parsed) > 0:
+                return True
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return False
+
+
+def compute_expectation_status(expected_value, answer_choice, expected_values=None, answer_mode="SINGLE", answer_options=None):
     """
     Compute evaluation status by comparing vendor answer to expected answer(s).
     Returns one of: EVAL_MEETS, EVAL_PARTIAL, EVAL_DOES_NOT_MEET, EVAL_NO_EXPECTATION
+
+    If answer_options is set (custom answers), scoring is binary: MEETS or DOES_NOT_MEET only.
     """
     import json
+
+    is_custom = False
+    if answer_options:
+        try:
+            parsed = json.loads(answer_options) if isinstance(answer_options, str) else answer_options
+            if isinstance(parsed, list) and len(parsed) > 0:
+                is_custom = True
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     expected_set = set()
     if expected_values:
@@ -376,7 +416,7 @@ def compute_expectation_status(expected_value, answer_choice, expected_values=No
 
         if intersection and answers <= expected_set:
             return EVAL_MEETS
-        elif intersection:
+        elif intersection and not is_custom:
             return EVAL_PARTIAL
         else:
             return EVAL_DOES_NOT_MEET
@@ -386,7 +426,7 @@ def compute_expectation_status(expected_value, answer_choice, expected_values=No
         if answer_lower in expected_set:
             return EVAL_MEETS
 
-        if answer_lower == "partial" and "yes" in expected_set:
+        if not is_custom and answer_lower == "partial" and "yes" in expected_set:
             return EVAL_PARTIAL
 
         return EVAL_DOES_NOT_MEET

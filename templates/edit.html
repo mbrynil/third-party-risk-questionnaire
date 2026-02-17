@@ -95,29 +95,9 @@
                                             <option value="MULTI" {% if q.answer_mode == 'MULTI' %}selected{% endif %}>Multi-Select</option>
                                         </select>
                                     </div>
-                                    <div class="d-flex align-items-center gap-1">
+                                    <div class="d-flex align-items-center gap-1" id="expected-container-{{ q.id }}">
                                         <span class="small text-muted">Expected:</span>
                                         {% set expected_list = q.expected_values | default('[]', true) | safe %}
-                                        <div class="form-check form-check-inline mb-0">
-                                            <input class="form-check-input" type="checkbox" name="expected_{{ q.id }}[]" value="yes" 
-                                                   id="exp_yes_{{ q.id }}" {% if 'yes' in expected_list %}checked{% endif %}>
-                                            <label class="form-check-label small" for="exp_yes_{{ q.id }}">Yes</label>
-                                        </div>
-                                        <div class="form-check form-check-inline mb-0">
-                                            <input class="form-check-input" type="checkbox" name="expected_{{ q.id }}[]" value="no" 
-                                                   id="exp_no_{{ q.id }}" {% if 'no' in expected_list %}checked{% endif %}>
-                                            <label class="form-check-label small" for="exp_no_{{ q.id }}">No</label>
-                                        </div>
-                                        <div class="form-check form-check-inline mb-0">
-                                            <input class="form-check-input" type="checkbox" name="expected_{{ q.id }}[]" value="partial" 
-                                                   id="exp_partial_{{ q.id }}" {% if 'partial' in expected_list %}checked{% endif %}>
-                                            <label class="form-check-label small" for="exp_partial_{{ q.id }}">Partial</label>
-                                        </div>
-                                        <div class="form-check form-check-inline mb-0">
-                                            <input class="form-check-input" type="checkbox" name="expected_{{ q.id }}[]" value="na" 
-                                                   id="exp_na_{{ q.id }}" {% if 'na' in expected_list %}checked{% endif %}>
-                                            <label class="form-check-label small" for="exp_na_{{ q.id }}">N/A</label>
-                                        </div>
                                     </div>
                                     <button type="button" class="btn btn-sm btn-outline-danger ms-auto" onclick="removeQuestion({{ q.id }})">
                                         <i class="bi bi-trash"></i>
@@ -188,22 +168,7 @@
                     <div class="col-md-2">
                         <label class="form-label small">Is any of:</label>
                         <div id="newRuleTriggerValues" class="d-flex flex-wrap gap-1">
-                            <div class="form-check form-check-inline mb-0">
-                                <input class="form-check-input trigger-value-cb" type="checkbox" value="yes" id="tv_yes">
-                                <label class="form-check-label small" for="tv_yes">Yes</label>
-                            </div>
-                            <div class="form-check form-check-inline mb-0">
-                                <input class="form-check-input trigger-value-cb" type="checkbox" value="no" id="tv_no">
-                                <label class="form-check-label small" for="tv_no">No</label>
-                            </div>
-                            <div class="form-check form-check-inline mb-0">
-                                <input class="form-check-input trigger-value-cb" type="checkbox" value="partial" id="tv_partial">
-                                <label class="form-check-label small" for="tv_partial">Partial</label>
-                            </div>
-                            <div class="form-check form-check-inline mb-0">
-                                <input class="form-check-input trigger-value-cb" type="checkbox" value="na" id="tv_na">
-                                <label class="form-check-label small" for="tv_na">N/A</label>
-                            </div>
+                            <span class="text-muted small">Select trigger first</span>
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -327,6 +292,61 @@
 </form>
 
 <script>
+var questionOptions = {{ question_options_json|safe }};
+
+// Populate expected checkboxes for each question on load
+(function() {
+    for (var qid in questionOptions) {
+        var container = document.getElementById('expected-container-' + qid);
+        if (!container) continue;
+        var opts = questionOptions[qid];
+        // Parse existing expected values to check them
+        var expectedEl = container.closest('.question-card');
+        opts.forEach(function(opt, idx) {
+            var div = document.createElement('div');
+            div.className = 'form-check form-check-inline mb-0';
+            var cbId = 'exp_' + qid + '_' + idx;
+            div.innerHTML = '<input class="form-check-input" type="checkbox" name="expected_' + qid + '[]" value="' + opt + '" id="' + cbId + '">' +
+                '<label class="form-check-label small" for="' + cbId + '">' + opt + '</label>';
+            container.appendChild(div);
+        });
+    }
+    // Now check the ones that are already expected (from server data)
+    {% for q in questions %}
+    {% if q.expected_values %}
+    (function() {
+        var expected = {{ q.expected_values|safe }};
+        if (Array.isArray(expected)) {
+            expected.forEach(function(val) {
+                var container = document.getElementById('expected-container-{{ q.id }}');
+                if (container) {
+                    var cb = container.querySelector('input[value="' + val + '"]');
+                    if (cb) cb.checked = true;
+                }
+            });
+        }
+    })();
+    {% endif %}
+    {% endfor %}
+})();
+
+// Populate trigger values when trigger question changes
+document.getElementById('newRuleTrigger').addEventListener('change', function() {
+    var container = document.getElementById('newRuleTriggerValues');
+    if (!this.value) {
+        container.innerHTML = '<span class="text-muted small">Select trigger first</span>';
+        return;
+    }
+    var opts = questionOptions[this.value] || ['yes','no','partial','na'];
+    var html = '';
+    opts.forEach(function(opt, idx) {
+        html += '<div class="form-check form-check-inline mb-0">' +
+            '<input class="form-check-input trigger-value-cb" type="checkbox" value="' + opt + '" id="tv_' + idx + '">' +
+            '<label class="form-check-label small" for="tv_' + idx + '">' + opt + '</label></div>';
+    });
+    container.innerHTML = html;
+});
+
 document.getElementById('bankSearch').addEventListener('input', function(e) {
     const term = e.target.value.toLowerCase();
     document.querySelectorAll('.bank-question-item').forEach(function(item) {

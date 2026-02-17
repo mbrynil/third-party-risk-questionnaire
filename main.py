@@ -8,7 +8,7 @@ from models import (
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
 )
-from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library
+from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank
 
 app = FastAPI(title="Third-Party Risk Questionnaire System")
 
@@ -48,6 +48,7 @@ app.include_router(templates_mgmt.router)
 app.include_router(vendors.router)
 app.include_router(decisions.router)
 app.include_router(risk_library.router)
+app.include_router(question_bank.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -28,6 +28,7 @@ def clone_template_to_assessment(db: Session, template_id: int, assessment_id: i
             expected_value_type=sq.expected_value_type,
             answer_mode=sq.answer_mode,
             category=sq.category,
+            answer_options=sq.answer_options,
         )
         db.add(new_q)
         db.flush()
@@ -77,6 +78,7 @@ def clone_assessment_to_template(db: Session, assessment_id: int, template_id: i
             expected_value_type=sq.expected_value_type,
             answer_mode=sq.answer_mode,
             category=sq.category,
+            answer_options=sq.answer_options,
         )
         db.add(new_q)
         db.flush()

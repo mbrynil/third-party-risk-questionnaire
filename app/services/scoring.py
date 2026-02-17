@@ -69,7 +69,8 @@ def compute_assessment_scores(questions, response) -> dict:
 
         if response:
             eval_status = compute_expectation_status(
-                q.expected_value, answer_choice, q.expected_values, q.answer_mode
+                q.expected_value, answer_choice, q.expected_values, q.answer_mode,
+                answer_options=q.answer_options
             )
         else:
             eval_status = EVAL_NO_EXPECTATION

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Question Bank - RiskQ{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <h1><i class="bi bi-collection me-2"></i>Question Bank</h1>
+            <p>Manage your library of assessment questions</p>
+        </div>
+        <a href="/question-bank/new" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Add Question
+        </a>
+    </div>
+</div>
+
+{% if message %}
+<div class="alert alert-{{ message_type|default('info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul me-2"></i>{{ total_count }} Questions in {{ grouped|length }} Categories</span>
+        <input type="text" class="form-control form-control-sm" id="searchQuestions"
+               placeholder="Search questions..." style="width: 250px;">
+    </div>
+    <div class="card-body">
+        {% for category, items in grouped.items() %}
+        <div class="category-section mb-4" data-category="{{ category }}">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">
+                    <span class="badge bg-primary me-2">{{ category }}</span>
+                    <small class="text-muted">({{ items|length }} questions)</small>
+                </h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        {% for item in items %}
+                        <tr class="question-row" data-text="{{ item.text|lower }}">
+                            <td class="w-50">
+                                <span class="{% if not item.is_active %}text-muted text-decoration-line-through{% endif %}">{{ item.text }}</span>
+                            </td>
+                            <td>
+                                {% if has_custom_answer_options(item) %}
+                                <span class="badge bg-info text-dark me-1">Custom</span>
+                                {% for opt in get_answer_options(item) %}
+                                <span class="badge bg-light text-dark border" style="font-size: 0.7rem;">{{ opt }}</span>
+                                {% endfor %}
+                                {% else %}
+                                <span class="badge bg-secondary">Standard</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="/question-bank/{{ item.id }}/edit" class="btn btn-sm btn-outline-primary me-1">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form method="post" action="/question-bank/{{ item.id }}/toggle" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-{{ 'warning' if item.is_active else 'success' }}"
+                                            title="{{ 'Deactivate' if item.is_active else 'Activate' }}">
+                                        <i class="bi bi-{{ 'pause-circle' if item.is_active else 'play-circle' }}"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+document.getElementById('searchQuestions').addEventListener('input', function(e) {
+    const term = e.target.value.toLowerCase();
+    document.querySelectorAll('.question-row').forEach(function(row) {
+        row.style.display = row.dataset.text.includes(term) ? '' : 'none';
+    });
+    document.querySelectorAll('.category-section').forEach(function(section) {
+        const visible = section.querySelectorAll('.question-row:not([style*="display: none"])');
+        section.style.display = visible.length === 0 ? 'none' : '';
+    });
+});
+</script>
+{% endblock %}

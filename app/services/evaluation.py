@@ -9,7 +9,8 @@ def compute_response_evaluations(questions: list, response) -> dict:
         answer = answers_dict.get(q.id)
         answer_choice = answer.answer_choice if answer else None
         eval_dict[q.id] = compute_expectation_status(
-            q.expected_value, answer_choice, q.expected_values, q.answer_mode
+            q.expected_value, answer_choice, q.expected_values, q.answer_mode,
+            answer_options=q.answer_options
         )
     return eval_dict
 
@@ -31,6 +32,7 @@ def compute_expectation_stats(questions: list, response) -> dict:
                     answer.answer_choice,
                     q.expected_values,
                     q.answer_mode,
+                    answer_options=q.answer_options,
                 )
                 if status == "MEETS_EXPECTATION":
                     meets += 1
