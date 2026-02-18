@@ -102,3 +102,68 @@ def get_open_remediation_count(db: Session) -> int:
     return db.query(RemediationItem).filter(
         RemediationItem.status.notin_([REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED])
     ).count()
+
+
+def get_overdue_remediation_count(db: Session) -> int:
+    """Get total overdue remediation items (past due date and not closed/verified)."""
+    now = datetime.utcnow()
+    return db.query(RemediationItem).filter(
+        RemediationItem.due_date < now,
+        RemediationItem.status.notin_([REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED])
+    ).count()
+
+
+def get_portfolio_remediation_summary(db: Session) -> dict:
+    """Get portfolio-wide remediation summary for the print report."""
+    now = datetime.utcnow()
+    items = db.query(RemediationItem).all()
+
+    total = len(items)
+    open_count = sum(
+        1 for i in items
+        if i.status not in (REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED)
+    )
+    closed_count = sum(
+        1 for i in items
+        if i.status in (REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED)
+    )
+    overdue_count = sum(
+        1 for i in items
+        if i.due_date and i.due_date < now
+        and i.status not in (REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED)
+    )
+
+    severity_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for i in items:
+        if i.severity in severity_counts:
+            severity_counts[i.severity] += 1
+
+    # Top 10 most overdue items
+    overdue_items = [
+        i for i in items
+        if i.due_date and i.due_date < now
+        and i.status not in (REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED)
+    ]
+    overdue_items.sort(key=lambda x: x.due_date)
+    overdue_items = overdue_items[:10]
+
+    overdue_list = []
+    for i in overdue_items:
+        days_overdue = (now - i.due_date).days
+        overdue_list.append({
+            "id": i.id,
+            "title": i.title,
+            "severity": i.severity,
+            "due_date": i.due_date.strftime("%Y-%m-%d"),
+            "days_overdue": days_overdue,
+            "vendor": i.vendor,
+        })
+
+    return {
+        "total": total,
+        "open": open_count,
+        "closed": closed_count,
+        "overdue": overdue_count,
+        "severity_counts": severity_counts,
+        "overdue_items": overdue_list,
+    }

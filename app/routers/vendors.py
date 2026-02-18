@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, date
 
 from fastapi import APIRouter, Request, Form, Depends, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
@@ -16,9 +16,11 @@ from models import (
     VALID_CONTACT_ROLES, VALID_DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS,
     REMEDIATION_STATUS_LABELS, REMEDIATION_STATUS_COLORS,
     VALID_SEVERITIES,
+    DECISION_STATUS_FINAL,
 )
 from app.services.token import generate_unique_token
 from app.services.cloning import clone_template_to_assessment
+from urllib.parse import quote
 from app.services.tiering import compute_inherent_risk_tier, get_effective_tier, TIER_COLORS, TIER_LABELS
 from app.services.vendor_document_service import validate_document_upload, store_vendor_document
 from app.services.remediation_service import get_vendor_remediations, get_remediation_stats
@@ -146,6 +148,27 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
     remediations = get_vendor_remediations(db, vendor_id)
     remediation_stats = get_remediation_stats(db, vendor_id)
 
+    # Build score history from finalized decisions
+    RISK_LABELS = {"VERY_LOW": "Very Low", "LOW": "Low", "MODERATE": "Moderate", "HIGH": "High", "VERY_HIGH": "Very High"}
+    finalized_decisions = db.query(AssessmentDecision).filter(
+        AssessmentDecision.vendor_id == vendor_id,
+        AssessmentDecision.status == DECISION_STATUS_FINAL,
+        AssessmentDecision.finalized_at != None,
+    ).order_by(AssessmentDecision.finalized_at.asc()).all()
+
+    score_history = []
+    for d in finalized_decisions:
+        score = d.overall_score
+        if score is not None:
+            score_history.append({
+                "date": d.finalized_at.strftime("%Y-%m-%d"),
+                "score": score,
+                "risk_rating": RISK_LABELS.get(d.overall_risk_rating, d.overall_risk_rating or "—"),
+            })
+
+    import json
+    score_history_json = json.dumps(score_history)
+
     return templates.TemplateResponse("vendor_profile.html", {
         "request": request,
         "vendor": vendor,
@@ -163,6 +186,9 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         "remediation_stats": remediation_stats,
         "remediation_status_labels": REMEDIATION_STATUS_LABELS,
         "remediation_status_colors": REMEDIATION_STATUS_COLORS,
+        "current_date": date.today(),
+        "score_history": score_history,
+        "score_history_json": score_history_json,
     })
 
 
@@ -486,3 +512,75 @@ async def create_vendor_assessment(
         db.commit()
 
         return RedirectResponse(url=f"/create?vendor_id={vendor.id}&questionnaire_id={new_assessment.id}", status_code=303)
+
+
+# ==================== BULK OPERATIONS ====================
+
+@router.post("/bulk/send-assessments")
+async def bulk_send_assessments(
+    template_id: int = Form(...),
+    title_pattern: str = Form(...),
+    vendor_ids: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    ids = [int(x.strip()) for x in vendor_ids.split(",") if x.strip()]
+    if not ids:
+        return RedirectResponse(url="/?message=No vendors selected&message_type=warning", status_code=303)
+
+    tmpl = db.query(AssessmentTemplate).filter(AssessmentTemplate.id == template_id).first()
+    if not tmpl:
+        return RedirectResponse(url="/?message=Template not found&message_type=danger", status_code=303)
+
+    count = 0
+    for vid in ids:
+        vendor = db.query(Vendor).filter(Vendor.id == vid).first()
+        if not vendor:
+            continue
+
+        title = title_pattern.replace("{vendor_name}", vendor.name)
+        token = generate_unique_token(db)
+
+        assessment = Assessment(
+            company_name=vendor.name,
+            title=title.strip(),
+            token=token,
+            vendor_id=vendor.id,
+            template_id=tmpl.id,
+            status="SENT",
+        )
+        db.add(assessment)
+        db.flush()
+
+        clone_template_to_assessment(db, tmpl.id, assessment.id)
+        count += 1
+
+    db.commit()
+    msg = quote(f"Bulk sent {count} assessment(s) using template '{tmpl.name}'")
+    return RedirectResponse(url=f"/?message={msg}&message_type=success", status_code=303)
+
+
+@router.post("/bulk/assign-tier")
+async def bulk_assign_tier(
+    tier: str = Form(...),
+    tier_notes: str = Form(""),
+    vendor_ids: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    ids = [int(x.strip()) for x in vendor_ids.split(",") if x.strip()]
+    if not ids:
+        return RedirectResponse(url="/?message=No vendors selected&message_type=warning", status_code=303)
+
+    if tier not in VALID_INHERENT_RISK_TIERS:
+        return RedirectResponse(url="/?message=Invalid tier&message_type=danger", status_code=303)
+
+    count = 0
+    for vid in ids:
+        vendor = db.query(Vendor).filter(Vendor.id == vid).first()
+        if vendor:
+            vendor.tier_override = tier
+            vendor.tier_notes = tier_notes.strip() or None
+            count += 1
+
+    db.commit()
+    msg = quote(f"Assigned {tier} to {count} vendor(s)")
+    return RedirectResponse(url=f"/?message={msg}&message_type=success", status_code=303)

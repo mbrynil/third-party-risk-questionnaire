@@ -7,12 +7,13 @@ import json
 
 from app import templates
 from models import (
-    get_db, Assessment, Question, QuestionBankItem, ConditionalRule,
+    get_db, Assessment, AssessmentTemplate, Question, QuestionBankItem, ConditionalRule,
     VALID_CHOICES, get_answer_options,
 )
 from app.services.token import generate_unique_token
 from app.services.vendor_service import find_or_create_vendor
 from app.services.portfolio import get_portfolio_data
+from app.services.remediation_service import get_portfolio_remediation_summary
 
 router = APIRouter()
 
@@ -20,6 +21,7 @@ router = APIRouter()
 @router.get("/", response_class=HTMLResponse)
 async def home(request: Request, db: Session = Depends(get_db)):
     data = get_portfolio_data(db)
+    templates_list = db.query(AssessmentTemplate).order_by(AssessmentTemplate.name).all()
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "kpis": data["kpis"],
@@ -28,12 +30,15 @@ async def home(request: Request, db: Session = Depends(get_db)):
         "decision_outcomes_json": json.dumps(data["decision_outcomes"]),
         "assessment_pipeline_json": json.dumps(data["assessment_pipeline"]),
         "category_analysis_json": json.dumps(data["category_analysis"]),
+        "heatmap": data["heatmap"],
+        "assessment_templates": templates_list,
     })
 
 
 @router.get("/dashboard/report", response_class=HTMLResponse)
 async def portfolio_report(request: Request, db: Session = Depends(get_db)):
     data = get_portfolio_data(db)
+    remediation_summary = get_portfolio_remediation_summary(db)
     return templates.TemplateResponse("portfolio_report.html", {
         "request": request,
         "kpis": data["kpis"],
@@ -42,6 +47,7 @@ async def portfolio_report(request: Request, db: Session = Depends(get_db)):
         "decision_outcomes": data["decision_outcomes"],
         "assessment_pipeline": data["assessment_pipeline"],
         "category_analysis": data["category_analysis"],
+        "remediation_summary": remediation_summary,
         "now": datetime.utcnow(),
     })
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -32,6 +32,7 @@ async def remediation_detail(request: Request, remediation_id: int, db: Session 
         "status_labels": REMEDIATION_STATUS_LABELS,
         "status_colors": REMEDIATION_STATUS_COLORS,
         "severities": VALID_SEVERITIES,
+        "current_date": date.today(),
     })
 
 

@@ -241,8 +241,13 @@ async def save_assessment_decision(
     if action == "finalize" and success:
         transition_to_reviewed(db, assessment)
 
-        # Auto-generate remediation items from risk statements
+        # Persist overall_score on the decision
         ctx = _load_decision_context(db, assessment_id)
+        scores = ctx["scores"]
+        if scores.get("overall_score") is not None:
+            decision.overall_score = int(scores["overall_score"])
+
+        # Auto-generate remediation items from risk statements
         risk_suggestions = ctx["risk_suggestions"]
         remediation_data = []
         for rs in risk_suggestions:

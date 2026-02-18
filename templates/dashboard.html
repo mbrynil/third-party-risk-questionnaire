@@ -149,6 +149,19 @@
         display: block;
         margin-bottom: 1rem;
     }
+
+    .bulk-toolbar {
+        background: #1e3a5f;
+        color: #fff;
+        border-radius: 12px;
+        padding: 0.75rem 1.25rem;
+        display: none;
+        align-items: center;
+        gap: 1rem;
+    }
+    .bulk-toolbar.visible { display: flex; }
+    .bulk-toolbar .btn { font-size: 0.85rem; }
+    .bulk-count { font-weight: 600; font-size: 0.9rem; }
 </style>
 {% endblock %}
 
@@ -213,6 +226,12 @@
         </div>
     </div>
     <div class="col-6 col-lg-3">
+        <div class="kpi-card kpi-red">
+            <div class="kpi-value">{{ kpis.overdue_remediations }}</div>
+            <div class="kpi-label">Overdue Remediations</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
         <div class="kpi-card" style="border-left: 4px solid #0d6efd;">
             <div class="kpi-value" style="color: #0d6efd;">{{ kpis.upcoming_reviews }}</div>
             <div class="kpi-label">Reviews Due (30 Days)</div>
@@ -259,6 +278,46 @@
         </div>
     </div>
 </div>
+
+{# ==================== HEATMAP: TIER x RISK ==================== #}
+{% if heatmap and heatmap.rows %}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="chart-card">
+            <h6><i class="bi bi-grid-3x3 me-1"></i>Risk Heatmap (Tier x Risk Rating)</h6>
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm mb-0 text-center" id="heatmapTable" style="font-size:0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="background:#f9fafb;"></th>
+                            {% for risk_label in heatmap.risks %}
+                            <th style="background:#f9fafb;font-weight:600;font-size:0.75rem;">{{ risk_label }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in heatmap.rows %}
+                        <tr>
+                            <td style="background:#f9fafb;font-weight:600;font-size:0.8rem;white-space:nowrap;">{{ row.tier }}</td>
+                            {% for count in row.counts %}
+                            {% set max_count = heatmap.rows | map(attribute='counts') | map('max') | max %}
+                            {% set opacity = (count / max_count * 0.8 + 0.15) if max_count > 0 and count > 0 else 0 %}
+                            <td class="heatmap-cell"
+                                data-tier="{{ heatmap.tier_values[loop.parent.loop.index0] }}"
+                                data-risk="{{ heatmap.risk_values[loop.index0] }}"
+                                style="{% if count > 0 %}background:rgba(220,53,69,{{ opacity }});color:{% if opacity > 0.5 %}#fff{% else %}#111{% endif %};cursor:pointer;font-weight:700;{% else %}background:#f3f4f6;color:#9ca3af;{% endif %}">
+                                {{ count }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {# ==================== FILTER BAR ==================== #}
 <div class="filter-bar mb-3">
@@ -309,12 +368,37 @@
     </div>
 </div>
 
+{# ==================== ALERTS ==================== #}
+{% set msg = request.query_params.get('message') %}
+{% set msg_type = request.query_params.get('message_type', 'success') %}
+{% if msg %}
+<div class="alert alert-{{ msg_type }} alert-dismissible fade show mb-3" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# ==================== BULK TOOLBAR ==================== #}
+<div class="bulk-toolbar mb-3" id="bulkToolbar">
+    <span class="bulk-count"><span id="bulkCount">0</span> selected</span>
+    <button type="button" class="btn btn-sm btn-light" onclick="openBulkAssessmentModal()">
+        <i class="bi bi-send me-1"></i>Send Assessments
+    </button>
+    <button type="button" class="btn btn-sm btn-light" onclick="openBulkTierModal()">
+        <i class="bi bi-diagram-3 me-1"></i>Assign Tier
+    </button>
+    <a href="#" class="text-white-50 small ms-auto" onclick="clearSelection(); return false;">Clear</a>
+</div>
+
 {# ==================== VENDOR TABLE ==================== #}
 {% if vendors %}
 <div class="vendor-table-wrap">
     <table class="table table-hover mb-0" id="vendorTable">
         <thead>
             <tr>
+                <th style="width:40px;" class="text-center">
+                    <input type="checkbox" id="selectAll" class="form-check-input" title="Select all">
+                </th>
                 <th class="sortable-header" data-sort="name">Vendor <i class="bi bi-chevron-expand sort-icon"></i></th>
                 <th class="sortable-header" data-sort="tier">Tier <i class="bi bi-chevron-expand sort-icon"></i></th>
                 <th class="sortable-header" data-sort="risk">Risk <i class="bi bi-chevron-expand sort-icon"></i></th>
@@ -336,6 +420,9 @@
                 data-score="{{ v.overall_score if v.overall_score is not none else '' }}"
                 data-assessed="{{ v.last_assessed_date or '' }}"
                 data-review="{{ v.next_review_date or '' }}">
+                <td class="text-center vendor-checkbox-cell" onclick="event.stopPropagation();">
+                    <input type="checkbox" class="form-check-input vendor-checkbox" value="{{ v.id }}">
+                </td>
                 <td>
                     <strong>{{ v.name }}</strong>
                     {% if v.assessment_count > 0 %}
@@ -366,6 +453,13 @@
                 <td>
                     {% if v.overall_score is not none %}
                     <strong>{{ v.overall_score }}%</strong>
+                    {% if v.score_trend == 'up' %}
+                    <i class="bi bi-arrow-up-short" style="color:#198754;font-size:1.1rem;" title="Score improved"></i>
+                    {% elif v.score_trend == 'down' %}
+                    <i class="bi bi-arrow-down-short" style="color:#dc3545;font-size:1.1rem;" title="Score declined"></i>
+                    {% elif v.score_trend == 'flat' %}
+                    <i class="bi bi-dash" style="color:#6c757d;font-size:1.1rem;" title="Score stable"></i>
+                    {% endif %}
                     {% else %}
                     <span class="text-muted">—</span>
                     {% endif %}
@@ -404,6 +498,80 @@
     </div>
 </div>
 {% endif %}
+
+{# ==================== BULK MODALS ==================== #}
+
+{# Bulk Send Assessments Modal #}
+<div class="modal fade" id="bulkAssessmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/bulk/send-assessments">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-send me-2"></i>Bulk Send Assessments</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3">Send assessments to <strong><span id="bulkAssessmentCount">0</span> selected vendor(s)</strong></p>
+                    <div class="mb-3">
+                        <label class="form-label">Template <span class="text-danger">*</span></label>
+                        <select name="template_id" class="form-select" required>
+                            <option value="">Select template...</option>
+                            {% for t in assessment_templates %}
+                            <option value="{{ t.id }}">{{ t.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Assessment Title Pattern</label>
+                        <input type="text" name="title_pattern" class="form-control"
+                               value="Security Assessment {vendor_name}" required>
+                        <small class="text-muted">{vendor_name} will be replaced with each vendor's name</small>
+                    </div>
+                    <input type="hidden" name="vendor_ids" id="bulkAssessmentVendorIds">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Send Assessments</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Bulk Assign Tier Modal #}
+<div class="modal fade" id="bulkTierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/bulk/assign-tier">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-diagram-3 me-2"></i>Bulk Assign Tier</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3">Assign tier override to <strong><span id="bulkTierCount">0</span> selected vendor(s)</strong></p>
+                    <div class="mb-3">
+                        <label class="form-label">Tier <span class="text-danger">*</span></label>
+                        <select name="tier" class="form-select" required>
+                            <option value="">Select tier...</option>
+                            <option value="Tier 1">Tier 1 — Critical</option>
+                            <option value="Tier 2">Tier 2 — Important</option>
+                            <option value="Tier 3">Tier 3 — Standard</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea name="tier_notes" class="form-control" rows="2" placeholder="Reason for tier assignment..."></textarea>
+                    </div>
+                    <input type="hidden" name="vendor_ids" id="bulkTierVendorIds">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Assign Tier</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
@@ -591,6 +759,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     applyFilters();
 
+    // ==================== HEATMAP: CELL CLICK ====================
+    document.querySelectorAll('.heatmap-cell').forEach(function(cell) {
+        cell.addEventListener('click', function() {
+            const tier = this.dataset.tier;
+            const risk = this.dataset.risk;
+            const count = parseInt(this.textContent.trim());
+            if (count === 0) return;
+
+            if (filterTier) filterTier.value = tier;
+            if (filterRisk) filterRisk.value = risk;
+            applyFilters();
+
+            const vendorTable = document.getElementById('vendorTable');
+            if (vendorTable) vendorTable.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
     // ==================== SORTING ====================
     const headers = document.querySelectorAll('.sortable-header');
     let currentSort = null;
@@ -659,6 +844,72 @@ document.addEventListener('DOMContentLoaded', function() {
             rowsArr.forEach(function(row) { tbody.appendChild(row); });
         });
     });
+
+    // ==================== BULK OPERATIONS ====================
+    const selectAll = document.getElementById('selectAll');
+    const bulkToolbar = document.getElementById('bulkToolbar');
+    const bulkCountEl = document.getElementById('bulkCount');
+
+    function getCheckedIds() {
+        return Array.from(document.querySelectorAll('.vendor-checkbox:checked')).map(cb => cb.value);
+    }
+
+    function updateBulkToolbar() {
+        const ids = getCheckedIds();
+        if (bulkToolbar) {
+            if (ids.length > 0) {
+                bulkToolbar.classList.add('visible');
+                bulkCountEl.textContent = ids.length;
+            } else {
+                bulkToolbar.classList.remove('visible');
+            }
+        }
+        // Sync select-all checkbox
+        const visibleCheckboxes = document.querySelectorAll('.vendor-checkbox');
+        const checkedCount = document.querySelectorAll('.vendor-checkbox:checked').length;
+        if (selectAll) {
+            selectAll.checked = visibleCheckboxes.length > 0 && checkedCount === visibleCheckboxes.length;
+            selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleCheckboxes.length;
+        }
+    }
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            document.querySelectorAll('.vendor-checkbox').forEach(cb => {
+                // Only toggle visible rows
+                const row = cb.closest('tr');
+                if (row && row.style.display !== 'none') {
+                    cb.checked = selectAll.checked;
+                }
+            });
+            updateBulkToolbar();
+        });
+    }
+
+    document.querySelectorAll('.vendor-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateBulkToolbar);
+    });
+
+    // Expose globally for onclick handlers
+    window.clearSelection = function() {
+        document.querySelectorAll('.vendor-checkbox').forEach(cb => cb.checked = false);
+        if (selectAll) selectAll.checked = false;
+        updateBulkToolbar();
+    };
+
+    window.openBulkAssessmentModal = function() {
+        const ids = getCheckedIds();
+        document.getElementById('bulkAssessmentVendorIds').value = ids.join(',');
+        document.getElementById('bulkAssessmentCount').textContent = ids.length;
+        new bootstrap.Modal(document.getElementById('bulkAssessmentModal')).show();
+    };
+
+    window.openBulkTierModal = function() {
+        const ids = getCheckedIds();
+        document.getElementById('bulkTierVendorIds').value = ids.join(',');
+        document.getElementById('bulkTierCount').textContent = ids.length;
+        new bootstrap.Modal(document.getElementById('bulkTierModal')).show();
+    };
 });
 </script>
 {% endblock %}

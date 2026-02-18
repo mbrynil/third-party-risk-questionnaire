@@ -324,6 +324,75 @@
         {% endfor %}
         {% endif %}
 
+        {# ==================== REMEDIATION SUMMARY ==================== #}
+        {% if remediation_summary and remediation_summary.total > 0 %}
+        <h2 class="section-title"><i class="bi bi-shield-exclamation me-2"></i>Remediation Summary</h2>
+        <div class="meta-grid">
+            <div class="meta-item">
+                <span class="meta-value meta-value-blue">{{ remediation_summary.total }}</span>
+                <span class="meta-label">Total Items</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-value meta-value-amber">{{ remediation_summary.open }}</span>
+                <span class="meta-label">Open</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-value meta-value-red">{{ remediation_summary.overdue }}</span>
+                <span class="meta-label">Overdue</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-value meta-value-green">{{ remediation_summary.closed }}</span>
+                <span class="meta-label">Closed / Verified</span>
+            </div>
+        </div>
+
+        {# Severity breakdown #}
+        {% set sev_colors = {"CRITICAL": "#dc3545", "HIGH": "#fd7e14", "MEDIUM": "#ffc107", "LOW": "#198754"} %}
+        {% set sev_max = [remediation_summary.severity_counts.CRITICAL, remediation_summary.severity_counts.HIGH, remediation_summary.severity_counts.MEDIUM, remediation_summary.severity_counts.LOW] | max %}
+        {% set sev_max_safe = sev_max if sev_max > 0 else 1 %}
+        {% for sev in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] %}
+        <div class="dist-row">
+            <span class="dist-label">{{ sev }}</span>
+            <div class="dist-bar-track">
+                <div class="dist-bar-fill" style="width: {{ (remediation_summary.severity_counts[sev] / sev_max_safe * 100) }}%; background: {{ sev_colors[sev] }};"></div>
+            </div>
+            <span class="dist-count">{{ remediation_summary.severity_counts[sev] }}</span>
+        </div>
+        {% endfor %}
+
+        {# Most overdue items #}
+        {% if remediation_summary.overdue_items %}
+        <h3 style="font-size:0.9rem;font-weight:600;color:#374151;margin-top:1.5rem;margin-bottom:0.75rem;">Most Overdue Items</h3>
+        <table class="table table-sm" style="font-size: 0.8rem;">
+            <thead>
+                <tr>
+                    <th>Vendor</th>
+                    <th>Title</th>
+                    <th>Severity</th>
+                    <th>Due Date</th>
+                    <th>Days Overdue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for oi in remediation_summary.overdue_items %}
+                <tr>
+                    <td>{{ oi.vendor.name if oi.vendor else '—' }}</td>
+                    <td>{{ oi.title[:60] }}{% if oi.title|length > 60 %}...{% endif %}</td>
+                    <td>
+                        {% set sev_text_colors = {"MEDIUM": "#000"} %}
+                        <span style="display:inline-block;padding:0.15rem 0.4rem;border-radius:4px;font-weight:600;font-size:0.65rem;color:{{ sev_text_colors.get(oi.severity, '#fff') }};background:{{ sev_colors.get(oi.severity, '#6c757d') }};">
+                            {{ oi.severity }}
+                        </span>
+                    </td>
+                    <td class="text-overdue">{{ oi.due_date }}</td>
+                    <td class="text-overdue">{{ oi.days_overdue }} days</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% endif %}
+
         {# ==================== VENDOR SUMMARY TABLE ==================== #}
         <h2 class="section-title"><i class="bi bi-building me-2"></i>Vendor Summary</h2>
         {% if vendors %}

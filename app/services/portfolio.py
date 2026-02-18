@@ -15,7 +15,7 @@ from models import (
 )
 from app.services.scoring import compute_assessment_scores, suggest_risk_level
 from app.services.tiering import get_effective_tier, TIER_COLORS, TIER_LABELS
-from app.services.remediation_service import get_open_remediation_count
+from app.services.remediation_service import get_open_remediation_count, get_overdue_remediation_count
 
 
 RISK_LABELS = {
@@ -88,11 +88,15 @@ def get_portfolio_data(db: Session) -> dict:
         .all()
     )
 
-    # Latest finalized decision per vendor (most recent first already)
-    latest_decision_by_vendor = {}
+    # All finalized decisions per vendor (most recent first already)
+    decisions_by_vendor = {}
     for d in all_decisions:
-        if d.vendor_id not in latest_decision_by_vendor:
-            latest_decision_by_vendor[d.vendor_id] = d
+        decisions_by_vendor.setdefault(d.vendor_id, []).append(d)
+
+    # Latest finalized decision per vendor
+    latest_decision_by_vendor = {}
+    for vendor_id, decs in decisions_by_vendor.items():
+        latest_decision_by_vendor[vendor_id] = decs[0]
 
     # Compute scores for each latest decision's assessment
     scores_by_vendor = {}
@@ -139,6 +143,7 @@ def get_portfolio_data(db: Session) -> dict:
     )
 
     open_remediations = get_open_remediation_count(db)
+    overdue_remediations = get_overdue_remediation_count(db)
 
     upcoming_threshold = today + timedelta(days=30)
     upcoming_reviews = sum(
@@ -250,6 +255,21 @@ def get_portfolio_data(db: Session) -> dict:
 
         eff_tier = get_effective_tier(v)
 
+        # Score trend: compare latest vs previous finalized decision
+        score_trend = None
+        vendor_decisions = decisions_by_vendor.get(v.id, [])
+        if len(vendor_decisions) >= 2:
+            latest_score = vendor_decisions[0].overall_score
+            prev_score = vendor_decisions[1].overall_score
+            if latest_score is not None and prev_score is not None:
+                diff = latest_score - prev_score
+                if diff >= 5:
+                    score_trend = "up"
+                elif diff <= -5:
+                    score_trend = "down"
+                else:
+                    score_trend = "flat"
+
         vendor_rows.append({
             "id": v.id,
             "name": v.name,
@@ -275,7 +295,36 @@ def get_portfolio_data(db: Session) -> dict:
             "next_review_date": next_review_date,
             "is_overdue": is_overdue,
             "assessment_count": assessment_count,
+            "score_trend": score_trend,
         })
+
+    # --- Heatmap: Tier x Risk Rating ---
+    tier_order = ["Tier 1", "Tier 2", "Tier 3", None]
+    risk_rating_order = [
+        RISK_LEVEL_VERY_HIGH, RISK_LEVEL_HIGH, RISK_LEVEL_MODERATE,
+        RISK_LEVEL_LOW, RISK_LEVEL_VERY_LOW, None,
+    ]
+    heatmap = []
+    for tier in tier_order:
+        row_data = []
+        for risk in risk_rating_order:
+            count = sum(
+                1 for v in vendor_rows
+                if v["inherent_risk_tier"] == tier and v["risk_rating"] == risk
+            )
+            row_data.append(count)
+        heatmap.append({
+            "tier": tier or "No Tier",
+            "counts": row_data,
+        })
+
+    heatmap_meta = {
+        "tiers": [t or "No Tier" for t in tier_order],
+        "risks": ["Very High", "High", "Moderate", "Low", "Very Low", "Not Rated"],
+        "risk_values": [r or "" for r in risk_rating_order],
+        "tier_values": [t or "" for t in tier_order],
+        "rows": heatmap,
+    }
 
     return {
         "kpis": {
@@ -284,6 +333,7 @@ def get_portfolio_data(db: Session) -> dict:
             "pending_assessments": pending_assessments,
             "overdue_reviews": overdue_reviews,
             "open_remediations": open_remediations,
+            "overdue_remediations": overdue_remediations,
             "upcoming_reviews": upcoming_reviews,
         },
         "risk_distribution": risk_distribution,
@@ -291,4 +341,5 @@ def get_portfolio_data(db: Session) -> dict:
         "assessment_pipeline": assessment_pipeline,
         "category_analysis": category_analysis,
         "vendors": vendor_rows,
+        "heatmap": heatmap_meta,
     }

@@ -368,6 +368,7 @@ class AssessmentDecision(Base):
     key_findings = Column(Text, nullable=True)
     remediation_required = Column(Text, nullable=True)
     next_review_date = Column(DateTime, nullable=True)
+    overall_score = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     finalized_at = Column(DateTime, nullable=True)
@@ -1008,6 +1009,41 @@ def backfill_question_bank_item_ids():
         db.close()
 
 
+def backfill_decision_scores():
+    """Backfill overall_score on finalized decisions that don't have one yet."""
+    from app.services.scoring import compute_assessment_scores
+
+    db = SessionLocal()
+    try:
+        decisions = db.query(AssessmentDecision).filter(
+            AssessmentDecision.status == DECISION_STATUS_FINAL,
+            AssessmentDecision.overall_score == None
+        ).all()
+        if not decisions:
+            return
+
+        updated = 0
+        for decision in decisions:
+            questions = db.query(Question).filter(
+                Question.assessment_id == decision.assessment_id
+            ).order_by(Question.order).all()
+            response = db.query(Response).filter(
+                Response.assessment_id == decision.assessment_id,
+                Response.status == RESPONSE_STATUS_SUBMITTED
+            ).order_by(Response.submitted_at.desc()).first()
+
+            if questions and response:
+                scores = compute_assessment_scores(questions, response)
+                if scores.get("overall_score") is not None:
+                    decision.overall_score = int(scores["overall_score"])
+                    updated += 1
+
+        if updated > 0:
+            db.commit()
+    finally:
+        db.close()
+
+
 def backfill_vendor_new_columns():
     """Add new vendor columns to existing database using raw ALTER TABLE.
     New tables (vendor_contacts, vendor_documents) are auto-created by init_db().
@@ -1042,6 +1078,15 @@ def backfill_vendor_new_columns():
                 cursor.execute(f"ALTER TABLE vendors ADD COLUMN {col_name} {col_type}")
             except sqlite3.OperationalError:
                 pass
+
+    # Also backfill assessment_decisions table
+    cursor.execute("PRAGMA table_info(assessment_decisions)")
+    existing_decision_cols = {row[1] for row in cursor.fetchall()}
+    if "overall_score" not in existing_decision_cols:
+        try:
+            cursor.execute("ALTER TABLE assessment_decisions ADD COLUMN overall_score INTEGER")
+        except sqlite3.OperationalError:
+            pass
 
     # Also backfill assessments table
     cursor.execute("PRAGMA table_info(assessments)")

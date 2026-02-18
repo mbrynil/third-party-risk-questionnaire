@@ -4,7 +4,7 @@ from datetime import datetime
 from models import (
     init_db, get_db, seed_question_bank, seed_risk_statements,
     backfill_question_categories, backfill_question_bank_item_ids,
-    backfill_vendor_new_columns, SessionLocal,
+    backfill_vendor_new_columns, backfill_decision_scores, SessionLocal,
     Assessment, Response,
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
@@ -19,6 +19,7 @@ seed_question_bank()
 seed_risk_statements()
 backfill_question_categories()
 backfill_question_bank_item_ids()
+backfill_decision_scores()
 
 
 def fix_stuck_assessment_statuses():
