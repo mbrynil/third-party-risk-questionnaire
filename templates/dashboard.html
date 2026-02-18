@@ -10,11 +10,16 @@
         background: #fff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         transition: transform 0.15s, box-shadow 0.15s;
-        cursor: default;
+        cursor: pointer;
     }
     .kpi-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    a.kpi-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
     }
     .kpi-card .kpi-value {
         font-size: 2rem;
@@ -180,10 +185,12 @@
 {# ==================== KPI ROW ==================== #}
 <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
-        <div class="kpi-card kpi-blue">
-            <div class="kpi-value">{{ kpis.total_active_vendors }}</div>
-            <div class="kpi-label">Active Vendors</div>
-        </div>
+        <a href="/vendors" class="kpi-link">
+            <div class="kpi-card kpi-blue">
+                <div class="kpi-value">{{ kpis.total_active_vendors }}</div>
+                <div class="kpi-label">Active Vendors</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
         {% if kpis.average_risk_score is not none %}
@@ -199,49 +206,63 @@
         {% else %}
             {% set score_class = "kpi-blue" %}
         {% endif %}
-        <div class="kpi-card {{ score_class }}" style="{% if kpis.average_risk_score is not none %}{% if kpis.average_risk_score >= 70 %}border-left: 4px solid #198754;{% elif kpis.average_risk_score >= 50 %}{% else %}{% endif %}{% else %}border-left: 4px solid #6c757d;{% endif %}">
-            <div class="kpi-value">{{ kpis.average_risk_score if kpis.average_risk_score is not none else '—' }}{% if kpis.average_risk_score is not none %}<span style="font-size: 1rem; font-weight: 400;">%</span>{% endif %}</div>
-            <div class="kpi-label">Avg Risk Score</div>
-        </div>
+        <a href="#vendorTable" class="kpi-link">
+            <div class="kpi-card {{ score_class }}" style="{% if kpis.average_risk_score is not none %}{% if kpis.average_risk_score >= 70 %}border-left: 4px solid #198754;{% elif kpis.average_risk_score >= 50 %}{% else %}{% endif %}{% else %}border-left: 4px solid #6c757d;{% endif %}">
+                <div class="kpi-value">{{ kpis.average_risk_score if kpis.average_risk_score is not none else '—' }}{% if kpis.average_risk_score is not none %}<span style="font-size: 1rem; font-weight: 400;">%</span>{% endif %}</div>
+                <div class="kpi-label">Avg Risk Score</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="kpi-card kpi-amber">
-            <div class="kpi-value">{{ kpis.pending_assessments }}</div>
-            <div class="kpi-label">Pending Assessments</div>
-        </div>
+        <a href="/responses" class="kpi-link">
+            <div class="kpi-card kpi-amber">
+                <div class="kpi-value">{{ kpis.pending_assessments }}</div>
+                <div class="kpi-label">Pending Assessments</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="kpi-card kpi-red">
-            <div class="kpi-value">{{ kpis.overdue_reviews }}</div>
-            <div class="kpi-label">Overdue Reviews</div>
-        </div>
+        <a href="/vendors" class="kpi-link">
+            <div class="kpi-card kpi-red">
+                <div class="kpi-value">{{ kpis.overdue_reviews }}</div>
+                <div class="kpi-label">Overdue Reviews</div>
+            </div>
+        </a>
     </div>
 </div>
 
 <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
-        <div class="kpi-card kpi-amber">
-            <div class="kpi-value">{{ kpis.open_remediations }}</div>
-            <div class="kpi-label">Open Remediations</div>
-        </div>
+        <a href="#vendorTable" class="kpi-link" onclick="setTimeout(function(){ document.getElementById('statusFilter') && (document.getElementById('statusFilter').value=''); }, 100);">
+            <div class="kpi-card kpi-amber">
+                <div class="kpi-value">{{ kpis.open_remediations }}</div>
+                <div class="kpi-label">Open Remediations</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="kpi-card kpi-red">
-            <div class="kpi-value">{{ kpis.overdue_remediations }}</div>
-            <div class="kpi-label">Overdue Remediations</div>
-        </div>
+        <a href="#vendorTable" class="kpi-link">
+            <div class="kpi-card kpi-red">
+                <div class="kpi-value">{{ kpis.overdue_remediations }}</div>
+                <div class="kpi-label">Overdue Remediations</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="kpi-card" style="border-left: 4px solid #0d6efd;">
-            <div class="kpi-value" style="color: #0d6efd;">{{ kpis.upcoming_reviews }}</div>
-            <div class="kpi-label">Reviews Due (30 Days)</div>
-        </div>
+        <a href="/vendors" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #0d6efd;">
+                <div class="kpi-value" style="color: #0d6efd;">{{ kpis.upcoming_reviews }}</div>
+                <div class="kpi-label">Reviews Due (30 Days)</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="kpi-card" style="border-left: 4px solid #fd7e14;">
-            <div class="kpi-value" style="color: #fd7e14;">{{ reminder_stats.awaiting_response }}</div>
-            <div class="kpi-label">Awaiting Response</div>
-        </div>
+        <a href="/settings/reminders" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #fd7e14;">
+                <div class="kpi-value" style="color: #fd7e14;">{{ reminder_stats.awaiting_response }}</div>
+                <div class="kpi-label">Awaiting Response</div>
+            </div>
+        </a>
     </div>
 </div>
 
