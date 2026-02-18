@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -8,9 +10,10 @@ import json as json_lib
 
 from models import (
     get_db, Assessment, Question, QuestionBankItem, ConditionalRule,
-    get_answer_options, has_custom_answer_options,
+    VendorContact, get_answer_options, has_custom_answer_options,
 )
 from app.services.lifecycle import transition_to_sent, transition_to_reviewed
+from app.services.email_service import send_assessment_invitation
 
 router = APIRouter()
 
@@ -117,11 +120,20 @@ async def share_assessment(request: Request, assessment_id: int, db: Session = D
     base_url = str(request.base_url).rstrip('/')
     vendor_url = f"{base_url}/vendor/{assessment.token}"
 
+    contacts = []
+    if assessment.vendor_id:
+        contacts = db.query(VendorContact).filter(
+            VendorContact.vendor_id == assessment.vendor_id,
+            VendorContact.email.isnot(None),
+            VendorContact.email != "",
+        ).order_by(VendorContact.name).all()
+
     return templates.TemplateResponse("created.html", {
         "request": request,
         "assessment": assessment,
         "token": assessment.token,
-        "vendor_url": vendor_url
+        "vendor_url": vendor_url,
+        "contacts": contacts,
     })
 
 
@@ -269,3 +281,79 @@ async def mark_assessment_reviewed(
         db.commit()
 
     return RedirectResponse(url=f"/responses/{assessment_id}?marked_reviewed=1", status_code=303)
+
+
+@router.post("/assessments/{assessment_id}/send")
+async def send_assessment_email(
+    request: Request,
+    assessment_id: int,
+    contact_email: str = Form(...),
+    contact_name: str = Form(""),
+    custom_message: str = Form(""),
+    expiry_days: int = Form(30),
+    db: Session = Depends(get_db),
+):
+    assessment = db.query(Assessment).filter(
+        Assessment.id == assessment_id
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    base_url = str(request.base_url).rstrip("/")
+    assessment_url = f"{base_url}/vendor/{assessment.token}"
+
+    expires_at = datetime.utcnow() + timedelta(days=expiry_days) if expiry_days > 0 else None
+
+    result = send_assessment_invitation(
+        to_email=contact_email.strip(),
+        to_name=contact_name.strip() or assessment.company_name,
+        vendor_name=assessment.company_name,
+        assessment_title=assessment.title,
+        assessment_url=assessment_url,
+        custom_message=custom_message.strip() or None,
+        expires_at=expires_at,
+    )
+
+    # Update assessment record
+    assessment.sent_to_email = contact_email.strip()
+    assessment.sent_at = datetime.utcnow()
+    if expires_at:
+        assessment.expires_at = expires_at
+    transition_to_sent(db, assessment)
+    db.commit()
+
+    # Redirect back to referrer or vendor profile
+    referer = request.headers.get("referer", "")
+    if "/vendors/" in referer:
+        vendor_url = referer.split("?")[0]
+        return RedirectResponse(url=f"{vendor_url}?email_sent=1", status_code=303)
+    elif "/templates" in referer:
+        return RedirectResponse(url=f"/templates?email_sent=1", status_code=303)
+    else:
+        return RedirectResponse(
+            url=f"/questionnaire/{assessment_id}/share?email_sent=1",
+            status_code=303,
+        )
+
+
+@router.get("/email-log", response_class=HTMLResponse)
+async def view_email_log(request: Request):
+    """Development tool: view all emails sent via console provider."""
+    import os
+    log_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "email_log.json",
+    )
+    entries = []
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r") as f:
+                entries = json.loads(f.read())
+            entries.reverse()  # newest first
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    return templates.TemplateResponse("email_log.html", {
+        "request": request,
+        "entries": entries,
+    })

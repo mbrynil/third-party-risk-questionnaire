@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Email Log - RiskQ{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1><i class="bi bi-envelope-paper me-2"></i>Email Log</h1>
+        <p>Development tool — shows all emails sent via the console provider</p>
+    </div>
+    <span class="badge bg-warning text-dark fs-6">
+        <i class="bi bi-tools me-1"></i>Dev Only
+    </span>
+</div>
+
+{% if entries %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>{{ entries|length }}</strong> email(s) logged. These were not actually delivered — switch to SMTP or SendGrid to send real emails.
+</div>
+
+{% for entry in entries %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <i class="bi bi-envelope me-2"></i>
+            <strong>{{ entry.subject }}</strong>
+        </div>
+        <small class="text-muted">{{ entry.timestamp }}</small>
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <small class="text-muted">To:</small>
+                <div><strong>{{ entry.to_name }}</strong> &lt;{{ entry.to_email }}&gt;</div>
+            </div>
+            <div class="col-md-6">
+                <small class="text-muted">From:</small>
+                <div>{{ entry.from_name }} &lt;{{ entry.from_email }}&gt;</div>
+            </div>
+        </div>
+
+        <div class="mb-2">
+            <button class="btn btn-sm btn-outline-primary" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#preview{{ loop.index }}">
+                <i class="bi bi-eye me-1"></i>Preview Email
+            </button>
+        </div>
+
+        <div class="collapse" id="preview{{ loop.index }}">
+            <div class="border rounded p-0" style="max-height: 500px; overflow-y: auto;">
+                <iframe srcdoc="{{ entry.html_body|e }}" style="width: 100%; height: 500px; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-envelope text-muted" style="font-size: 3rem;"></i>
+        <h5 class="mt-3">No emails logged yet</h5>
+        <p class="text-muted">Send an assessment to a vendor and it will appear here.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

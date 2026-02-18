@@ -196,6 +196,8 @@ class Assessment(Base):
     template_id = Column(Integer, ForeignKey("assessment_templates.id"), nullable=True)
     status = Column(String(20), default=ASSESSMENT_STATUS_DRAFT, nullable=False)
     sent_at = Column(DateTime, nullable=True)
+    sent_to_email = Column(String(255), nullable=True)
+    expires_at = Column(DateTime, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -1096,6 +1098,12 @@ def backfill_vendor_new_columns():
             cursor.execute("ALTER TABLE assessments ADD COLUMN previous_assessment_id INTEGER")
         except sqlite3.OperationalError:
             pass
+    for col_name, col_type in [("sent_to_email", "VARCHAR(255)"), ("expires_at", "DATETIME")]:
+        if col_name not in existing_assessment_cols:
+            try:
+                cursor.execute(f"ALTER TABLE assessments ADD COLUMN {col_name} {col_type}")
+            except sqlite3.OperationalError:
+                pass
 
     conn.commit()
     conn.close()
