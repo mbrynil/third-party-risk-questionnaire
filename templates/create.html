@@ -24,17 +24,23 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="company_name" class="form-label">
-                        <i class="bi bi-building me-1"></i>Your Company Name
+                        <i class="bi bi-building me-1"></i>Vendor
                     </label>
-                    <input type="text" class="form-control" id="company_name" name="company_name" required 
-                           placeholder="e.g., Acme Corporation">
-                    <div class="form-text">Your company name will appear in the vendor link</div>
+                    <select class="form-select" id="company_name" name="company_name" required>
+                        <option value="">Select a vendor...</option>
+                        {% for v in vendors %}
+                        <option value="{{ v.name }}">{{ v.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">
+                        Vendor not listed? <a href="/vendors/new">Create a new vendor record</a> first.
+                    </div>
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="title" class="form-label">
                         <i class="bi bi-tag me-1"></i>Questionnaire Title
                     </label>
-                    <input type="text" class="form-control" id="title" name="title" required 
+                    <input type="text" class="form-control" id="title" name="title" required
                            placeholder="e.g., Vendor Security Assessment 2024">
                     <div class="form-text">Give your questionnaire a clear, descriptive name</div>
                 </div>

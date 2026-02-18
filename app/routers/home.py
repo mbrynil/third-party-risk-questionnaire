@@ -54,6 +54,8 @@ async def portfolio_report(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/create", response_class=HTMLResponse)
 async def create_assessment_page(request: Request, db: Session = Depends(get_db)):
+    from models import Vendor, VENDOR_STATUS_ACTIVE
+
     question_bank = db.query(QuestionBankItem).filter(
         QuestionBankItem.is_active == True
     ).order_by(QuestionBankItem.category, QuestionBankItem.id).all()
@@ -66,10 +68,15 @@ async def create_assessment_page(request: Request, db: Session = Depends(get_db)
 
     bank_item_options = {str(item.id): get_answer_options(item) for item in question_bank}
 
+    vendors = db.query(Vendor).filter(
+        Vendor.status == VENDOR_STATUS_ACTIVE
+    ).order_by(Vendor.name).all()
+
     return templates.TemplateResponse("create.html", {
         "request": request,
         "categories": categories,
         "bank_item_options_json": json.dumps(bank_item_options),
+        "vendors": vendors,
     })
 
 
@@ -85,6 +92,7 @@ async def create_assessment(
     question_ids = form_data.getlist("question_ids")
 
     if not question_ids and not custom_questions.strip():
+        from models import Vendor, VENDOR_STATUS_ACTIVE
         question_bank = db.query(QuestionBankItem).filter(
             QuestionBankItem.is_active == True
         ).order_by(QuestionBankItem.category, QuestionBankItem.id).all()
@@ -97,10 +105,12 @@ async def create_assessment(
         for cat_items in categories.values():
             for item in cat_items:
                 bank_item_options[str(item.id)] = get_answer_options(item)
+        vendors = db.query(Vendor).filter(Vendor.status == VENDOR_STATUS_ACTIVE).order_by(Vendor.name).all()
         return templates.TemplateResponse("create.html", {
             "request": request,
             "categories": categories,
             "bank_item_options_json": json.dumps(bank_item_options),
+            "vendors": vendors,
             "error": "Please select at least one question from the bank or add custom questions."
         })
 
