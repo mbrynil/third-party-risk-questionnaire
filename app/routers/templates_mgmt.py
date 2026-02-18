@@ -13,12 +13,18 @@ router = APIRouter()
 
 @router.get("/templates", response_class=HTMLResponse)
 async def view_templates(request: Request, db: Session = Depends(get_db)):
+    from models import Vendor, VENDOR_STATUS_ACTIVE
+
     templates_list = db.query(AssessmentTemplate).order_by(
         AssessmentTemplate.created_at.desc()
     ).all()
+    vendors = db.query(Vendor).filter(
+        Vendor.status == VENDOR_STATUS_ACTIVE
+    ).order_by(Vendor.name).all()
     return templates.TemplateResponse("templates_list.html", {
         "request": request,
-        "templates": templates_list
+        "templates": templates_list,
+        "vendors": vendors,
     })
 
 

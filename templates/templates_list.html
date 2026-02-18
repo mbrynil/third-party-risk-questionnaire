@@ -100,9 +100,18 @@
                         Creating from: <strong>{{ t.name }}</strong>
                     </p>
                     <div class="mb-3">
-                        <label for="companyName{{ t.id }}" class="form-label">Company Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="companyName{{ t.id }}" name="company_name" 
-                               placeholder="Enter vendor company name" required>
+                        <label for="companyName{{ t.id }}" class="form-label">
+                            <i class="bi bi-building me-1"></i>Vendor <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="companyName{{ t.id }}" name="company_name" required>
+                            <option value="">Select a vendor...</option>
+                            {% for v in vendors %}
+                            <option value="{{ v.name }}">{{ v.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Vendor not listed? <a href="/vendors/new">Create a new vendor record</a> first.
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="questionnaireTitle{{ t.id }}" class="form-label">Questionnaire Title <span class="text-danger">*</span></label>
