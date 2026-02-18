@@ -144,6 +144,19 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
     ).all() if assessment_ids else []
     decisions = {d.assessment_id: d for d in assessment_decisions}
 
+    # Get reminder counts per assessment
+    from models import ReminderLog, REMINDER_TYPE_REMINDER
+    from sqlalchemy import func
+    reminder_counts = {}
+    if assessment_ids:
+        counts = db.query(
+            ReminderLog.assessment_id, func.count(ReminderLog.id)
+        ).filter(
+            ReminderLog.assessment_id.in_(assessment_ids),
+            ReminderLog.reminder_type == REMINDER_TYPE_REMINDER,
+        ).group_by(ReminderLog.assessment_id).all()
+        reminder_counts = {aid: cnt for aid, cnt in counts}
+
     effective_tier = get_effective_tier(vendor)
     remediations = get_vendor_remediations(db, vendor_id)
     remediation_stats = get_remediation_stats(db, vendor_id)
@@ -189,6 +202,7 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         "current_date": date.today(),
         "score_history": score_history,
         "score_history_json": score_history_json,
+        "reminder_counts": reminder_counts,
     })
 
 

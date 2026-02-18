@@ -336,6 +336,26 @@ async def send_assessment_email(
         )
 
 
+@router.post("/assessments/{assessment_id}/toggle-reminders")
+async def toggle_assessment_reminders(
+    request: Request,
+    assessment_id: int,
+    db: Session = Depends(get_db),
+):
+    """Pause or resume automated reminders for an assessment."""
+    assessment = db.query(Assessment).filter(
+        Assessment.id == assessment_id
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    assessment.reminders_paused = not assessment.reminders_paused
+    db.commit()
+
+    referer = request.headers.get("referer", "/")
+    return RedirectResponse(url=referer, status_code=303)
+
+
 @router.get("/email-log", response_class=HTMLResponse)
 async def view_email_log(request: Request):
     """Development tool: view all emails sent via console provider."""

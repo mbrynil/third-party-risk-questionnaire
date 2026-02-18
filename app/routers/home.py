@@ -14,6 +14,7 @@ from app.services.token import generate_unique_token
 from app.services.vendor_service import find_or_create_vendor
 from app.services.portfolio import get_portfolio_data
 from app.services.remediation_service import get_portfolio_remediation_summary
+from app.services.reminder_service import get_reminder_stats
 
 router = APIRouter()
 
@@ -22,6 +23,7 @@ router = APIRouter()
 async def home(request: Request, db: Session = Depends(get_db)):
     data = get_portfolio_data(db)
     templates_list = db.query(AssessmentTemplate).order_by(AssessmentTemplate.name).all()
+    reminder_stats = get_reminder_stats(db)
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "kpis": data["kpis"],
@@ -32,6 +34,7 @@ async def home(request: Request, db: Session = Depends(get_db)):
         "category_analysis_json": json.dumps(data["category_analysis"]),
         "heatmap": data["heatmap"],
         "assessment_templates": templates_list,
+        "reminder_stats": reminder_stats,
     })
 
 

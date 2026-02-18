@@ -198,6 +198,7 @@ class Assessment(Base):
     sent_at = Column(DateTime, nullable=True)
     sent_to_email = Column(String(255), nullable=True)
     expires_at = Column(DateTime, nullable=True)
+    reminders_paused = Column(Boolean, default=False)
     submitted_at = Column(DateTime, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -477,6 +478,55 @@ class RiskStatement(Base):
     trigger_answer_value = Column(String(255), nullable=True)
 
     trigger_question = relationship("QuestionBankItem")
+
+
+# ---------------------------------------------------------------------------
+# Reminder system
+# ---------------------------------------------------------------------------
+
+REMINDER_TYPE_INITIAL = "INITIAL"
+REMINDER_TYPE_REMINDER = "REMINDER"
+REMINDER_TYPE_ESCALATION = "ESCALATION"
+REMINDER_TYPE_FINAL = "FINAL_NOTICE"
+
+
+class ReminderConfig(Base):
+    """Global reminder settings — single row table."""
+    __tablename__ = "reminder_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+    enabled = Column(Boolean, default=True)
+    first_reminder_days = Column(Integer, default=3)
+    frequency_days = Column(Integer, default=7)
+    max_reminders = Column(Integer, default=3)
+    escalation_after = Column(Integer, default=2)
+    escalation_email = Column(String(255), nullable=True)
+    final_notice_days_before_expiry = Column(Integer, default=3)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ReminderLog(Base):
+    """Tracks every reminder sent."""
+    __tablename__ = "reminder_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=False)
+    to_email = Column(String(255), nullable=False)
+    reminder_number = Column(Integer, default=1)
+    reminder_type = Column(String(20), default=REMINDER_TYPE_REMINDER)
+    sent_at = Column(DateTime, default=datetime.utcnow)
+
+    assessment = relationship("Assessment")
+
+
+def ensure_reminder_config(db_session):
+    """Ensure a default ReminderConfig row exists."""
+    config = db_session.query(ReminderConfig).first()
+    if not config:
+        config = ReminderConfig()
+        db_session.add(config)
+        db_session.commit()
+    return config
 
 
 VALID_CHOICES = ["yes", "no", "partial", "na"]
@@ -1098,7 +1148,7 @@ def backfill_vendor_new_columns():
             cursor.execute("ALTER TABLE assessments ADD COLUMN previous_assessment_id INTEGER")
         except sqlite3.OperationalError:
             pass
-    for col_name, col_type in [("sent_to_email", "VARCHAR(255)"), ("expires_at", "DATETIME")]:
+    for col_name, col_type in [("sent_to_email", "VARCHAR(255)"), ("expires_at", "DATETIME"), ("reminders_paused", "BOOLEAN DEFAULT 0")]:
         if col_name not in existing_assessment_cols:
             try:
                 cursor.execute(f"ALTER TABLE assessments ADD COLUMN {col_name} {col_type}")

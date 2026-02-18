@@ -586,6 +586,11 @@
                         {% if q.sent_to_email %}
                         <br><small class="text-muted"><i class="bi bi-envelope-at me-1"></i>{{ q.sent_to_email }}</small>
                         {% endif %}
+                        {% if q.reminders_paused %}
+                        <br><span class="badge bg-secondary"><i class="bi bi-pause-circle me-1"></i>Reminders paused</span>
+                        {% elif reminder_counts.get(q.id, 0) > 0 %}
+                        <br><small class="text-muted"><i class="bi bi-bell me-1"></i>{{ reminder_counts.get(q.id, 0) }} reminder(s) sent</small>
+                        {% endif %}
                         {% elif q.status == 'IN_PROGRESS' %}
                         <span class="badge bg-warning text-dark">In Progress</span>
                         {% elif q.status == 'SUBMITTED' %}
@@ -648,6 +653,19 @@
                                 title="Send assessment via email">
                             <i class="bi bi-envelope me-1"></i>Send
                         </button>
+                        {% endif %}
+                        {% if q.status in ['SENT', 'IN_PROGRESS'] and q.sent_to_email %}
+                        <form method="post" action="/assessments/{{ q.id }}/toggle-reminders" style="display:inline;">
+                            {% if q.reminders_paused %}
+                            <button type="submit" class="btn btn-sm btn-outline-warning" title="Resume automated reminders">
+                                <i class="bi bi-play-circle"></i>
+                            </button>
+                            {% else %}
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Pause automated reminders">
+                                <i class="bi bi-pause-circle"></i>
+                            </button>
+                            {% endif %}
+                        </form>
                         {% endif %}
                         {% if decision and decision.status == 'FINAL' and loop.first %}
                         <form method="post" action="/vendors/{{ vendor.id }}/reassess" style="display:inline;">

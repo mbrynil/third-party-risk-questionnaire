@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from datetime import datetime
 
@@ -5,13 +7,12 @@ from models import (
     init_db, get_db, seed_question_bank, seed_risk_statements,
     backfill_question_categories, backfill_question_bank_item_ids,
     backfill_vendor_new_columns, backfill_decision_scores, SessionLocal,
-    Assessment, Response,
+    Assessment, Response, ensure_reminder_config,
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
 )
-from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations
-
-app = FastAPI(title="Third-Party Risk Questionnaire System")
+from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations, settings
+from app.services.scheduler import start_scheduler, stop_scheduler
 
 init_db()
 backfill_vendor_new_columns()
@@ -20,6 +21,23 @@ seed_risk_statements()
 backfill_question_categories()
 backfill_question_bank_item_ids()
 backfill_decision_scores()
+
+# Ensure default reminder config exists
+_db = SessionLocal()
+try:
+    ensure_reminder_config(_db)
+finally:
+    _db.close()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    start_scheduler()
+    yield
+    stop_scheduler()
+
+
+app = FastAPI(title="Third-Party Risk Questionnaire System", lifespan=lifespan)
 
 
 def fix_stuck_assessment_statuses():
@@ -53,6 +71,7 @@ app.include_router(decisions.router)
 app.include_router(risk_library.router)
 app.include_router(question_bank.router)
 app.include_router(remediations.router)
+app.include_router(settings.router)
 
 if __name__ == "__main__":
     import uvicorn
