@@ -8,14 +8,68 @@ import json
 from app import templates
 import json as json_lib
 
+from sqlalchemy import func
+
 from models import (
     get_db, Assessment, Question, QuestionBankItem, ConditionalRule,
-    VendorContact, get_answer_options, has_custom_answer_options,
+    VendorContact, ReminderLog, AssessmentDecision,
+    REMINDER_TYPE_REMINDER,
+    get_answer_options, has_custom_answer_options,
 )
 from app.services.lifecycle import transition_to_sent, transition_to_reviewed
 from app.services.email_service import send_assessment_invitation
 
 router = APIRouter()
+
+
+@router.get("/assessments/tracker", response_class=HTMLResponse)
+async def assessment_tracker(request: Request, db: Session = Depends(get_db)):
+    """Assessment pipeline tracker — shows all assessments with status, reminders, and actions."""
+    now = datetime.utcnow()
+
+    assessments = db.query(Assessment).order_by(Assessment.created_at.desc()).all()
+
+    # Get reminder counts per assessment
+    assessment_ids = [a.id for a in assessments]
+    reminder_counts = {}
+    if assessment_ids:
+        counts = db.query(
+            ReminderLog.assessment_id, func.count(ReminderLog.id)
+        ).filter(
+            ReminderLog.assessment_id.in_(assessment_ids),
+            ReminderLog.reminder_type == REMINDER_TYPE_REMINDER,
+        ).group_by(ReminderLog.assessment_id).all()
+        reminder_counts = {aid: cnt for aid, cnt in counts}
+
+    # Get decisions
+    decisions_list = db.query(AssessmentDecision).filter(
+        AssessmentDecision.assessment_id.in_(assessment_ids)
+    ).all() if assessment_ids else []
+    decisions = {d.assessment_id: d for d in decisions_list}
+
+    # Build enriched rows
+    rows = []
+    for a in assessments:
+        days_waiting = None
+        if a.sent_at and a.status in ("SENT", "IN_PROGRESS"):
+            days_waiting = (now - a.sent_at).days
+
+        decision = decisions.get(a.id)
+
+        rows.append({
+            "assessment": a,
+            "vendor_name": a.vendor.name if a.vendor else a.company_name,
+            "vendor_id": a.vendor_id,
+            "days_waiting": days_waiting,
+            "reminder_count": reminder_counts.get(a.id, 0),
+            "decision": decision,
+        })
+
+    return templates.TemplateResponse("assessment_tracker.html", {
+        "request": request,
+        "rows": rows,
+        "now": now,
+    })
 
 
 @router.get("/questionnaire/{assessment_id}/edit", response_class=HTMLResponse)

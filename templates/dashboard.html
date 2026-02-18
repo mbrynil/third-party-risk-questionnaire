@@ -214,7 +214,7 @@
         </a>
     </div>
     <div class="col-6 col-lg-3">
-        <a href="/responses" class="kpi-link">
+        <a href="/assessments/tracker?status=SUBMITTED" class="kpi-link">
             <div class="kpi-card kpi-amber">
                 <div class="kpi-value">{{ kpis.pending_assessments }}</div>
                 <div class="kpi-label">Pending Assessments</div>
@@ -257,7 +257,7 @@
         </a>
     </div>
     <div class="col-6 col-lg-3">
-        <a href="/settings/reminders" class="kpi-link">
+        <a href="/assessments/tracker?waiting=awaiting" class="kpi-link">
             <div class="kpi-card" style="border-left: 4px solid #fd7e14;">
                 <div class="kpi-value" style="color: #fd7e14;">{{ reminder_stats.awaiting_response }}</div>
                 <div class="kpi-label">Awaiting Response</div>

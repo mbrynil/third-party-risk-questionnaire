@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}Assessment Tracker - RiskQ{% endblock %}
+
+{% block extra_head %}
+<style>
+    .tracker-filters select {
+        min-width: 140px;
+    }
+    .days-badge {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .days-ok { background: #d1fae5; color: #065f46; }
+    .days-warn { background: #fef3c7; color: #92400e; }
+    .days-overdue { background: #fee2e2; color: #991b1b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1><i class="bi bi-kanban me-2"></i>Assessment Tracker</h1>
+        <p>Monitor all assessments across vendors — status, reminders, and response times</p>
+    </div>
+    <a href="/create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>New Assessment
+    </a>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center tracker-filters">
+            <div class="col-auto">
+                <i class="bi bi-funnel me-1 text-muted"></i>
+                <strong class="small text-muted">Filters:</strong>
+            </div>
+            <div class="col-auto">
+                <select class="form-select form-select-sm" id="filterStatus" onchange="applyTrackerFilters()">
+                    <option value="">All Statuses</option>
+                    <option value="DRAFT">Draft</option>
+                    <option value="SENT">Sent</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="SUBMITTED">Submitted</option>
+                    <option value="REVIEWED">Reviewed</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <select class="form-select form-select-sm" id="filterWaiting" onchange="applyTrackerFilters()">
+                    <option value="">All Wait Times</option>
+                    <option value="awaiting">Awaiting Response</option>
+                    <option value="overdue">Overdue (7+ days)</option>
+                    <option value="critical">Critical (14+ days)</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <input type="text" class="form-control form-control-sm" id="filterSearch"
+                       placeholder="Search vendor or title..." oninput="applyTrackerFilters()">
+            </div>
+            <div class="col-auto ms-auto">
+                <span class="badge bg-secondary" id="rowCount">{{ rows|length }}</span>
+                <small class="text-muted">assessments</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="row g-3 mb-4">
+    {% set sent_count = rows|selectattr('assessment.status', 'equalto', 'SENT')|list|length %}
+    {% set in_progress_count = rows|selectattr('assessment.status', 'equalto', 'IN_PROGRESS')|list|length %}
+    {% set submitted_count = rows|selectattr('assessment.status', 'equalto', 'SUBMITTED')|list|length %}
+    {% set draft_count = rows|selectattr('assessment.status', 'equalto', 'DRAFT')|list|length %}
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-secondary">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-secondary">{{ draft_count }}</div>
+                <small class="text-muted">Draft</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-primary">{{ sent_count }}</div>
+                <small class="text-muted">Sent</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-warning">{{ in_progress_count }}</div>
+                <small class="text-muted">In Progress</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-info">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-info">{{ submitted_count }}</div>
+                <small class="text-muted">Submitted</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tracker Table -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Vendor</th>
+                    <th>Assessment</th>
+                    <th>Status</th>
+                    <th>Sent To</th>
+                    <th>Sent Date</th>
+                    <th>Waiting</th>
+                    <th>Reminders</th>
+                    <th>Decision</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="trackerBody">
+                {% for row in rows %}
+                <tr data-status="{{ row.assessment.status }}"
+                    data-days="{{ row.days_waiting if row.days_waiting is not none else '' }}"
+                    data-search="{{ row.vendor_name|lower }} {{ row.assessment.title|lower }}">
+                    <td>
+                        {% if row.vendor_id %}
+                        <a href="/vendors/{{ row.vendor_id }}" class="text-decoration-none fw-semibold">
+                            {{ row.vendor_name }}
+                        </a>
+                        {% else %}
+                        <span class="fw-semibold">{{ row.vendor_name }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div>{{ row.assessment.title }}</div>
+                        <small class="text-muted">{{ row.assessment.questions|length }} questions</small>
+                    </td>
+                    <td>
+                        {% if row.assessment.status == 'DRAFT' %}
+                        <span class="badge bg-secondary">Draft</span>
+                        {% elif row.assessment.status == 'SENT' %}
+                        <span class="badge bg-primary">Sent</span>
+                        {% elif row.assessment.status == 'IN_PROGRESS' %}
+                        <span class="badge bg-warning text-dark">In Progress</span>
+                        {% elif row.assessment.status == 'SUBMITTED' %}
+                        <span class="badge bg-info">Submitted</span>
+                        {% elif row.assessment.status == 'REVIEWED' %}
+                        <span class="badge bg-success">Reviewed</span>
+                        {% endif %}
+                        {% if row.assessment.reminders_paused %}
+                        <br><span class="badge bg-secondary mt-1"><i class="bi bi-pause-circle me-1"></i>Paused</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.assessment.sent_to_email %}
+                        <small>{{ row.assessment.sent_to_email }}</small>
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.assessment.sent_at %}
+                        {{ row.assessment.sent_at.strftime('%Y-%m-%d') }}
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.days_waiting is not none %}
+                            {% if row.days_waiting >= 14 %}
+                            <span class="days-badge days-overdue">{{ row.days_waiting }}d</span>
+                            {% elif row.days_waiting >= 7 %}
+                            <span class="days-badge days-warn">{{ row.days_waiting }}d</span>
+                            {% else %}
+                            <span class="days-badge days-ok">{{ row.days_waiting }}d</span>
+                            {% endif %}
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.reminder_count > 0 %}
+                        <span class="badge bg-warning text-dark">{{ row.reminder_count }}</span>
+                        {% else %}
+                        <span class="text-muted">0</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.decision and row.decision.status == 'FINAL' %}
+                            {% if row.decision.decision_outcome == 'APPROVE' %}
+                            <span class="badge bg-success">Approved</span>
+                            {% elif row.decision.decision_outcome == 'APPROVE_WITH_CONDITIONS' %}
+                            <span class="badge bg-warning text-dark">Conditional</span>
+                            {% elif row.decision.decision_outcome == 'NEEDS_FOLLOW_UP' %}
+                            <span class="badge bg-info">Follow-up</span>
+                            {% elif row.decision.decision_outcome == 'REJECT' %}
+                            <span class="badge bg-danger">Rejected</span>
+                            {% endif %}
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if row.assessment.status == 'SUBMITTED' and (not row.decision or row.decision.status != 'FINAL') %}
+                        <a href="/assessments/{{ row.assessment.id }}/decision" class="btn btn-sm btn-outline-primary" title="Perform assessment">
+                            <i class="bi bi-clipboard-check"></i>
+                        </a>
+                        {% elif row.decision and row.decision.status == 'FINAL' %}
+                        <a href="/assessments/{{ row.assessment.id }}/decision" class="btn btn-sm btn-outline-secondary" title="View decision">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        {% endif %}
+                        {% if row.assessment.status in ['DRAFT', 'SENT'] %}
+                        <a href="/questionnaire/{{ row.assessment.id }}/share" class="btn btn-sm btn-outline-success" title="Send to vendor">
+                            <i class="bi bi-envelope"></i>
+                        </a>
+                        {% endif %}
+                        <a href="/questionnaire/{{ row.assessment.id }}/edit" class="btn btn-sm btn-outline-secondary" title="Edit assessment">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        {% if row.assessment.status in ['SENT', 'IN_PROGRESS'] and row.assessment.sent_to_email %}
+                        <form method="post" action="/assessments/{{ row.assessment.id }}/toggle-reminders" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="{{ 'Resume reminders' if row.assessment.reminders_paused else 'Pause reminders' }}">
+                                <i class="bi bi-{{ 'play-circle' if row.assessment.reminders_paused else 'pause-circle' }}"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function applyTrackerFilters() {
+    var statusVal = document.getElementById('filterStatus').value;
+    var waitingVal = document.getElementById('filterWaiting').value;
+    var searchVal = document.getElementById('filterSearch').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('#trackerBody tr');
+    var visibleCount = 0;
+
+    rows.forEach(function(row) {
+        var status = row.dataset.status;
+        var days = row.dataset.days;
+        var search = row.dataset.search;
+        var show = true;
+
+        // Status filter
+        if (statusVal && status !== statusVal) show = false;
+
+        // Waiting filter
+        if (waitingVal === 'awaiting' && (days === '' || status === 'SUBMITTED' || status === 'REVIEWED' || status === 'DRAFT')) show = false;
+        if (waitingVal === 'overdue' && (days === '' || parseInt(days) < 7)) show = false;
+        if (waitingVal === 'critical' && (days === '' || parseInt(days) < 14)) show = false;
+
+        // Search filter
+        if (searchVal && search.indexOf(searchVal) === -1) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visibleCount++;
+    });
+
+    document.getElementById('rowCount').textContent = visibleCount;
+}
+
+// Apply filter from URL params if present
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('status')) {
+        document.getElementById('filterStatus').value = params.get('status');
+        applyTrackerFilters();
+    }
+    if (params.get('waiting')) {
+        document.getElementById('filterWaiting').value = params.get('waiting');
+        applyTrackerFilters();
+    }
+})();
+</script>
+{% endblock %}
