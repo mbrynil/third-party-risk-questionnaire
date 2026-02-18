@@ -297,13 +297,14 @@
                     </thead>
                     <tbody>
                         {% for row in heatmap.rows %}
+                        {% set tier_idx = loop.index0 %}
                         <tr>
                             <td style="background:#f9fafb;font-weight:600;font-size:0.8rem;white-space:nowrap;">{{ row.tier }}</td>
                             {% for count in row.counts %}
                             {% set max_count = heatmap.rows | map(attribute='counts') | map('max') | max %}
                             {% set opacity = (count / max_count * 0.8 + 0.15) if max_count > 0 and count > 0 else 0 %}
                             <td class="heatmap-cell"
-                                data-tier="{{ heatmap.tier_values[loop.parent.loop.index0] }}"
+                                data-tier="{{ heatmap.tier_values[tier_idx] }}"
                                 data-risk="{{ heatmap.risk_values[loop.index0] }}"
                                 style="{% if count > 0 %}background:rgba(220,53,69,{{ opacity }});color:{% if opacity > 0.5 %}#fff{% else %}#111{% endif %};cursor:pointer;font-weight:700;{% else %}background:#f3f4f6;color:#9ca3af;{% endif %}">
                                 {{ count }}
