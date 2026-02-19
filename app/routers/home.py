@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Form, Depends
-from fastapi.responses import HTMLResponse, Response as FastAPIResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response as FastAPIResponse, StreamingResponse
 from sqlalchemy.orm import Session
 import json
 
@@ -18,12 +18,36 @@ from app.services.remediation_service import get_portfolio_remediation_summary
 from app.services.reminder_service import get_reminder_stats
 from app.services.export_service import generate_portfolio_report_pdf, generate_vendor_list_csv
 from app.services.auth_service import require_login, require_role
+from app.services.workspace_service import get_workspace_data
 
 router = APIRouter()
 
 
+# ==================== MY WORKSPACE (landing page) ====================
+
 @router.get("/", response_class=HTMLResponse)
-async def home(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+async def workspace(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    # Viewers don't have assigned vendors — redirect to portfolio
+    if current_user.role == "viewer":
+        return RedirectResponse(url="/portfolio", status_code=303)
+
+    data = get_workspace_data(db, current_user)
+    return templates.TemplateResponse("workspace.html", {
+        "request": request,
+        "current_user": current_user,
+        "now": datetime.utcnow(),
+        "kpis": data["kpis"],
+        "action_items": data["action_items"],
+        "vendor_rows": data["vendor_rows"],
+        "recent_activities": data["recent_activities"],
+        "org_overview": data["org_overview"],
+    })
+
+
+# ==================== PORTFOLIO DASHBOARD (moved from /) ====================
+
+@router.get("/portfolio", response_class=HTMLResponse)
+async def portfolio(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     data = get_portfolio_data(db)
     templates_list = db.query(AssessmentTemplate).order_by(AssessmentTemplate.name).all()
     reminder_stats = get_reminder_stats(db)
@@ -46,7 +70,9 @@ async def home(request: Request, db: Session = Depends(get_db), current_user: Us
     })
 
 
-@router.get("/dashboard/report", response_class=HTMLResponse)
+# ==================== PORTFOLIO SUB-ROUTES ====================
+
+@router.get("/portfolio/report", response_class=HTMLResponse)
 async def portfolio_report(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     data = get_portfolio_data(db)
     remediation_summary = get_portfolio_remediation_summary(db)
@@ -63,7 +89,7 @@ async def portfolio_report(request: Request, db: Session = Depends(get_db), curr
     })
 
 
-@router.get("/dashboard/report.pdf")
+@router.get("/portfolio/report.pdf")
 async def portfolio_report_pdf(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     data = get_portfolio_data(db)
     remediation_summary = get_portfolio_remediation_summary(db)
@@ -90,7 +116,7 @@ async def portfolio_report_pdf(db: Session = Depends(get_db), current_user: User
     )
 
 
-@router.get("/dashboard/vendors.csv")
+@router.get("/portfolio/vendors.csv")
 async def vendor_list_csv(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     csv_content = generate_vendor_list_csv(db)
     filename = f"vendors_{datetime.utcnow().strftime('%Y%m%d')}.csv"
@@ -99,6 +125,23 @@ async def vendor_list_csv(db: Session = Depends(get_db), current_user: User = De
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ==================== BACKWARD-COMPAT REDIRECTS ====================
+
+@router.get("/dashboard/report")
+async def dashboard_report_redirect():
+    return RedirectResponse(url="/portfolio/report", status_code=301)
+
+
+@router.get("/dashboard/report.pdf")
+async def dashboard_report_pdf_redirect():
+    return RedirectResponse(url="/portfolio/report.pdf", status_code=301)
+
+
+@router.get("/dashboard/vendors.csv")
+async def dashboard_vendors_csv_redirect():
+    return RedirectResponse(url="/portfolio/vendors.csv", status_code=301)
 
 
 @router.get("/create", response_class=HTMLResponse)

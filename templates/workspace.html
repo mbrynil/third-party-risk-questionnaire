@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}My Workspace - RiskQ{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card {
+        border-radius: 12px;
+        padding: 1.5rem;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .kpi-card .kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+    .kpi-card .kpi-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+
+    .org-bar {
+        background: #f0f4ff;
+        border: 1px solid #dbeafe;
+        border-radius: 10px;
+        padding: 0.6rem 1.25rem;
+        font-size: 0.8rem;
+        color: #4b5563;
+    }
+    .org-bar .org-stat {
+        font-weight: 700;
+        color: #1e3a5f;
+    }
+
+    .action-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f3f4f6;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.1s;
+    }
+    .action-item:hover {
+        background: #f8fafc;
+        color: inherit;
+    }
+    .action-item:last-child {
+        border-bottom: none;
+    }
+    .action-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 0.9rem;
+    }
+    .action-text {
+        flex: 1;
+        min-width: 0;
+    }
+    .action-text .action-title {
+        font-weight: 600;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .action-text .action-subtitle {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+
+    .activity-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f9fafb;
+        font-size: 0.8rem;
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 5px;
+    }
+    .activity-time {
+        font-size: 0.7rem;
+        color: #9ca3af;
+    }
+
+    .vendor-table-compact .table {
+        font-size: 0.85rem;
+        margin-bottom: 0;
+    }
+    .vendor-table-compact .table tbody tr {
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+    .vendor-table-compact .table tbody tr:hover {
+        background: #f0f4ff;
+    }
+    .tier-badge-sm {
+        display: inline-block;
+        padding: 0.15rem 0.45rem;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.7rem;
+        color: #fff;
+    }
+    .badge-risk {
+        padding: 0.2rem 0.5rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.7rem;
+    }
+    .badge-risk-very_low { background: #d1e7dd; color: #166534; }
+    .badge-risk-low { background: #d1f2eb; color: #0f766e; }
+    .badge-risk-moderate { background: #fff3cd; color: #92400e; }
+    .badge-risk-high { background: #ffe4cc; color: #9a3412; }
+    .badge-risk-very_high { background: #f8d7da; color: #991b1b; }
+
+    .text-overdue { color: #dc3545; font-weight: 600; }
+
+    .empty-state {
+        text-align: center;
+        padding: 2.5rem 1rem;
+        color: #9ca3af;
+    }
+    .empty-state i {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: 0.75rem;
+    }
+    .card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .scroll-list {
+        max-height: 420px;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ==================== ADMIN ORG OVERVIEW BAR ==================== #}
+{% if org_overview %}
+<div class="org-bar mb-3 d-flex align-items-center gap-4 flex-wrap">
+    <span><i class="bi bi-globe2 me-1"></i>Org Overview:</span>
+    <span><span class="org-stat">{{ org_overview.total_active_vendors }}</span> active vendors</span>
+    <span><span class="org-stat">{{ org_overview.total_pending_assessments }}</span> pending assessments</span>
+    <span><span class="org-stat text-danger">{{ org_overview.total_overdue_remediations }}</span> overdue remediations</span>
+    <a href="/portfolio" class="ms-auto text-decoration-none small"><i class="bi bi-arrow-right me-1"></i>Full Portfolio</a>
+</div>
+{% endif %}
+
+{# ==================== GREETING ==================== #}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        {% set hour = now.hour %}
+        {% if hour < 12 %}
+            {% set greeting = "Good morning" %}
+        {% elif hour < 17 %}
+            {% set greeting = "Good afternoon" %}
+        {% else %}
+            {% set greeting = "Good evening" %}
+        {% endif %}
+        <h1 class="h3 mb-0" style="font-weight: 700; color: #1e3a5f;">
+            {{ greeting }}, {{ current_user.display_name }}
+        </h1>
+        <p class="text-muted mb-0">
+            <span class="badge bg-light text-dark" style="font-size:0.65rem;vertical-align:middle;">{{ current_user.role|upper }}</span>
+            Here's what needs your attention today.
+        </p>
+    </div>
+    <a href="/portfolio" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-speedometer2 me-1"></i>Portfolio Dashboard
+    </a>
+</div>
+
+{# ==================== KPI ROW ==================== #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card" style="border-left: 4px solid #2563eb;">
+            <div class="kpi-value" style="color: #2563eb;">{{ kpis.my_vendors }}</div>
+            <div class="kpi-label">My Vendors</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card" style="border-left: 4px solid #f59e0b;">
+            <div class="kpi-value" style="color: #f59e0b;">{{ kpis.pending_reviews }}</div>
+            <div class="kpi-label">Pending Reviews</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card" style="border-left: 4px solid #fd7e14;">
+            <div class="kpi-value" style="color: #fd7e14;">{{ kpis.open_remediations }}</div>
+            <div class="kpi-label">Open Remediations</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card" style="border-left: 4px solid #dc3545;">
+            <div class="kpi-value" style="color: #dc3545;">{{ kpis.overdue_items }}</div>
+            <div class="kpi-label">Overdue Items</div>
+        </div>
+    </div>
+</div>
+
+{# ==================== TWO-COLUMN: ACTION ITEMS + ACTIVITY ==================== #}
+<div class="row g-3 mb-4">
+    {# LEFT: Action Items #}
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-lightning-charge me-1"></i>Action Items</span>
+                {% if action_items %}
+                <span class="badge bg-primary rounded-pill">{{ action_items|length }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if action_items %}
+                <div class="scroll-list">
+                    {% for item in action_items %}
+                    <a href="{{ item.link }}" class="action-item">
+                        <div class="action-icon" style="background: {{ item.color }}15; color: {{ item.color }};">
+                            <i class="bi {{ item.icon }}"></i>
+                        </div>
+                        <div class="action-text">
+                            <div class="action-title">{{ item.title }}</div>
+                            <div class="action-subtitle">{{ item.subtitle }}</div>
+                        </div>
+                        <i class="bi bi-chevron-right text-muted" style="font-size:0.75rem;"></i>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <i class="bi bi-check-circle"></i>
+                    <h6>All caught up!</h6>
+                    <p class="small">No action items need your attention right now.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# RIGHT: Recent Activity #}
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history me-1"></i>Recent Activity
+            </div>
+            <div class="card-body">
+                {% if recent_activities %}
+                <div style="max-height: 380px; overflow-y: auto;">
+                    {% for act in recent_activities[:10] %}
+                    <div class="activity-item">
+                        <div class="activity-dot" style="background: {{ act.color }};"></div>
+                        <div style="min-width:0;">
+                            <div style="font-size:0.8rem;">
+                                {% if act.vendor_name %}
+                                <a href="/vendors/{{ act.vendor_id }}" class="text-decoration-none fw-semibold">{{ act.vendor_name }}</a> —
+                                {% endif %}
+                                {{ act.description }}
+                            </div>
+                            <div class="activity-time">
+                                {{ act.created_at.strftime("%b %d, %H:%M") }}
+                                {% if act.user_name %} by {{ act.user_name }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-3 text-muted small">
+                    <i class="bi bi-clock" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;"></i>
+                    No recent activity
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ==================== MY VENDORS TABLE ==================== #}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-building me-1"></i>My Vendors</span>
+        {% if vendor_rows %}
+        <span class="text-muted small">{{ vendor_rows|length }} vendor{{ 's' if vendor_rows|length != 1 }}</span>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if vendor_rows %}
+        <div class="vendor-table-compact">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding:0.75rem 1rem;">Vendor</th>
+                        <th>Tier</th>
+                        <th>Score</th>
+                        <th>Risk</th>
+                        <th>Assessment</th>
+                        <th>Next Review</th>
+                        <th>Remediations</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in vendor_rows %}
+                    <tr onclick="window.location.href='/vendors/{{ v.id }}'">
+                        <td style="padding:0.75rem 1rem;"><strong>{{ v.name }}</strong></td>
+                        <td>
+                            {% if v.tier %}
+                            <span class="tier-badge-sm" style="background: {{ v.tier_color or '#6c757d' }};">{{ v.tier }}</span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if v.score is not none %}
+                            <strong>{{ v.score }}%</strong>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if v.risk_rating_display %}
+                            <span class="badge-risk badge-risk-{{ v.risk_rating|lower }}">{{ v.risk_rating_display }}</span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ v.assessment_status or '—' }}</td>
+                        <td>
+                            {% if v.next_review %}
+                                {% if v.is_overdue %}
+                                <span class="text-overdue">{{ v.next_review }}</span>
+                                {% else %}
+                                {{ v.next_review }}
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if v.open_remediations > 0 %}
+                            <span class="badge bg-warning text-dark">{{ v.open_remediations }}</span>
+                            {% else %}
+                            <span class="text-muted">0</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-person-plus"></i>
+            <h6>No vendors assigned</h6>
+            <p class="small">You don't have any vendors assigned yet. Browse the portfolio to see all vendors.</p>
+            <a href="/portfolio" class="btn btn-outline-primary btn-sm"><i class="bi bi-speedometer2 me-1"></i>View Portfolio</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

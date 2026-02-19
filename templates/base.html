@@ -120,8 +120,13 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
+                    {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
                     <li class="nav-item">
-                        <a class="nav-link" href="/"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+                        <a class="nav-link" href="/"><i class="bi bi-house-door me-1"></i>My Workspace</a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/portfolio"><i class="bi bi-speedometer2 me-1"></i>Portfolio</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/vendors">
