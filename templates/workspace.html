@@ -10,10 +10,16 @@
         background: #fff;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         transition: transform 0.15s, box-shadow 0.15s;
+        cursor: pointer;
     }
     .kpi-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    a.kpi-link {
+        text-decoration: none;
+        color: inherit;
+        display: block;
     }
     .kpi-card .kpi-value {
         font-size: 2rem;
@@ -201,28 +207,36 @@
 {# ==================== KPI ROW ==================== #}
 <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
-        <div class="kpi-card" style="border-left: 4px solid #2563eb;">
-            <div class="kpi-value" style="color: #2563eb;">{{ kpis.my_vendors }}</div>
-            <div class="kpi-label">My Vendors</div>
-        </div>
+        <a href="#myVendorsTable" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #2563eb;">
+                <div class="kpi-value" style="color: #2563eb;">{{ kpis.my_vendors }}</div>
+                <div class="kpi-label">My Vendors</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="kpi-card" style="border-left: 4px solid #f59e0b;">
-            <div class="kpi-value" style="color: #f59e0b;">{{ kpis.pending_reviews }}</div>
-            <div class="kpi-label">Pending Reviews</div>
-        </div>
+        <a href="/assessments/tracker?status=SUBMITTED" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #f59e0b;">
+                <div class="kpi-value" style="color: #f59e0b;">{{ kpis.pending_reviews }}</div>
+                <div class="kpi-label">Pending Reviews</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="kpi-card" style="border-left: 4px solid #fd7e14;">
-            <div class="kpi-value" style="color: #fd7e14;">{{ kpis.open_remediations }}</div>
-            <div class="kpi-label">Open Remediations</div>
-        </div>
+        <a href="#actionItems" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #fd7e14;">
+                <div class="kpi-value" style="color: #fd7e14;">{{ kpis.open_remediations }}</div>
+                <div class="kpi-label">Open Remediations</div>
+            </div>
+        </a>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="kpi-card" style="border-left: 4px solid #dc3545;">
-            <div class="kpi-value" style="color: #dc3545;">{{ kpis.overdue_items }}</div>
-            <div class="kpi-label">Overdue Items</div>
-        </div>
+        <a href="#actionItems" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #dc3545;">
+                <div class="kpi-value" style="color: #dc3545;">{{ kpis.overdue_items }}</div>
+                <div class="kpi-label">Overdue Items</div>
+            </div>
+        </a>
     </div>
 </div>
 
@@ -230,7 +244,7 @@
 <div class="row g-3 mb-4">
     {# LEFT: Action Items #}
     <div class="col-lg-8">
-        <div class="card">
+        <div class="card" id="actionItems">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-lightning-charge me-1"></i>Action Items</span>
                 {% if action_items %}
@@ -303,7 +317,7 @@
 </div>
 
 {# ==================== MY VENDORS TABLE ==================== #}
-<div class="card">
+<div class="card" id="myVendorsTable">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span><i class="bi bi-building me-1"></i>My Vendors</span>
         {% if vendor_rows %}

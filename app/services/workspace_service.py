@@ -116,7 +116,7 @@ def get_workspace_data(db: Session, user: User) -> dict:
                 "color": "#dc3545",
                 "title": r.title[:80],
                 "subtitle": f"Overdue by {days_over} day{'s' if days_over != 1 else ''}" + (f" — {r.vendor.name}" if r.vendor else ""),
-                "link": f"/vendors/{r.vendor_id}/remediations",
+                "link": f"/remediations/{r.id}",
                 "due_info": r.due_date.strftime("%Y-%m-%d"),
             })
 
@@ -161,7 +161,7 @@ def get_workspace_data(db: Session, user: User) -> dict:
                 "color": "#f59e0b",
                 "title": r.title[:80],
                 "subtitle": (f"Due {r.due_date.strftime('%Y-%m-%d')}" if r.due_date else "No due date") + (f" — {r.vendor.name}" if r.vendor else ""),
-                "link": f"/vendors/{r.vendor_id}/remediations",
+                "link": f"/remediations/{r.id}",
                 "due_info": r.due_date.strftime("%Y-%m-%d") if r.due_date else None,
             })
 
