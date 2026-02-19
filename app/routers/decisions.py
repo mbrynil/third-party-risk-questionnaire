@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response as FastAPIResponse
 from sqlalchemy.orm import Session
 
 from app import templates
@@ -19,6 +19,9 @@ from app.services.draft_generator import generate_draft
 from app.services.remediation_service import auto_generate_remediations
 from app.services.reassessment_service import suggest_next_review_date, compute_assessment_delta
 from app.services.tiering import get_effective_tier
+from app.services.activity_service import log_activity
+from app.services.export_service import generate_assessment_report_pdf
+from models import ACTIVITY_DECISION_FINALIZED
 
 router = APIRouter()
 
@@ -155,6 +158,39 @@ async def assessment_report_page(request: Request, assessment_id: int, db: Sessi
     })
 
 
+@router.get("/assessments/{assessment_id}/report.pdf")
+async def assessment_report_pdf(assessment_id: int, db: Session = Depends(get_db)):
+    ctx = _load_decision_context(db, assessment_id)
+
+    if ctx["decision"].status != DECISION_STATUS_FINAL:
+        raise HTTPException(status_code=400, detail="Report is only available for finalized assessments")
+
+    scores = ctx["scores"]
+    template_ctx = {
+        "assessment": ctx["assessment"],
+        "vendor": ctx["vendor"],
+        "decision": ctx["decision"],
+        "response": ctx["response"],
+        "total_questions": len(ctx["questions"]),
+        "scores": scores,
+        **{k: scores[k] for k in ("meets_count", "partial_count", "does_not_meet_count", "no_expectation_count")},
+        "evidence_files": ctx["evidence_files"],
+        "follow_ups": ctx["follow_ups"],
+        "now": datetime.utcnow(),
+    }
+    try:
+        pdf_bytes = generate_assessment_report_pdf(template_ctx)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    vendor_name = ctx["vendor"].name.replace(" ", "_")
+    filename = f"assessment_report_{vendor_name}_{assessment_id}.pdf"
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.post("/assessments/{assessment_id}/decision/generate")
 async def auto_generate_draft(assessment_id: int, db: Session = Depends(get_db)):
     ctx = _load_decision_context(db, assessment_id)
@@ -240,6 +276,11 @@ async def save_assessment_decision(
 
     if action == "finalize" and success:
         transition_to_reviewed(db, assessment)
+        if assessment.vendor_id:
+            outcome_label = (decision_outcome or "").replace("_", " ").title()
+            log_activity(db, assessment.vendor_id, ACTIVITY_DECISION_FINALIZED,
+                         f"Decision finalized for '{assessment.title}': {outcome_label}",
+                         assessment_id=assessment.id)
 
         # Persist overall_score on the decision
         ctx = _load_decision_context(db, assessment_id)

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 import json
 
@@ -18,6 +18,9 @@ from models import (
 )
 from app.services.lifecycle import transition_to_sent, transition_to_reviewed
 from app.services.email_service import send_assessment_invitation
+from app.services.activity_service import log_activity
+from app.services.export_service import generate_assessment_tracker_csv
+from models import ACTIVITY_ASSESSMENT_SENT
 
 router = APIRouter()
 
@@ -70,6 +73,17 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db)):
         "rows": rows,
         "now": now,
     })
+
+
+@router.get("/assessments/tracker.csv")
+async def assessment_tracker_csv(db: Session = Depends(get_db)):
+    csv_content = generate_assessment_tracker_csv(db)
+    filename = f"assessment_tracker_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/questionnaire/{assessment_id}/edit", response_class=HTMLResponse)
@@ -374,6 +388,10 @@ async def send_assessment_email(
     if expires_at:
         assessment.expires_at = expires_at
     transition_to_sent(db, assessment)
+    if assessment.vendor_id:
+        log_activity(db, assessment.vendor_id, ACTIVITY_ASSESSMENT_SENT,
+                     f"Assessment '{assessment.title}' sent to {contact_email.strip()}",
+                     assessment_id=assessment.id)
     db.commit()
 
     # Redirect back to referrer or vendor profile

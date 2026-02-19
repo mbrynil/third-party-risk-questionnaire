@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Form, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response as FastAPIResponse, StreamingResponse
 from sqlalchemy.orm import Session
 import json
 
@@ -15,6 +15,7 @@ from app.services.vendor_service import find_or_create_vendor
 from app.services.portfolio import get_portfolio_data
 from app.services.remediation_service import get_portfolio_remediation_summary
 from app.services.reminder_service import get_reminder_stats
+from app.services.export_service import generate_portfolio_report_pdf, generate_vendor_list_csv
 
 router = APIRouter()
 
@@ -53,6 +54,44 @@ async def portfolio_report(request: Request, db: Session = Depends(get_db)):
         "remediation_summary": remediation_summary,
         "now": datetime.utcnow(),
     })
+
+
+@router.get("/dashboard/report.pdf")
+async def portfolio_report_pdf(db: Session = Depends(get_db)):
+    data = get_portfolio_data(db)
+    remediation_summary = get_portfolio_remediation_summary(db)
+    template_ctx = {
+        "kpis": data["kpis"],
+        "vendors": data["vendors"],
+        "risk_distribution": data["risk_distribution"],
+        "decision_outcomes": data["decision_outcomes"],
+        "assessment_pipeline": data["assessment_pipeline"],
+        "category_analysis": data["category_analysis"],
+        "remediation_summary": remediation_summary,
+        "now": datetime.utcnow(),
+    }
+    try:
+        pdf_bytes = generate_portfolio_report_pdf(template_ctx)
+    except RuntimeError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail=str(exc))
+    filename = f"portfolio_report_{datetime.utcnow().strftime('%Y%m%d')}.pdf"
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/dashboard/vendors.csv")
+async def vendor_list_csv(db: Session = Depends(get_db)):
+    csv_content = generate_vendor_list_csv(db)
+    filename = f"vendors_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/create", response_class=HTMLResponse)

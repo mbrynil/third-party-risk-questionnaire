@@ -1,3 +1,12 @@
+import os
+import sys
+
+# Add MSYS2 GTK3/Pango libraries to PATH for WeasyPrint PDF generation (Windows)
+if sys.platform == "win32":
+    _msys2_bin = r"C:\msys64\mingw64\bin"
+    if os.path.isdir(_msys2_bin) and _msys2_bin not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = _msys2_bin + os.pathsep + os.environ.get("PATH", "")
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,18 +15,21 @@ from datetime import datetime
 from models import (
     init_db, get_db, seed_question_bank, seed_risk_statements,
     backfill_question_categories, backfill_question_bank_item_ids,
-    backfill_vendor_new_columns, backfill_decision_scores, SessionLocal,
+    backfill_vendor_new_columns, backfill_decision_scores,
+    backfill_template_columns, seed_default_templates, SessionLocal,
     Assessment, Response, ensure_reminder_config,
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
 )
-from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations, settings
+from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations, settings, notifications, onboarding
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 init_db()
 backfill_vendor_new_columns()
+backfill_template_columns()
 seed_question_bank()
 seed_risk_statements()
+seed_default_templates()
 backfill_question_categories()
 backfill_question_bank_item_ids()
 backfill_decision_scores()
@@ -72,6 +84,8 @@ app.include_router(risk_library.router)
 app.include_router(question_bank.router)
 app.include_router(remediations.router)
 app.include_router(settings.router)
+app.include_router(notifications.router)
+app.include_router(onboarding.router)
 
 if __name__ == "__main__":
     import uvicorn

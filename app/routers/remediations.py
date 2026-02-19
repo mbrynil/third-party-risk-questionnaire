@@ -1,7 +1,7 @@
 from datetime import datetime, date
 
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import templates
@@ -13,7 +13,20 @@ from models import (
     VALID_SEVERITIES,
 )
 
+from app.services.export_service import generate_remediation_csv
+
 router = APIRouter()
+
+
+@router.get("/remediations/export.csv")
+async def remediation_export_csv(db: Session = Depends(get_db)):
+    csv_content = generate_remediation_csv(db)
+    filename = f"remediations_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/remediations/{remediation_id}", response_class=HTMLResponse)

@@ -206,9 +206,14 @@
     </style>
 </head>
 <body>
-    <button class="btn btn-primary print-btn no-print" onclick="window.print()">
-        <i class="bi bi-printer me-1"></i>Print / Save PDF
-    </button>
+    <div class="print-btn no-print d-flex gap-2">
+        <a href="/submissions/{{ response.id }}/export.pdf" class="btn btn-success">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
+        </a>
+        <button class="btn btn-primary" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i>Print / Save PDF
+        </button>
+    </div>
     
     <div class="export-container">
         <div class="export-header">

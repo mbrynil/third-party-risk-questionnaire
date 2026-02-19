@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response as FastAPIResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
@@ -12,6 +12,7 @@ from models import (
     ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED,
 )
 from app.services.evaluation import compute_response_evaluations
+from app.services.export_service import generate_submission_pdf, generate_assessment_responses_csv
 
 router = APIRouter()
 
@@ -151,3 +152,70 @@ async def export_submission(request: Request, submission_id: int, db: Session = 
         "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
         "now": datetime.utcnow()
     })
+
+
+@router.get("/submissions/{submission_id}/export.pdf")
+async def export_submission_pdf(submission_id: int, db: Session = Depends(get_db)):
+    response = db.query(Response).filter(Response.id == submission_id).first()
+    if not response:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    assessment = db.query(Assessment).filter(Assessment.id == response.assessment_id).first()
+    questions = db.query(Question).filter(
+        Question.assessment_id == assessment.id
+    ).order_by(Question.order).all()
+
+    answers_dict = {a.question_id: a for a in response.answers}
+    eval_dict = compute_response_evaluations(questions, response)
+
+    answered_count = sum(1 for a in response.answers if a.answer_choice)
+    total_questions = len(questions)
+    completion_percent = (answered_count / total_questions * 100) if total_questions > 0 else 0
+
+    evidence_files = db.query(EvidenceFile).filter(
+        EvidenceFile.response_id == response.id
+    ).order_by(EvidenceFile.uploaded_at.desc()).all()
+
+    follow_ups = db.query(FollowUp).filter(
+        FollowUp.response_id == response.id
+    ).order_by(FollowUp.created_at.desc()).all()
+
+    template_ctx = {
+        "response": response,
+        "assessment": assessment,
+        "questions": questions,
+        "answers_dict": answers_dict,
+        "eval_dict": eval_dict,
+        "completion_percent": completion_percent,
+        "answered_count": answered_count,
+        "evidence_files": evidence_files,
+        "follow_ups": follow_ups,
+        "RESPONSE_STATUS_DRAFT": RESPONSE_STATUS_DRAFT,
+        "RESPONSE_STATUS_SUBMITTED": RESPONSE_STATUS_SUBMITTED,
+        "RESPONSE_STATUS_NEEDS_INFO": RESPONSE_STATUS_NEEDS_INFO,
+        "now": datetime.utcnow(),
+    }
+    try:
+        pdf_bytes = generate_submission_pdf(template_ctx)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    vendor_name = (response.vendor_name or "vendor").replace(" ", "_")
+    filename = f"submission_{vendor_name}_{submission_id}.pdf"
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/submissions/{submission_id}/responses.csv")
+async def export_submission_csv(submission_id: int, db: Session = Depends(get_db)):
+    csv_content = generate_assessment_responses_csv(db, submission_id)
+    if not csv_content:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    filename = f"responses_{submission_id}.csv"
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

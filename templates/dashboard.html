@@ -177,9 +177,17 @@
         <h1 class="h3 mb-0" style="font-weight: 700; color: #1e3a5f;">Vendor Portfolio</h1>
         <p class="text-muted mb-0">Holistic view of your third-party risk program</p>
     </div>
-    <a href="/dashboard/report" target="_blank" class="btn btn-outline-primary">
-        <i class="bi bi-printer me-1"></i>Print Portfolio Report
-    </a>
+    <div class="d-flex gap-2">
+        <a href="/dashboard/vendors.csv" class="btn btn-outline-success">
+            <i class="bi bi-filetype-csv me-1"></i>Export Vendors CSV
+        </a>
+        <a href="/dashboard/report.pdf" class="btn btn-outline-success">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Download Report PDF
+        </a>
+        <a href="/dashboard/report" target="_blank" class="btn btn-outline-primary">
+            <i class="bi bi-printer me-1"></i>Print Portfolio Report
+        </a>
+    </div>
 </div>
 
 {# ==================== KPI ROW ==================== #}
