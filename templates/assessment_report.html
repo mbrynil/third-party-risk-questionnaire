@@ -294,6 +294,12 @@
                 <span class="meta-label">Report Date</span>
                 <span class="meta-value">{{ now.strftime('%Y-%m-%d %H:%M UTC') }}</span>
             </div>
+            {% if decision.decided_by %}
+            <div class="meta-item">
+                <span class="meta-label">Reviewed By</span>
+                <span class="meta-value">{{ decision.decided_by.display_name }}</span>
+            </div>
+            {% endif %}
         </div>
 
         {# ==================== EXECUTIVE SUMMARY ==================== #}

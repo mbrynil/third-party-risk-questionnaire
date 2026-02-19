@@ -5,15 +5,18 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import templates
-from models import get_db, ReminderConfig, ReminderLog, ensure_reminder_config
+from models import get_db, ReminderConfig, ReminderLog, User, ensure_reminder_config
 from app.services.reminder_service import get_reminder_stats
 from app.services.scheduler import run_now
+from app.services.auth_service import require_role
 
 router = APIRouter()
 
+_admin_dep = require_role("admin")
+
 
 @router.get("/settings/reminders", response_class=HTMLResponse)
-async def reminder_settings_page(request: Request, db: Session = Depends(get_db)):
+async def reminder_settings_page(request: Request, db: Session = Depends(get_db), current_user: User = Depends(_admin_dep)):
     config = ensure_reminder_config(db)
     stats = get_reminder_stats(db)
 
@@ -40,6 +43,7 @@ async def update_reminder_settings(
     escalation_email: str = Form(""),
     final_notice_days_before_expiry: int = Form(3),
     db: Session = Depends(get_db),
+    current_user: User = Depends(_admin_dep),
 ):
     config = ensure_reminder_config(db)
     config.enabled = (enabled == "on")
@@ -56,7 +60,7 @@ async def update_reminder_settings(
 
 
 @router.post("/settings/reminders/run-now")
-async def trigger_reminders_now(request: Request):
+async def trigger_reminders_now(request: Request, current_user: User = Depends(_admin_dep)):
     """Manually trigger a reminder check cycle."""
     summary = run_now()
     sent = summary.get("reminders_sent", 0)

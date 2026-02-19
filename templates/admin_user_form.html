@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}{% if edit_user %}Edit User{% else %}New User{% endif %} - RiskQ{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="/admin/users" class="text-decoration-none text-muted">
+        <i class="bi bi-arrow-left me-1"></i>Back to Users
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    {% if edit_user %}
+                    <i class="bi bi-person-gear me-2"></i>Edit User: {{ edit_user.display_name }}
+                    {% else %}
+                    <i class="bi bi-person-plus me-2"></i>Create New User
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+
+                <form method="post" action="{% if edit_user %}/admin/users/{{ edit_user.id }}/edit{% else %}/admin/users/new{% endif %}">
+                    {% if not edit_user %}
+                    <div class="mb-3">
+                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" name="email" class="form-control" required
+                               placeholder="user@example.com">
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" value="{{ edit_user.email }}" disabled>
+                        <small class="text-muted">Email cannot be changed.</small>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Display Name <span class="text-danger">*</span></label>
+                        <input type="text" name="display_name" class="form-control" required
+                               value="{{ edit_user.display_name if edit_user else '' }}"
+                               placeholder="Full name">
+                    </div>
+
+                    {% if not edit_user %}
+                    <div class="mb-3">
+                        <label class="form-label">Password <span class="text-danger">*</span></label>
+                        <input type="password" name="password" class="form-control" required
+                               placeholder="Initial password" minlength="6">
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">New Password</label>
+                        <input type="password" name="new_password" class="form-control"
+                               placeholder="Leave blank to keep current password" minlength="6">
+                        <small class="text-muted">Only fill in to reset the user's password.</small>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Role <span class="text-danger">*</span></label>
+                        <select name="role" class="form-select">
+                            {% for r in roles %}
+                            <option value="{{ r }}"
+                                    {% if edit_user and edit_user.role == r %}selected{% endif %}
+                                    {% if not edit_user and r == 'analyst' %}selected{% endif %}>
+                                {{ r | capitalize }}
+                                {% if r == 'admin' %} — Full access, user management
+                                {% elif r == 'analyst' %} — Create assessments, manage vendors
+                                {% elif r == 'viewer' %} — Read-only access
+                                {% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% if edit_user %}
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="is_active" id="isActive"
+                                   {% if edit_user.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="isActive">Account Active</label>
+                        </div>
+                        <small class="text-muted">Inactive users cannot log in.</small>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="/admin/users" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            {% if edit_user %}Save Changes{% else %}Create User{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

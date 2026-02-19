@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}My Account - RiskQ{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="page-header">
+            <h1 class="h3"><i class="bi bi-person-circle me-2"></i>My Account</h1>
+        </div>
+
+        {% if message %}
+        <div class="alert alert-{{ message_type|default('info') }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        <div class="card mb-4">
+            <div class="card-header">Profile</div>
+            <div class="card-body">
+                <form method="post" action="/account">
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" value="{{ current_user.email }}" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Role</label>
+                        <input type="text" class="form-control" value="{{ current_user.role|capitalize }}" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="display_name">Display Name</label>
+                        <input type="text" class="form-control" id="display_name" name="display_name"
+                               value="{{ current_user.display_name }}" required>
+                    </div>
+
+                    <hr>
+                    <h6 class="mb-3">Change Password</h6>
+                    <div class="mb-3">
+                        <label class="form-label" for="current_password">Current Password</label>
+                        <input type="password" class="form-control" id="current_password" name="current_password">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="new_password">New Password</label>
+                        <input type="password" class="form-control" id="new_password" name="new_password"
+                               minlength="8">
+                        <small class="text-muted">Minimum 8 characters</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="confirm_password">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Save Changes
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

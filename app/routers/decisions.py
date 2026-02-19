@@ -21,7 +21,8 @@ from app.services.reassessment_service import suggest_next_review_date, compute_
 from app.services.tiering import get_effective_tier
 from app.services.activity_service import log_activity
 from app.services.export_service import generate_assessment_report_pdf
-from models import ACTIVITY_DECISION_FINALIZED
+from app.services.auth_service import require_login, require_role
+from models import ACTIVITY_DECISION_FINALIZED, User
 
 router = APIRouter()
 
@@ -76,7 +77,7 @@ def _load_decision_context(db: Session, assessment_id: int):
 
 
 @router.get("/assessments/{assessment_id}/decision", response_class=HTMLResponse)
-async def assessment_decision_page(request: Request, assessment_id: int, db: Session = Depends(get_db)):
+async def assessment_decision_page(request: Request, assessment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     ctx = _load_decision_context(db, assessment_id)
     scores = ctx["scores"]
     assessment = ctx["assessment"]
@@ -132,7 +133,7 @@ async def assessment_decision_page(request: Request, assessment_id: int, db: Ses
 
 
 @router.get("/assessments/{assessment_id}/report", response_class=HTMLResponse)
-async def assessment_report_page(request: Request, assessment_id: int, db: Session = Depends(get_db)):
+async def assessment_report_page(request: Request, assessment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     ctx = _load_decision_context(db, assessment_id)
 
     if ctx["decision"].status != DECISION_STATUS_FINAL:
@@ -159,7 +160,7 @@ async def assessment_report_page(request: Request, assessment_id: int, db: Sessi
 
 
 @router.get("/assessments/{assessment_id}/report.pdf")
-async def assessment_report_pdf(assessment_id: int, db: Session = Depends(get_db)):
+async def assessment_report_pdf(assessment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     ctx = _load_decision_context(db, assessment_id)
 
     if ctx["decision"].status != DECISION_STATUS_FINAL:
@@ -192,7 +193,7 @@ async def assessment_report_pdf(assessment_id: int, db: Session = Depends(get_db
 
 
 @router.post("/assessments/{assessment_id}/decision/generate")
-async def auto_generate_draft(assessment_id: int, db: Session = Depends(get_db)):
+async def auto_generate_draft(assessment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
     ctx = _load_decision_context(db, assessment_id)
     decision = ctx["decision"]
 
@@ -235,7 +236,8 @@ async def save_assessment_decision(
     key_findings: str = Form(None),
     remediation_required: str = Form(None),
     next_review_date: str = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
     if not assessment:
@@ -275,12 +277,13 @@ async def save_assessment_decision(
         )
 
     if action == "finalize" and success:
+        decision.decided_by_id = current_user.id
         transition_to_reviewed(db, assessment)
         if assessment.vendor_id:
             outcome_label = (decision_outcome or "").replace("_", " ").title()
             log_activity(db, assessment.vendor_id, ACTIVITY_DECISION_FINALIZED,
                          f"Decision finalized for '{assessment.title}': {outcome_label}",
-                         assessment_id=assessment.id)
+                         assessment_id=assessment.id, user_id=current_user.id)
 
         # Persist overall_score on the decision
         ctx = _load_decision_context(db, assessment_id)

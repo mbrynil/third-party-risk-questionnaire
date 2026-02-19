@@ -6,20 +6,21 @@ from sqlalchemy.orm import Session
 
 from app import templates
 from models import (
-    get_db, Vendor, RemediationItem,
+    get_db, Vendor, RemediationItem, User,
     VALID_REMEDIATION_STATUSES, REMEDIATION_STATUS_LABELS, REMEDIATION_STATUS_COLORS,
     REMEDIATION_STATUS_OPEN, REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED,
     REMEDIATION_SOURCE_MANUAL,
-    VALID_SEVERITIES,
+    VALID_SEVERITIES, VALID_ROLES,
 )
 
 from app.services.export_service import generate_remediation_csv
+from app.services.auth_service import require_login, require_role
 
 router = APIRouter()
 
 
 @router.get("/remediations/export.csv")
-async def remediation_export_csv(db: Session = Depends(get_db)):
+async def remediation_export_csv(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     csv_content = generate_remediation_csv(db)
     filename = f"remediations_{datetime.utcnow().strftime('%Y%m%d')}.csv"
     return StreamingResponse(
@@ -30,12 +31,16 @@ async def remediation_export_csv(db: Session = Depends(get_db)):
 
 
 @router.get("/remediations/{remediation_id}", response_class=HTMLResponse)
-async def remediation_detail(request: Request, remediation_id: int, db: Session = Depends(get_db)):
+async def remediation_detail(request: Request, remediation_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     item = db.query(RemediationItem).filter(RemediationItem.id == remediation_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Remediation item not found")
 
     vendor = db.query(Vendor).filter(Vendor.id == item.vendor_id).first()
+    analysts = db.query(User).filter(
+        User.is_active == True,
+        User.role.in_(["admin", "analyst"]),
+    ).order_by(User.display_name).all()
 
     return templates.TemplateResponse("remediation_detail.html", {
         "request": request,
@@ -46,6 +51,7 @@ async def remediation_detail(request: Request, remediation_id: int, db: Session 
         "status_colors": REMEDIATION_STATUS_COLORS,
         "severities": VALID_SEVERITIES,
         "current_date": date.today(),
+        "analysts": analysts,
     })
 
 
@@ -56,7 +62,8 @@ async def update_remediation(
     assigned_to: str = Form(""),
     due_date: str = Form(""),
     evidence_notes: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     item = db.query(RemediationItem).filter(RemediationItem.id == remediation_id).first()
     if not item:
@@ -95,7 +102,8 @@ async def create_manual_remediation(
     severity: str = Form("MEDIUM"),
     assigned_to: str = Form(""),
     due_date: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
@@ -128,7 +136,7 @@ async def create_manual_remediation(
 
 
 @router.post("/remediations/{remediation_id}/delete")
-async def delete_remediation(remediation_id: int, db: Session = Depends(get_db)):
+async def delete_remediation(remediation_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
     item = db.query(RemediationItem).filter(RemediationItem.id == remediation_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Remediation item not found")

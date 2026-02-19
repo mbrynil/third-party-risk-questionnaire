@@ -29,7 +29,11 @@ from app.services.activity_service import log_activity, get_vendor_timeline
 from models import (
     ACTIVITY_VENDOR_CREATED, ACTIVITY_ASSESSMENT_CREATED, ACTIVITY_TIER_CHANGED,
     ACTIVITY_ICONS, ACTIVITY_COLORS,
+    User,
 )
+from app.services.auth_service import require_login, require_role
+
+_analyst_dep = require_role("admin", "analyst")
 
 router = APIRouter()
 
@@ -47,7 +51,7 @@ def _classification_context():
 
 
 @router.get("/vendors", response_class=HTMLResponse)
-async def vendors_list(request: Request, db: Session = Depends(get_db)):
+async def vendors_list(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     vendors = db.query(Vendor).order_by(Vendor.name).all()
     return templates.TemplateResponse("vendors.html", {
         "request": request,
@@ -56,7 +60,7 @@ async def vendors_list(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/vendors/new", response_class=HTMLResponse)
-async def new_vendor_page(request: Request):
+async def new_vendor_page(request: Request, current_user: User = Depends(require_role("admin", "analyst"))):
     return templates.TemplateResponse("vendor_edit.html", {
         "request": request,
         "vendor": None,
@@ -82,7 +86,8 @@ async def create_vendor(
     contract_end_date: str = Form(""),
     contract_value: str = Form(""),
     auto_renewal: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     if not name.strip():
         return templates.TemplateResponse("vendor_edit.html", {
@@ -125,14 +130,15 @@ async def create_vendor(
 
     db.add(vendor)
     db.flush()
-    log_activity(db, vendor.id, ACTIVITY_VENDOR_CREATED, f"Vendor '{vendor.name}' created")
+    log_activity(db, vendor.id, ACTIVITY_VENDOR_CREATED, f"Vendor '{vendor.name}' created",
+                 user_id=current_user.id)
     db.commit()
 
     return RedirectResponse(url=f"/vendors/{vendor.id}?created=1", status_code=303)
 
 
 @router.get("/vendors/{vendor_id}", response_class=HTMLResponse)
-async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends(get_db)):
+async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -191,6 +197,12 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
 
     timeline = get_vendor_timeline(db, vendor_id)
 
+    # Active analysts for assignment dropdown
+    analysts = db.query(User).filter(
+        User.is_active == True,
+        User.role.in_(["admin", "analyst"]),
+    ).order_by(User.display_name).all()
+
     return templates.TemplateResponse("vendor_profile.html", {
         "request": request,
         "vendor": vendor,
@@ -215,11 +227,12 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         "timeline": timeline,
         "activity_icons": ACTIVITY_ICONS,
         "activity_colors": ACTIVITY_COLORS,
+        "analysts": analysts,
     })
 
 
 @router.get("/vendors/{vendor_id}/edit", response_class=HTMLResponse)
-async def edit_vendor_page(request: Request, vendor_id: int, db: Session = Depends(get_db)):
+async def edit_vendor_page(request: Request, vendor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
@@ -251,7 +264,8 @@ async def update_vendor(
     contract_end_date: str = Form(""),
     contract_value: str = Form(""),
     auto_renewal: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
@@ -317,7 +331,8 @@ async def add_contact(
     contact_email: str = Form(""),
     contact_role: str = Form(""),
     contact_phone: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
@@ -337,7 +352,7 @@ async def add_contact(
 
 
 @router.post("/vendors/{vendor_id}/contacts/{contact_id}/delete")
-async def delete_contact(vendor_id: int, contact_id: int, db: Session = Depends(get_db)):
+async def delete_contact(vendor_id: int, contact_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
     contact = db.query(VendorContact).filter(
         VendorContact.id == contact_id,
         VendorContact.vendor_id == vendor_id
@@ -361,7 +376,8 @@ async def upload_document(
     expiry_date: str = Form(""),
     document_notes: str = Form(""),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
@@ -405,7 +421,7 @@ async def upload_document(
 
 
 @router.get("/vendors/{vendor_id}/documents/{document_id}/download")
-async def download_document(vendor_id: int, document_id: int, db: Session = Depends(get_db)):
+async def download_document(vendor_id: int, document_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     doc = db.query(VendorDocument).filter(
         VendorDocument.id == document_id,
         VendorDocument.vendor_id == vendor_id
@@ -424,7 +440,7 @@ async def download_document(vendor_id: int, document_id: int, db: Session = Depe
 
 
 @router.post("/vendors/{vendor_id}/documents/{document_id}/delete")
-async def delete_document(vendor_id: int, document_id: int, db: Session = Depends(get_db)):
+async def delete_document(vendor_id: int, document_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
     doc = db.query(VendorDocument).filter(
         VendorDocument.id == document_id,
         VendorDocument.vendor_id == vendor_id
@@ -448,7 +464,8 @@ async def set_tier_override(
     vendor_id: int,
     tier_override: str = Form(""),
     tier_notes: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
@@ -461,10 +478,43 @@ async def set_tier_override(
     new_tier = get_effective_tier(vendor)
     if old_tier != new_tier:
         log_activity(db, vendor_id, ACTIVITY_TIER_CHANGED,
-                     f"Tier changed from {old_tier or 'None'} to {new_tier or 'None'}")
+                     f"Tier changed from {old_tier or 'None'} to {new_tier or 'None'}",
+                     user_id=current_user.id)
     db.commit()
 
     return RedirectResponse(url=f"/vendors/{vendor_id}?tier_updated=1", status_code=303)
+
+
+# ==================== ANALYST ASSIGNMENT ====================
+
+@router.post("/vendors/{vendor_id}/assign-analyst")
+async def assign_analyst(
+    vendor_id: int,
+    assigned_analyst_id: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    new_id = int(assigned_analyst_id) if assigned_analyst_id.strip().isdigit() else None
+    old_analyst = vendor.assigned_analyst
+    vendor.assigned_analyst_id = new_id
+    new_analyst = db.query(User).filter(User.id == new_id).first() if new_id else None
+
+    old_name = old_analyst.display_name if old_analyst else "Unassigned"
+    new_name = new_analyst.display_name if new_analyst else "Unassigned"
+    if old_name != new_name:
+        log_activity(db, vendor_id, "ANALYST_ASSIGNED",
+                     f"Analyst changed from {old_name} to {new_name}",
+                     user_id=current_user.id)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/vendors/{vendor_id}?message=Analyst assignment updated&message_type=success",
+        status_code=303
+    )
 
 
 # ==================== REASSESSMENT ====================
@@ -473,7 +523,8 @@ async def set_tier_override(
 async def initiate_reassessment(
     vendor_id: int,
     previous_assessment_id: int = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
@@ -503,7 +554,8 @@ async def create_vendor_assessment(
     source: str = Form(...),
     title: str = Form(...),
     template_id: Optional[int] = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
     if not vendor:
@@ -531,7 +583,7 @@ async def create_vendor_assessment(
         clone_template_to_assessment(db, tmpl.id, new_assessment.id)
         log_activity(db, vendor.id, ACTIVITY_ASSESSMENT_CREATED,
                      f"Assessment '{title.strip()}' created from template '{tmpl.name}'",
-                     assessment_id=new_assessment.id)
+                     assessment_id=new_assessment.id, user_id=current_user.id)
 
         db.commit()
         return RedirectResponse(url=f"/questionnaire/{new_assessment.id}/edit?from_template=1", status_code=303)
@@ -547,7 +599,7 @@ async def create_vendor_assessment(
         db.flush()
         log_activity(db, vendor.id, ACTIVITY_ASSESSMENT_CREATED,
                      f"Assessment '{title.strip()}' created from question bank",
-                     assessment_id=new_assessment.id)
+                     assessment_id=new_assessment.id, user_id=current_user.id)
         db.commit()
 
         return RedirectResponse(url=f"/create?vendor_id={vendor.id}&questionnaire_id={new_assessment.id}", status_code=303)
@@ -560,7 +612,8 @@ async def bulk_send_assessments(
     template_id: int = Form(...),
     title_pattern: str = Form(...),
     vendor_ids: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     ids = [int(x.strip()) for x in vendor_ids.split(",") if x.strip()]
     if not ids:
@@ -603,7 +656,8 @@ async def bulk_assign_tier(
     tier: str = Form(...),
     tier_notes: str = Form(""),
     vendor_ids: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     ids = [int(x.strip()) for x in vendor_ids.split(",") if x.strip()]
     if not ids:

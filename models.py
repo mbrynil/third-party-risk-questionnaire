@@ -10,6 +10,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False)
+    display_name = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    role = Column(String(50), nullable=False, default="analyst")  # admin, analyst, viewer
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+
+
+VALID_ROLES = ["admin", "analyst", "viewer"]
+
+
 class QuestionBankItem(Base):
     __tablename__ = "question_bank_items"
 
@@ -78,6 +94,10 @@ class Vendor(Base):
     contract_end_date = Column(DateTime, nullable=True)
     contract_value = Column(String(100), nullable=True)
     auto_renewal = Column(Boolean, default=False)
+
+    # Analyst assignment
+    assigned_analyst_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    assigned_analyst = relationship("User", foreign_keys=[assigned_analyst_id])
 
     assessments = relationship("Assessment", back_populates="vendor")
     contacts = relationship("VendorContact", back_populates="vendor", cascade="all, delete-orphan")
@@ -379,9 +399,11 @@ class AssessmentDecision(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     finalized_at = Column(DateTime, nullable=True)
+    decided_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     vendor = relationship("Vendor")
     assessment = relationship("Assessment")
+    decided_by = relationship("User", foreign_keys=[decided_by_id])
 
 
 # ==================== REMEDIATION ====================
@@ -432,7 +454,8 @@ class RemediationItem(Base):
     category = Column(String(100), nullable=True)
     severity = Column(String(20), default="MEDIUM", nullable=False)
     status = Column(String(30), default=REMEDIATION_STATUS_OPEN, nullable=False)
-    assigned_to = Column(String(255), nullable=True)
+    assigned_to = Column(String(255), nullable=True)  # legacy free-text
+    assigned_to_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     due_date = Column(DateTime, nullable=True)
     completed_date = Column(DateTime, nullable=True)
     evidence_notes = Column(Text, nullable=True)
@@ -443,6 +466,7 @@ class RemediationItem(Base):
     assessment = relationship("Assessment")
     decision = relationship("AssessmentDecision")
     risk_statement = relationship("RiskStatement")
+    assigned_user = relationship("User", foreign_keys=[assigned_to_user_id])
 
 
 # ==================== RISK STATEMENT LIBRARY ====================
@@ -630,6 +654,26 @@ def compute_expectation_status(expected_value, answer_choice, expected_values=No
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+
+def seed_default_admin():
+    """Create a default admin user if no users exist."""
+    import bcrypt
+    db = SessionLocal()
+    try:
+        if db.query(User).count() == 0:
+            hashed = bcrypt.hashpw("changeme".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            admin = User(
+                email="admin@example.com",
+                display_name="Admin",
+                password_hash=hashed,
+                role="admin",
+                is_active=True,
+            )
+            db.add(admin)
+            db.commit()
+    finally:
+        db.close()
 
 
 def seed_question_bank():
@@ -1173,6 +1217,7 @@ ACTIVITY_VENDOR_SUBMITTED = "VENDOR_SUBMITTED"
 ACTIVITY_DECISION_FINALIZED = "DECISION_FINALIZED"
 ACTIVITY_TIER_CHANGED = "TIER_CHANGED"
 ACTIVITY_ONBOARDING_COMPLETE = "ONBOARDING_COMPLETE"
+ACTIVITY_ANALYST_ASSIGNED = "ANALYST_ASSIGNED"
 
 ACTIVITY_ICONS = {
     ACTIVITY_VENDOR_CREATED: "bi-building",
@@ -1183,6 +1228,7 @@ ACTIVITY_ICONS = {
     ACTIVITY_DECISION_FINALIZED: "bi-shield-check",
     ACTIVITY_TIER_CHANGED: "bi-arrow-left-right",
     ACTIVITY_ONBOARDING_COMPLETE: "bi-magic",
+    ACTIVITY_ANALYST_ASSIGNED: "bi-person-check",
 }
 
 ACTIVITY_COLORS = {
@@ -1194,6 +1240,7 @@ ACTIVITY_COLORS = {
     ACTIVITY_DECISION_FINALIZED: "#0dcaf0",
     ACTIVITY_TIER_CHANGED: "#ffc107",
     ACTIVITY_ONBOARDING_COMPLETE: "#6f42c1",
+    ACTIVITY_ANALYST_ASSIGNED: "#0d6efd",
 }
 
 
@@ -1205,10 +1252,12 @@ class VendorActivity(Base):
     activity_type = Column(String(50), nullable=False)
     description = Column(Text, nullable=False)
     assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     metadata_json = Column(Text, nullable=True)
 
     vendor = relationship("Vendor")
+    user = relationship("User", foreign_keys=[user_id])
 
 
 # ==================== NOTIFICATIONS ====================
@@ -1235,6 +1284,52 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
     assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+
+
+def backfill_auth_columns():
+    """Add auth-related columns to existing tables."""
+    import sqlite3
+    conn = sqlite3.connect("./questionnaires.db")
+    cursor = conn.cursor()
+
+    # Vendor: assigned_analyst_id
+    cursor.execute("PRAGMA table_info(vendors)")
+    vendor_cols = {row[1] for row in cursor.fetchall()}
+    if "assigned_analyst_id" not in vendor_cols:
+        try:
+            cursor.execute("ALTER TABLE vendors ADD COLUMN assigned_analyst_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+    # VendorActivity: user_id
+    cursor.execute("PRAGMA table_info(vendor_activities)")
+    activity_cols = {row[1] for row in cursor.fetchall()}
+    if "user_id" not in activity_cols:
+        try:
+            cursor.execute("ALTER TABLE vendor_activities ADD COLUMN user_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+    # AssessmentDecision: decided_by_id
+    cursor.execute("PRAGMA table_info(assessment_decisions)")
+    decision_cols = {row[1] for row in cursor.fetchall()}
+    if "decided_by_id" not in decision_cols:
+        try:
+            cursor.execute("ALTER TABLE assessment_decisions ADD COLUMN decided_by_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+    # RemediationItem: assigned_to_user_id
+    cursor.execute("PRAGMA table_info(remediation_items)")
+    rem_cols = {row[1] for row in cursor.fetchall()}
+    if "assigned_to_user_id" not in rem_cols:
+        try:
+            cursor.execute("ALTER TABLE remediation_items ADD COLUMN assigned_to_user_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+    conn.commit()
+    conn.close()
 
 
 def backfill_template_columns():

@@ -392,9 +392,26 @@
                 <option value="ARCHIVED">Archived</option>
             </select>
         </div>
+        <div class="col-auto">
+            <select id="filterAnalyst" class="form-select form-select-sm">
+                <option value="">All Analysts</option>
+                {% for a in analysts %}
+                <option value="{{ a.id }}">{{ a.display_name }}</option>
+                {% endfor %}
+                <option value="unassigned">Unassigned</option>
+            </select>
+        </div>
         <div class="col">
             <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="Search vendor name...">
         </div>
+        {% set current_user = request.state.current_user %}
+        {% if current_user and current_user.role in ['admin', 'analyst'] %}
+        <div class="col-auto">
+            <button id="filterMyVendors" class="btn btn-sm btn-outline-primary" data-analyst-id="{{ current_user.id }}">
+                <i class="bi bi-person-fill me-1"></i>My Vendors
+            </button>
+        </div>
+        {% endif %}
         <div class="col-auto">
             <button id="filterClear" class="btn btn-sm btn-outline-secondary">Clear</button>
         </div>
@@ -442,6 +459,7 @@
                 <th class="sortable-header" data-sort="score">Score <i class="bi bi-chevron-expand sort-icon"></i></th>
                 <th class="sortable-header" data-sort="assessed">Last Assessed <i class="bi bi-chevron-expand sort-icon"></i></th>
                 <th class="sortable-header" data-sort="review">Next Review <i class="bi bi-chevron-expand sort-icon"></i></th>
+                <th class="sortable-header" data-sort="analyst">Analyst <i class="bi bi-chevron-expand sort-icon"></i></th>
                 <th class="sortable-header" data-sort="status">Status <i class="bi bi-chevron-expand sort-icon"></i></th>
             </tr>
         </thead>
@@ -455,7 +473,9 @@
                 data-name="{{ v.name|lower }}"
                 data-score="{{ v.overall_score if v.overall_score is not none else '' }}"
                 data-assessed="{{ v.last_assessed_date or '' }}"
-                data-review="{{ v.next_review_date or '' }}">
+                data-review="{{ v.next_review_date or '' }}"
+                data-analyst="{{ v.assigned_analyst_id or '' }}"
+                data-analyst-name="{{ v.assigned_analyst_name or '' }}">
                 <td class="text-center vendor-checkbox-cell" onclick="event.stopPropagation();">
                     <input type="checkbox" class="form-check-input vendor-checkbox" value="{{ v.id }}">
                 </td>
@@ -508,6 +528,13 @@
                         {% else %}
                         {{ v.next_review_date }}
                         {% endif %}
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if v.assigned_analyst_name %}
+                    <small>{{ v.assigned_analyst_name }}</small>
                     {% else %}
                     <span class="text-muted">—</span>
                     {% endif %}
@@ -750,8 +777,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const filterRisk = document.getElementById('filterRisk');
     const filterOutcome = document.getElementById('filterOutcome');
     const filterStatus = document.getElementById('filterStatus');
+    const filterAnalyst = document.getElementById('filterAnalyst');
     const filterSearch = document.getElementById('filterSearch');
     const filterClear = document.getElementById('filterClear');
+    const filterMyVendors = document.getElementById('filterMyVendors');
     const filterCount = document.getElementById('filterCount');
     const rows = document.querySelectorAll('#vendorTableBody tr');
     const totalRows = rows.length;
@@ -761,6 +790,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const risk = filterRisk.value;
         const outcome = filterOutcome.value;
         const status = filterStatus.value;
+        const analyst = filterAnalyst ? filterAnalyst.value : '';
         const search = filterSearch.value.toLowerCase().trim();
         let visible = 0;
 
@@ -770,25 +800,52 @@ document.addEventListener('DOMContentLoaded', function() {
             if (risk && row.dataset.risk !== risk) show = false;
             if (outcome && row.dataset.outcome !== outcome) show = false;
             if (status && row.dataset.status !== status) show = false;
+            if (analyst === 'unassigned' && row.dataset.analyst !== '') show = false;
+            else if (analyst && analyst !== 'unassigned' && row.dataset.analyst !== analyst) show = false;
             if (search && row.dataset.name.indexOf(search) === -1) show = false;
             row.style.display = show ? '' : 'none';
             if (show) visible++;
         });
 
         filterCount.textContent = 'Showing ' + visible + ' of ' + totalRows;
+
+        // Toggle "My Vendors" button active state
+        if (filterMyVendors) {
+            const myId = filterMyVendors.dataset.analystId;
+            if (filterAnalyst && filterAnalyst.value === myId) {
+                filterMyVendors.classList.remove('btn-outline-primary');
+                filterMyVendors.classList.add('btn-primary');
+            } else {
+                filterMyVendors.classList.remove('btn-primary');
+                filterMyVendors.classList.add('btn-outline-primary');
+            }
+        }
     }
 
     if (filterTier) filterTier.addEventListener('change', applyFilters);
     if (filterRisk) filterRisk.addEventListener('change', applyFilters);
     if (filterOutcome) filterOutcome.addEventListener('change', applyFilters);
     if (filterStatus) filterStatus.addEventListener('change', applyFilters);
+    if (filterAnalyst) filterAnalyst.addEventListener('change', applyFilters);
     if (filterSearch) filterSearch.addEventListener('input', applyFilters);
+    if (filterMyVendors) {
+        filterMyVendors.addEventListener('click', function() {
+            const myId = this.dataset.analystId;
+            if (filterAnalyst.value === myId) {
+                filterAnalyst.value = '';
+            } else {
+                filterAnalyst.value = myId;
+            }
+            applyFilters();
+        });
+    }
     if (filterClear) {
         filterClear.addEventListener('click', function() {
             filterTier.value = '';
             filterRisk.value = '';
             filterOutcome.value = '';
             filterStatus.value = '';
+            if (filterAnalyst) filterAnalyst.value = '';
             filterSearch.value = '';
             applyFilters();
         });
@@ -865,6 +922,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         break;
                     case 'review':
                         va = a.dataset.review || ''; vb = b.dataset.review || '';
+                        break;
+                    case 'analyst':
+                        va = (a.dataset.analystName || 'zzz').toLowerCase();
+                        vb = (b.dataset.analystName || 'zzz').toLowerCase();
                         break;
                     case 'status':
                         va = a.dataset.status; vb = b.dataset.status;

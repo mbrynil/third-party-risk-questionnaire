@@ -13,12 +13,14 @@ from models import (
 )
 from app.services.evaluation import compute_response_evaluations
 from app.services.export_service import generate_submission_pdf, generate_assessment_responses_csv
+from app.services.auth_service import require_login, require_role
+from models import User
 
 router = APIRouter()
 
 
 @router.get("/responses", response_class=HTMLResponse)
-async def view_responses(request: Request, status_filter: Optional[str] = None, db: Session = Depends(get_db)):
+async def view_responses(request: Request, status_filter: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     assessments = db.query(Assessment).all()
     return templates.TemplateResponse("responses.html", {
         "request": request,
@@ -35,7 +37,8 @@ async def view_assessment_responses(
     request: Request,
     assessment_id: int,
     status_filter: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
 ):
     assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
     if not assessment:
@@ -77,7 +80,8 @@ async def create_followup(
     assessment_id: int,
     response_id: int,
     message: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
     if not assessment:
@@ -107,7 +111,7 @@ async def create_followup(
 
 
 @router.get("/submissions/{submission_id}/export", response_class=HTMLResponse)
-async def export_submission(request: Request, submission_id: int, db: Session = Depends(get_db)):
+async def export_submission(request: Request, submission_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     response = db.query(Response).filter(Response.id == submission_id).first()
     if not response:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -155,7 +159,7 @@ async def export_submission(request: Request, submission_id: int, db: Session = 
 
 
 @router.get("/submissions/{submission_id}/export.pdf")
-async def export_submission_pdf(submission_id: int, db: Session = Depends(get_db)):
+async def export_submission_pdf(submission_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     response = db.query(Response).filter(Response.id == submission_id).first()
     if not response:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -209,7 +213,7 @@ async def export_submission_pdf(submission_id: int, db: Session = Depends(get_db
 
 
 @router.get("/submissions/{submission_id}/responses.csv")
-async def export_submission_csv(submission_id: int, db: Session = Depends(get_db)):
+async def export_submission_csv(submission_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     csv_content = generate_assessment_responses_csv(db, submission_id)
     if not csv_content:
         raise HTTPException(status_code=404, detail="Submission not found")

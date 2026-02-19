@@ -274,6 +274,8 @@ def get_portfolio_data(db: Session) -> dict:
             "id": v.id,
             "name": v.name,
             "status": v.status,
+            "assigned_analyst_id": v.assigned_analyst_id,
+            "assigned_analyst_name": v.assigned_analyst.display_name if v.assigned_analyst else None,
             "inherent_risk_tier": eff_tier,
             "tier_display": eff_tier or None,
             "tier_color": TIER_COLORS.get(eff_tier, "#6c757d") if eff_tier else None,

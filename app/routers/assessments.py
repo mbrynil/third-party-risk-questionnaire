@@ -20,13 +20,14 @@ from app.services.lifecycle import transition_to_sent, transition_to_reviewed
 from app.services.email_service import send_assessment_invitation
 from app.services.activity_service import log_activity
 from app.services.export_service import generate_assessment_tracker_csv
-from models import ACTIVITY_ASSESSMENT_SENT
+from app.services.auth_service import require_login, require_role
+from models import ACTIVITY_ASSESSMENT_SENT, User
 
 router = APIRouter()
 
 
 @router.get("/assessments/tracker", response_class=HTMLResponse)
-async def assessment_tracker(request: Request, db: Session = Depends(get_db)):
+async def assessment_tracker(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     """Assessment pipeline tracker — shows all assessments with status, reminders, and actions."""
     now = datetime.utcnow()
 
@@ -76,7 +77,7 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/assessments/tracker.csv")
-async def assessment_tracker_csv(db: Session = Depends(get_db)):
+async def assessment_tracker_csv(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     csv_content = generate_assessment_tracker_csv(db)
     filename = f"assessment_tracker_{datetime.utcnow().strftime('%Y%m%d')}.csv"
     return StreamingResponse(
@@ -87,7 +88,7 @@ async def assessment_tracker_csv(db: Session = Depends(get_db)):
 
 
 @router.get("/questionnaire/{assessment_id}/edit", response_class=HTMLResponse)
-async def edit_assessment_page(request: Request, assessment_id: int, db: Session = Depends(get_db)):
+async def edit_assessment_page(request: Request, assessment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
     assessment = db.query(Assessment).filter(
         Assessment.id == assessment_id
     ).first()
@@ -130,7 +131,8 @@ async def update_assessment(
     assessment_id: int,
     company_name: str = Form(...),
     title: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     assessment = db.query(Assessment).filter(
         Assessment.id == assessment_id
@@ -176,7 +178,7 @@ async def update_assessment(
 
 
 @router.get("/questionnaire/{assessment_id}/share", response_class=HTMLResponse)
-async def share_assessment(request: Request, assessment_id: int, db: Session = Depends(get_db)):
+async def share_assessment(request: Request, assessment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
     assessment = db.query(Assessment).filter(
         Assessment.id == assessment_id
     ).first()
@@ -211,7 +213,8 @@ async def add_questions_to_assessment(
     assessment_id: int,
     bank_ids: str = Form(""),
     custom_text: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     assessment = db.query(Assessment).filter(
         Assessment.id == assessment_id
@@ -271,7 +274,8 @@ async def add_questions_to_assessment(
 async def remove_question_from_assessment(
     assessment_id: int,
     question_id: int = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     question = db.query(Question).filter(
         Question.id == question_id,
@@ -295,7 +299,8 @@ async def add_rule_to_assessment(
     target_id: int = Form(...),
     trigger_values: str = Form(...),
     make_required: str = Form("0"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     assessment = db.query(Assessment).filter(
         Assessment.id == assessment_id
@@ -321,7 +326,8 @@ async def add_rule_to_assessment(
 async def delete_rule_from_assessment(
     assessment_id: int,
     rule_id: int = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     rule = db.query(ConditionalRule).filter(
         ConditionalRule.id == rule_id,
@@ -337,7 +343,8 @@ async def delete_rule_from_assessment(
 @router.post("/questionnaire/{assessment_id}/mark-reviewed")
 async def mark_assessment_reviewed(
     assessment_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     assessment = db.query(Assessment).filter(
         Assessment.id == assessment_id
@@ -360,6 +367,7 @@ async def send_assessment_email(
     custom_message: str = Form(""),
     expiry_days: int = Form(30),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     assessment = db.query(Assessment).filter(
         Assessment.id == assessment_id
@@ -391,7 +399,7 @@ async def send_assessment_email(
     if assessment.vendor_id:
         log_activity(db, assessment.vendor_id, ACTIVITY_ASSESSMENT_SENT,
                      f"Assessment '{assessment.title}' sent to {contact_email.strip()}",
-                     assessment_id=assessment.id)
+                     assessment_id=assessment.id, user_id=current_user.id)
     db.commit()
 
     # Redirect back to referrer or vendor profile
@@ -413,6 +421,7 @@ async def toggle_assessment_reminders(
     request: Request,
     assessment_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     """Pause or resume automated reminders for an assessment."""
     assessment = db.query(Assessment).filter(
@@ -429,7 +438,7 @@ async def toggle_assessment_reminders(
 
 
 @router.get("/email-log", response_class=HTMLResponse)
-async def view_email_log(request: Request):
+async def view_email_log(request: Request, current_user: User = Depends(require_role("admin"))):
     """Development tool: view all emails sent via console provider."""
     import os
     log_path = os.path.join(

@@ -148,8 +148,14 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Assigned To</label>
-                            <input type="text" name="assigned_to" class="form-control"
-                                   value="{{ item.assigned_to or '' }}" placeholder="e.g., John Smith">
+                            <select name="assigned_to" class="form-select">
+                                <option value="">Unassigned</option>
+                                {% for a in analysts %}
+                                <option value="{{ a.display_name }}" {% if item.assigned_to == a.display_name %}selected{% endif %}>
+                                    {{ a.display_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Due Date</label>

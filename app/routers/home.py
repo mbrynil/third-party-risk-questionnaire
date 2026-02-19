@@ -7,8 +7,9 @@ import json
 
 from app import templates
 from models import (
-    get_db, Assessment, AssessmentTemplate, Question, QuestionBankItem, ConditionalRule,
+    get_db, Assessment, AssessmentTemplate, Question, QuestionBankItem, ConditionalRule, User,
     VALID_CHOICES, get_answer_options,
+    Vendor,
 )
 from app.services.token import generate_unique_token
 from app.services.vendor_service import find_or_create_vendor
@@ -16,15 +17,20 @@ from app.services.portfolio import get_portfolio_data
 from app.services.remediation_service import get_portfolio_remediation_summary
 from app.services.reminder_service import get_reminder_stats
 from app.services.export_service import generate_portfolio_report_pdf, generate_vendor_list_csv
+from app.services.auth_service import require_login, require_role
 
 router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def home(request: Request, db: Session = Depends(get_db)):
+async def home(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     data = get_portfolio_data(db)
     templates_list = db.query(AssessmentTemplate).order_by(AssessmentTemplate.name).all()
     reminder_stats = get_reminder_stats(db)
+    analysts = db.query(User).filter(
+        User.is_active == True,
+        User.role.in_(["admin", "analyst"]),
+    ).order_by(User.display_name).all()
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "kpis": data["kpis"],
@@ -36,11 +42,12 @@ async def home(request: Request, db: Session = Depends(get_db)):
         "heatmap": data["heatmap"],
         "assessment_templates": templates_list,
         "reminder_stats": reminder_stats,
+        "analysts": analysts,
     })
 
 
 @router.get("/dashboard/report", response_class=HTMLResponse)
-async def portfolio_report(request: Request, db: Session = Depends(get_db)):
+async def portfolio_report(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     data = get_portfolio_data(db)
     remediation_summary = get_portfolio_remediation_summary(db)
     return templates.TemplateResponse("portfolio_report.html", {
@@ -57,7 +64,7 @@ async def portfolio_report(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/dashboard/report.pdf")
-async def portfolio_report_pdf(db: Session = Depends(get_db)):
+async def portfolio_report_pdf(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     data = get_portfolio_data(db)
     remediation_summary = get_portfolio_remediation_summary(db)
     template_ctx = {
@@ -84,7 +91,7 @@ async def portfolio_report_pdf(db: Session = Depends(get_db)):
 
 
 @router.get("/dashboard/vendors.csv")
-async def vendor_list_csv(db: Session = Depends(get_db)):
+async def vendor_list_csv(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     csv_content = generate_vendor_list_csv(db)
     filename = f"vendors_{datetime.utcnow().strftime('%Y%m%d')}.csv"
     return StreamingResponse(
@@ -95,7 +102,7 @@ async def vendor_list_csv(db: Session = Depends(get_db)):
 
 
 @router.get("/create", response_class=HTMLResponse)
-async def create_assessment_page(request: Request, db: Session = Depends(get_db)):
+async def create_assessment_page(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
     from models import Vendor, VENDOR_STATUS_ACTIVE
 
     question_bank = db.query(QuestionBankItem).filter(
@@ -128,7 +135,8 @@ async def create_assessment(
     company_name: str = Form(...),
     title: str = Form(...),
     custom_questions: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
 ):
     form_data = await request.form()
     question_ids = form_data.getlist("question_ids")

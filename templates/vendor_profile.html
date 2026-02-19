@@ -149,6 +149,30 @@
                 {{ vendor.industry or '—' }}
             </div>
 
+            {# Assigned Analyst #}
+            <div class="col-md-3">
+                <div class="text-muted small text-uppercase mb-1">Assigned Analyst</div>
+                {% if vendor.assigned_analyst %}
+                    <span class="fw-semibold"><i class="bi bi-person-fill me-1"></i>{{ vendor.assigned_analyst.display_name }}</span>
+                {% else %}
+                    <span class="text-muted">Unassigned</span>
+                {% endif %}
+                {% set current_user = request.state.current_user %}
+                {% if current_user and current_user.role in ['admin', 'analyst'] %}
+                <form method="post" action="/vendors/{{ vendor.id }}/assign-analyst" class="mt-1">
+                    <div class="d-flex gap-1">
+                        <select name="assigned_analyst_id" class="form-select form-select-sm" style="max-width: 180px;">
+                            <option value="">Unassigned</option>
+                            {% for a in analysts %}
+                            <option value="{{ a.id }}" {% if vendor.assigned_analyst_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Save"><i class="bi bi-check-lg"></i></button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+
             {# Contract row #}
             <div class="col-md-3">
                 <div class="text-muted small text-uppercase mb-1">Contract Start</div>
@@ -558,7 +582,10 @@
                 </div>
                 <div>
                     <div class="small">{{ event.description }}</div>
-                    <div class="text-muted" style="font-size:0.7rem;">{{ event.created_at.strftime('%b %d, %Y %H:%M') }}</div>
+                    <div class="text-muted" style="font-size:0.7rem;">
+                        {{ event.created_at.strftime('%b %d, %Y %H:%M') }}
+                        {% if event.user %}<span class="ms-1">by {{ event.user.display_name }}</span>{% endif %}
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -958,7 +985,12 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Assigned To</label>
-                            <input type="text" name="assigned_to" class="form-control" placeholder="e.g., John Smith">
+                            <select name="assigned_to" class="form-select">
+                                <option value="">Unassigned</option>
+                                {% for a in analysts %}
+                                <option value="{{ a.display_name }}">{{ a.display_name }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Due Date</label>

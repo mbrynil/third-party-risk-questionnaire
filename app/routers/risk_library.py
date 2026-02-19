@@ -7,12 +7,15 @@ from app import templates
 import json as json_lib
 
 from models import (
-    get_db, RiskStatement, QuestionBankItem,
+    get_db, RiskStatement, QuestionBankItem, User,
     VALID_TRIGGER_CONDITIONS, VALID_SEVERITIES, TRIGGER_LABELS,
     TRIGGER_QUESTION_ANSWERED, VALID_CHOICES, get_answer_options,
 )
+from app.services.auth_service import require_role
 
 router = APIRouter()
+
+_analyst_dep = require_role("admin", "analyst")
 
 
 def _get_categories(db: Session) -> list[str]:
@@ -50,7 +53,7 @@ def _form_context(db: Session, statement=None, error=None):
 
 
 @router.get("/risk-library", response_class=HTMLResponse)
-async def risk_library_list(request: Request, db: Session = Depends(get_db)):
+async def risk_library_list(request: Request, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     statements = db.query(RiskStatement).options(
         joinedload(RiskStatement.trigger_question)
     ).order_by(RiskStatement.category, RiskStatement.severity).all()
@@ -70,7 +73,7 @@ async def risk_library_list(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/risk-library/new", response_class=HTMLResponse)
-async def risk_library_new(request: Request, db: Session = Depends(get_db)):
+async def risk_library_new(request: Request, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     ctx = _form_context(db)
     ctx["request"] = request
     return templates.TemplateResponse("risk_library_edit.html", ctx)
@@ -87,6 +90,7 @@ async def risk_library_create(
     trigger_question_id: str = Form(""),
     trigger_answer_value: str = Form(""),
     db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
 ):
     # For QUESTION_ANSWERED, auto-derive category from the selected question
     if trigger_condition == TRIGGER_QUESTION_ANSWERED:
@@ -126,7 +130,7 @@ async def risk_library_create(
 
 
 @router.get("/risk-library/{statement_id}/edit", response_class=HTMLResponse)
-async def risk_library_edit(request: Request, statement_id: int, db: Session = Depends(get_db)):
+async def risk_library_edit(request: Request, statement_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     stmt = db.query(RiskStatement).options(
         joinedload(RiskStatement.trigger_question)
     ).filter(RiskStatement.id == statement_id).first()
@@ -151,6 +155,7 @@ async def risk_library_update(
     trigger_question_id: str = Form(""),
     trigger_answer_value: str = Form(""),
     db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
 ):
     stmt = db.query(RiskStatement).filter(RiskStatement.id == statement_id).first()
     if not stmt:
@@ -197,7 +202,7 @@ async def risk_library_update(
 
 
 @router.post("/risk-library/{statement_id}/delete", response_class=HTMLResponse)
-async def risk_library_delete(statement_id: int, db: Session = Depends(get_db)):
+async def risk_library_delete(statement_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     stmt = db.query(RiskStatement).filter(RiskStatement.id == statement_id).first()
     if not stmt:
         raise HTTPException(status_code=404, detail="Risk statement not found")

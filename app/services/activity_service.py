@@ -11,6 +11,7 @@ def log_activity(
     description: str,
     assessment_id: int | None = None,
     metadata_json: str | None = None,
+    user_id: int | None = None,
 ):
     """Create a new activity record for a vendor."""
     activity = VendorActivity(
@@ -19,6 +20,7 @@ def log_activity(
         description=description,
         assessment_id=assessment_id,
         metadata_json=metadata_json,
+        user_id=user_id,
     )
     db.add(activity)
     return activity

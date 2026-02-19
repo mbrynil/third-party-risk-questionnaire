@@ -4,16 +4,17 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from models import get_db, NOTIF_ICONS
+from models import get_db, NOTIF_ICONS, User
 from app.services.notification_service import (
     get_unread_count, get_recent_notifications, mark_read, mark_all_read,
 )
+from app.services.auth_service import require_login
 
 router = APIRouter()
 
 
 @router.get("/api/notifications")
-async def api_notifications(db: Session = Depends(get_db)):
+async def api_notifications(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     """Return recent notifications + unread count as JSON."""
     notifications = get_recent_notifications(db)
     unread = get_unread_count(db)
@@ -35,7 +36,7 @@ async def api_notifications(db: Session = Depends(get_db)):
 
 
 @router.post("/api/notifications/{notification_id}/read")
-async def api_mark_read(notification_id: int, db: Session = Depends(get_db)):
+async def api_mark_read(notification_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     """Mark a notification as read and redirect to its link."""
     notif = mark_read(db, notification_id)
     db.commit()
@@ -45,7 +46,7 @@ async def api_mark_read(notification_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/api/notifications/read-all")
-async def api_mark_all_read(db: Session = Depends(get_db)):
+async def api_mark_all_read(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     """Mark all notifications as read."""
     mark_all_read(db)
     db.commit()

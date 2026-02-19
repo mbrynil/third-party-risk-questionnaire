@@ -24,12 +24,16 @@ from app.services.email_service import send_assessment_invitation
 from app.services.tiering import compute_inherent_risk_tier, TIER_COLORS, TIER_LABELS
 from app.services.activity_service import log_activity
 from app.services.notification_service import create_notification
+from app.services.auth_service import require_role
+from models import User
 
 router = APIRouter()
 
+_analyst_dep = require_role("admin", "analyst")
+
 
 @router.get("/onboarding", response_class=HTMLResponse)
-async def onboarding_page(request: Request, db: Session = Depends(get_db)):
+async def onboarding_page(request: Request, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     """Render the onboarding wizard."""
     vendors = db.query(Vendor).filter(
         Vendor.status == VENDOR_STATUS_ACTIVE
@@ -60,6 +64,7 @@ async def api_compute_tier(
     data_classification: str = "",
     business_criticality: str = "",
     access_level: str = "",
+    current_user: User = Depends(_analyst_dep),
 ):
     """Live tier computation for the wizard."""
     tier = compute_inherent_risk_tier(data_classification, business_criticality, access_level)
@@ -71,7 +76,7 @@ async def api_compute_tier(
 
 
 @router.get("/api/templates-for-tier")
-async def api_templates_for_tier(tier: str = "", db: Session = Depends(get_db)):
+async def api_templates_for_tier(tier: str = "", db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     """Return templates sorted by match to the given tier."""
     all_templates = db.query(AssessmentTemplate).order_by(
         AssessmentTemplate.name
@@ -97,7 +102,7 @@ async def api_templates_for_tier(tier: str = "", db: Session = Depends(get_db)):
 
 
 @router.get("/api/template-preview/{template_id}")
-async def api_template_preview(template_id: int, db: Session = Depends(get_db)):
+async def api_template_preview(template_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     """Return questions for a template, grouped by category."""
     questions = db.query(TemplateQuestion).filter(
         TemplateQuestion.template_id == template_id
@@ -115,7 +120,7 @@ async def api_template_preview(template_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/api/vendor-contacts/{vendor_id}")
-async def api_vendor_contacts(vendor_id: int, db: Session = Depends(get_db)):
+async def api_vendor_contacts(vendor_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     """Return contacts for an existing vendor."""
     contacts = db.query(VendorContact).filter(
         VendorContact.vendor_id == vendor_id,
@@ -157,6 +162,7 @@ async def onboarding_launch(
     reminder_frequency_days: int = Form(7),
     max_reminders: int = Form(3),
     db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
 ):
     """Execute the full onboarding workflow in one request."""
 
@@ -184,7 +190,8 @@ async def onboarding_launch(
         db.add(vendor)
         db.flush()
         log_activity(db, vendor.id, ACTIVITY_VENDOR_CREATED,
-                     f"Vendor '{vendor.name}' created via onboarding wizard")
+                     f"Vendor '{vendor.name}' created via onboarding wizard",
+                     user_id=current_user.id)
 
     # 2. Create assessment from template
     tmpl = db.query(AssessmentTemplate).filter(
@@ -209,7 +216,7 @@ async def onboarding_launch(
     clone_template_to_assessment(db, tmpl.id, assessment.id)
     log_activity(db, vendor.id, ACTIVITY_ASSESSMENT_CREATED,
                  f"Assessment '{title}' created from template '{tmpl.name}'",
-                 assessment_id=assessment.id)
+                 assessment_id=assessment.id, user_id=current_user.id)
 
     # 3. Send email
     base_url = str(request.base_url).rstrip("/")
@@ -237,12 +244,12 @@ async def onboarding_launch(
 
     log_activity(db, vendor.id, ACTIVITY_ASSESSMENT_SENT,
                  f"Assessment '{title}' sent to {contact_email.strip()}",
-                 assessment_id=assessment.id)
+                 assessment_id=assessment.id, user_id=current_user.id)
 
     # 4. Log onboarding complete + notification
     log_activity(db, vendor.id, ACTIVITY_ONBOARDING_COMPLETE,
                  f"Onboarding complete — assessment sent to {contact_email.strip()}",
-                 assessment_id=assessment.id)
+                 assessment_id=assessment.id, user_id=current_user.id)
 
     create_notification(db, NOTIF_ONBOARDING_COMPLETE,
                         f"Onboarding complete for {vendor.name} — assessment sent",

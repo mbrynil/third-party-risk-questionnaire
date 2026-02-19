@@ -3,16 +3,19 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import templates
-from models import get_db, Assessment, AssessmentTemplate
+from models import get_db, Assessment, AssessmentTemplate, User
 from app.services.token import generate_unique_token
 from app.services.cloning import clone_assessment_to_template, clone_template_to_assessment
 from app.services.vendor_service import find_or_create_vendor
+from app.services.auth_service import require_role
 
 router = APIRouter()
 
+_admin_dep = require_role("admin")
+
 
 @router.get("/templates", response_class=HTMLResponse)
-async def view_templates(request: Request, db: Session = Depends(get_db)):
+async def view_templates(request: Request, db: Session = Depends(get_db), current_user: User = Depends(_admin_dep)):
     from models import Vendor, VENDOR_STATUS_ACTIVE
 
     templates_list = db.query(AssessmentTemplate).order_by(
@@ -34,7 +37,8 @@ async def save_as_template(
     assessment_id: int,
     template_name: str = Form(...),
     template_description: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_admin_dep),
 ):
     source = db.query(Assessment).filter(Assessment.id == assessment_id).first()
     if not source:
@@ -65,7 +69,8 @@ async def create_from_template(
     template_id: int,
     company_name: str = Form(...),
     title: str = Form(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_admin_dep),
 ):
     source = db.query(AssessmentTemplate).filter(
         AssessmentTemplate.id == template_id
@@ -97,7 +102,7 @@ async def create_from_template(
 
 
 @router.post("/templates/{template_id}/delete")
-async def delete_template(template_id: int, db: Session = Depends(get_db)):
+async def delete_template(template_id: int, db: Session = Depends(get_db), current_user: User = Depends(_admin_dep)):
     template = db.query(AssessmentTemplate).filter(
         AssessmentTemplate.id == template_id
     ).first()

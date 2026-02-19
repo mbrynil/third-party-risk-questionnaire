@@ -4,13 +4,16 @@ from sqlalchemy.orm import Session
 import json
 
 from app import templates
-from models import get_db, QuestionBankItem, get_answer_options, has_custom_answer_options
+from models import get_db, QuestionBankItem, User, get_answer_options, has_custom_answer_options
+from app.services.auth_service import require_login, require_role
 
 router = APIRouter()
 
+_analyst_dep = require_role("admin", "analyst")
+
 
 @router.get("/question-bank", response_class=HTMLResponse)
-async def question_bank_list(request: Request, db: Session = Depends(get_db)):
+async def question_bank_list(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     items = db.query(QuestionBankItem).order_by(
         QuestionBankItem.category, QuestionBankItem.id
     ).all()
@@ -36,7 +39,7 @@ async def question_bank_list(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/question-bank/new", response_class=HTMLResponse)
-async def question_bank_new(request: Request, db: Session = Depends(get_db)):
+async def question_bank_new(request: Request, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     categories = _get_categories(db)
     return templates.TemplateResponse("question_bank_edit.html", {
         "request": request,
@@ -53,6 +56,7 @@ async def question_bank_create(
     answer_type: str = Form("standard"),
     custom_options: str = Form(""),
     db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
 ):
     category = category.strip()
     text = text.strip()
@@ -88,7 +92,7 @@ async def question_bank_create(
 
 
 @router.get("/question-bank/{item_id}/edit", response_class=HTMLResponse)
-async def question_bank_edit(request: Request, item_id: int, db: Session = Depends(get_db)):
+async def question_bank_edit(request: Request, item_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     item = db.query(QuestionBankItem).filter(QuestionBankItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Question not found")
@@ -113,6 +117,7 @@ async def question_bank_update(
     custom_options: str = Form(""),
     is_active: str = Form(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
 ):
     item = db.query(QuestionBankItem).filter(QuestionBankItem.id == item_id).first()
     if not item:
@@ -154,7 +159,7 @@ async def question_bank_update(
 
 
 @router.post("/question-bank/{item_id}/toggle")
-async def question_bank_toggle(item_id: int, db: Session = Depends(get_db)):
+async def question_bank_toggle(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     item = db.query(QuestionBankItem).filter(QuestionBankItem.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Question not found")

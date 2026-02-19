@@ -529,6 +529,9 @@
             {% if decision.finalized_at %}
             <span class="ms-2 opacity-75">{{ decision.finalized_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
             {% endif %}
+            {% if decision.decided_by %}
+            <span class="ms-2 opacity-75">by {{ decision.decided_by.display_name }}</span>
+            {% endif %}
         </div>
         <a href="/assessments/{{ assessment.id }}/report" target="_blank" class="btn btn-sm btn-light">
             <i class="bi bi-file-earmark-text me-1"></i>Export Report
