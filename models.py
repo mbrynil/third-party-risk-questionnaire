@@ -227,6 +227,7 @@ class Assessment(Base):
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     previous_assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+    assigned_analyst_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     vendor = relationship("Vendor", back_populates="assessments")
     template = relationship("AssessmentTemplate")
@@ -234,6 +235,7 @@ class Assessment(Base):
     responses = relationship("Response", back_populates="assessment", cascade="all, delete-orphan")
     conditional_rules = relationship("ConditionalRule", back_populates="assessment", cascade="all, delete-orphan")
     previous_assessment = relationship("Assessment", remote_side="Assessment.id", uselist=False)
+    assigned_analyst = relationship("User", foreign_keys=[assigned_analyst_id])
 
 
 WEIGHT_LOW = "LOW"
@@ -1325,6 +1327,15 @@ def backfill_auth_columns():
     if "assigned_to_user_id" not in rem_cols:
         try:
             cursor.execute("ALTER TABLE remediation_items ADD COLUMN assigned_to_user_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+    # Assessment: assigned_analyst_id
+    cursor.execute("PRAGMA table_info(assessments)")
+    assessment_cols = {row[1] for row in cursor.fetchall()}
+    if "assigned_analyst_id" not in assessment_cols:
+        try:
+            cursor.execute("ALTER TABLE assessments ADD COLUMN assigned_analyst_id INTEGER")
         except sqlite3.OperationalError:
             pass
 

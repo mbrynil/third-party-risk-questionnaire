@@ -63,6 +63,15 @@
                 </select>
             </div>
             <div class="col-auto">
+                <select class="form-select form-select-sm" id="filterAnalyst" onchange="applyTrackerFilters()">
+                    <option value="">All Analysts</option>
+                    {% for a in analysts %}
+                    <option value="{{ a.id }}">{{ a.display_name }}</option>
+                    {% endfor %}
+                    <option value="unassigned">Unassigned</option>
+                </select>
+            </div>
+            <div class="col-auto">
                 <input type="text" class="form-control form-control-sm" id="filterSearch"
                        placeholder="Search vendor or title..." oninput="applyTrackerFilters()">
             </div>
@@ -122,6 +131,7 @@
                 <tr>
                     <th>Vendor</th>
                     <th>Assessment</th>
+                    <th>Analyst</th>
                     <th>Status</th>
                     <th>Sent To</th>
                     <th>Sent Date</th>
@@ -135,7 +145,8 @@
                 {% for row in rows %}
                 <tr data-status="{{ row.assessment.status }}"
                     data-days="{{ row.days_waiting if row.days_waiting is not none else '' }}"
-                    data-search="{{ row.vendor_name|lower }} {{ row.assessment.title|lower }}">
+                    data-search="{{ row.vendor_name|lower }} {{ row.assessment.title|lower }}"
+                    data-analyst="{{ row.assessment.assigned_analyst_id or (row.effective_analyst.id if row.effective_analyst else '') }}">
                     <td>
                         {% if row.vendor_id %}
                         <a href="/vendors/{{ row.vendor_id }}" class="text-decoration-none fw-semibold">
@@ -148,6 +159,28 @@
                     <td>
                         <div>{{ row.assessment.title }}</div>
                         <small class="text-muted">{{ row.assessment.questions|length }} questions</small>
+                    </td>
+                    <td onclick="event.stopPropagation();" style="min-width:150px;">
+                        {% set current_user = request.state.current_user %}
+                        {% if current_user and current_user.role in ['admin', 'analyst'] %}
+                        <form method="post" action="/assessments/{{ row.assessment.id }}/assign-analyst" class="d-flex gap-1 align-items-center">
+                            <select name="assigned_analyst_id" class="form-select form-select-sm py-0" style="font-size:0.8rem;" onchange="this.form.submit()">
+                                <option value="">—</option>
+                                {% for a in analysts %}
+                                <option value="{{ a.id }}" {% if row.assessment.assigned_analyst_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                        {% if row.is_inherited and row.effective_analyst %}
+                        <small class="text-muted" style="font-size:0.65rem;" title="Inherited from vendor assignment"><i class="bi bi-arrow-return-right"></i> via vendor</small>
+                        {% endif %}
+                        {% else %}
+                        {% if row.effective_analyst %}
+                        <small>{{ row.effective_analyst.display_name }}</small>
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                        {% endif %}
                     </td>
                     <td>
                         {% if row.assessment.status == 'DRAFT' %}
@@ -253,6 +286,7 @@
 function applyTrackerFilters() {
     var statusVal = document.getElementById('filterStatus').value;
     var waitingVal = document.getElementById('filterWaiting').value;
+    var analystVal = document.getElementById('filterAnalyst').value;
     var searchVal = document.getElementById('filterSearch').value.toLowerCase().trim();
     var rows = document.querySelectorAll('#trackerBody tr');
     var visibleCount = 0;
@@ -261,6 +295,7 @@ function applyTrackerFilters() {
         var status = row.dataset.status;
         var days = row.dataset.days;
         var search = row.dataset.search;
+        var analyst = row.dataset.analyst;
         var show = true;
 
         // Status filter
@@ -270,6 +305,10 @@ function applyTrackerFilters() {
         if (waitingVal === 'awaiting' && (days === '' || status === 'SUBMITTED' || status === 'REVIEWED' || status === 'DRAFT')) show = false;
         if (waitingVal === 'overdue' && (days === '' || parseInt(days) < 7)) show = false;
         if (waitingVal === 'critical' && (days === '' || parseInt(days) < 14)) show = false;
+
+        // Analyst filter
+        if (analystVal === 'unassigned' && analyst !== '') show = false;
+        else if (analystVal && analystVal !== 'unassigned' && analyst !== analystVal) show = false;
 
         // Search filter
         if (searchVal && search.indexOf(searchVal) === -1) show = false;

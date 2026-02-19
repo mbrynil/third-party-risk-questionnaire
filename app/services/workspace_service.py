@@ -19,24 +19,45 @@ from app.services.portfolio import RISK_LABELS, DECISION_LABELS
 
 
 def get_workspace_data(db: Session, user: User) -> dict:
-    """Return everything the personal workspace dashboard needs."""
+    """Return everything the personal workspace dashboard needs.
+
+    Assignment logic:
+    - Assessment-level ``assigned_analyst_id`` takes priority.
+    - Vendor-level ``assigned_analyst_id`` is the fallback — assessments
+      without their own analyst inherit from the vendor.
+    """
     today = date.today()
     now = datetime.utcnow()
 
-    # --- My Vendors ---
+    # --- My Vendors (vendor-level assignment) ---
     my_vendors = db.query(Vendor).filter(
         Vendor.assigned_analyst_id == user.id,
         Vendor.status == VENDOR_STATUS_ACTIVE,
     ).order_by(Vendor.name).all()
     my_vendor_ids = [v.id for v in my_vendors]
 
-    # --- Latest finalized decisions for my vendors ---
+    # --- My Assessments: directly assigned OR on my vendors (without another analyst) ---
+    my_assessments = db.query(Assessment).filter(
+        or_(
+            Assessment.assigned_analyst_id == user.id,
+            # Vendor-assigned but no assessment-level override
+            (Assessment.vendor_id.in_(my_vendor_ids) if my_vendor_ids else False) &
+            (Assessment.assigned_analyst_id == None),
+        )
+    ).all() if my_vendor_ids or True else []
+    # Simpler fallback: always query
+    my_assessments = _get_my_assessments(db, user.id, my_vendor_ids)
+
+    my_assessment_vendor_ids = {a.vendor_id for a in my_assessments if a.vendor_id}
+
+    # --- Latest finalized decisions for relevant vendors ---
+    relevant_vendor_ids = set(my_vendor_ids) | my_assessment_vendor_ids
     my_decisions = {}
-    if my_vendor_ids:
+    if relevant_vendor_ids:
         decisions = (
             db.query(AssessmentDecision)
             .filter(
-                AssessmentDecision.vendor_id.in_(my_vendor_ids),
+                AssessmentDecision.vendor_id.in_(relevant_vendor_ids),
                 AssessmentDecision.status == DECISION_STATUS_FINAL,
             )
             .order_by(AssessmentDecision.finalized_at.desc())
@@ -46,35 +67,15 @@ def get_workspace_data(db: Session, user: User) -> dict:
             if d.vendor_id not in my_decisions:
                 my_decisions[d.vendor_id] = d
 
-    # --- Assessments for my vendors ---
-    my_assessments = []
-    if my_vendor_ids:
-        my_assessments = db.query(Assessment).filter(
-            Assessment.vendor_id.in_(my_vendor_ids),
-        ).all()
-
     # --- Remediations assigned to me or for my vendors ---
-    my_remediations = []
+    rem_filters = [RemediationItem.assigned_to_user_id == user.id]
     if my_vendor_ids:
-        my_remediations = db.query(RemediationItem).filter(
-            or_(
-                RemediationItem.assigned_to_user_id == user.id,
-                RemediationItem.vendor_id.in_(my_vendor_ids),
-            ),
-            RemediationItem.status.notin_([REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED]),
-        ).all()
+        rem_filters.append(RemediationItem.vendor_id.in_(my_vendor_ids))
 
-    # Also get remediations assigned directly to me (even outside my vendors)
-    direct_remediations = db.query(RemediationItem).filter(
-        RemediationItem.assigned_to_user_id == user.id,
+    my_remediations = db.query(RemediationItem).filter(
+        or_(*rem_filters),
         RemediationItem.status.notin_([REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED]),
     ).all()
-    # Merge without duplicates
-    seen_rem_ids = {r.id for r in my_remediations}
-    for r in direct_remediations:
-        if r.id not in seen_rem_ids:
-            my_remediations.append(r)
-            seen_rem_ids.add(r.id)
 
     # ===================== PERSONAL KPIs =====================
     pending_reviews = sum(
@@ -87,8 +88,10 @@ def get_workspace_data(db: Session, user: User) -> dict:
         1 for r in my_remediations if r.due_date and r.due_date < now
     )
     overdue_vendor_reviews = sum(
-        1 for d in my_decisions.values()
-        if d.next_review_date and d.next_review_date.date() < today
+        1 for vid in my_vendor_ids
+        if vid in my_decisions
+        and my_decisions[vid].next_review_date
+        and my_decisions[vid].next_review_date.date() < today
     )
     overdue_items = overdue_remediations + overdue_vendor_reviews
 
@@ -132,8 +135,9 @@ def get_workspace_data(db: Session, user: User) -> dict:
             })
 
     # P3: Overdue vendor reviews
-    for vid, d in my_decisions.items():
-        if d.next_review_date and d.next_review_date.date() < today:
+    for vid in my_vendor_ids:
+        d = my_decisions.get(vid)
+        if d and d.next_review_date and d.next_review_date.date() < today:
             days_over = (today - d.next_review_date.date()).days
             vendor = next((v for v in my_vendors if v.id == vid), None)
             action_items.append({
@@ -177,8 +181,9 @@ def get_workspace_data(db: Session, user: User) -> dict:
 
     # P6: Upcoming reviews (within 30 days)
     upcoming_threshold = today + timedelta(days=30)
-    for vid, d in my_decisions.items():
-        if d.next_review_date and today <= d.next_review_date.date() <= upcoming_threshold:
+    for vid in my_vendor_ids:
+        d = my_decisions.get(vid)
+        if d and d.next_review_date and today <= d.next_review_date.date() <= upcoming_threshold:
             days_until = (d.next_review_date.date() - today).days
             vendor = next((v for v in my_vendors if v.id == vid), None)
             action_items.append({
@@ -297,3 +302,28 @@ def get_workspace_data(db: Session, user: User) -> dict:
         "recent_activities": activity_items,
         "org_overview": org_overview,
     }
+
+
+def _get_my_assessments(db: Session, user_id: int, my_vendor_ids: list[int]) -> list:
+    """Get assessments assigned to user — directly or via vendor fallback."""
+    # Directly assigned to this user at assessment level
+    direct = db.query(Assessment).filter(
+        Assessment.assigned_analyst_id == user_id,
+    ).all()
+    seen = {a.id for a in direct}
+
+    # Via vendor assignment, but only if assessment has no specific analyst
+    inherited = []
+    if my_vendor_ids:
+        inherited = db.query(Assessment).filter(
+            Assessment.vendor_id.in_(my_vendor_ids),
+            Assessment.assigned_analyst_id == None,
+        ).all()
+
+    result = list(direct)
+    for a in inherited:
+        if a.id not in seen:
+            result.append(a)
+            seen.add(a.id)
+
+    return result

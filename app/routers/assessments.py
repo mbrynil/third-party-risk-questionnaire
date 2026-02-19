@@ -51,6 +51,12 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db), cu
     ).all() if assessment_ids else []
     decisions = {d.assessment_id: d for d in decisions_list}
 
+    # Analysts for assignment dropdown
+    analysts = db.query(User).filter(
+        User.is_active == True,
+        User.role.in_(["admin", "analyst"]),
+    ).order_by(User.display_name).all()
+
     # Build enriched rows
     rows = []
     for a in assessments:
@@ -60,6 +66,11 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db), cu
 
         decision = decisions.get(a.id)
 
+        # Effective analyst: assessment-level, fallback to vendor-level
+        effective_analyst = a.assigned_analyst
+        if not effective_analyst and a.vendor and a.vendor.assigned_analyst:
+            effective_analyst = a.vendor.assigned_analyst
+
         rows.append({
             "assessment": a,
             "vendor_name": a.vendor.name if a.vendor else a.company_name,
@@ -67,13 +78,37 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db), cu
             "days_waiting": days_waiting,
             "reminder_count": reminder_counts.get(a.id, 0),
             "decision": decision,
+            "effective_analyst": effective_analyst,
+            "is_inherited": effective_analyst and not a.assigned_analyst_id,
         })
 
     return templates.TemplateResponse("assessment_tracker.html", {
         "request": request,
         "rows": rows,
+        "analysts": analysts,
         "now": now,
     })
+
+
+@router.post("/assessments/{assessment_id}/assign-analyst")
+async def assign_assessment_analyst(
+    request: Request,
+    assessment_id: int,
+    assigned_analyst_id: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
+):
+    """Assign or clear the analyst on a specific assessment."""
+    assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    new_id = int(assigned_analyst_id) if assigned_analyst_id.strip().isdigit() else None
+    assessment.assigned_analyst_id = new_id
+    db.commit()
+
+    referer = request.headers.get("referer", "/assessments/tracker")
+    return RedirectResponse(url=referer, status_code=303)
 
 
 @router.get("/assessments/tracker.csv")
