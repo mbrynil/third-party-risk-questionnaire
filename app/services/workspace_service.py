@@ -95,8 +95,16 @@ def get_workspace_data(db: Session, user: User) -> dict:
     )
     overdue_items = overdue_remediations + overdue_vendor_reviews
 
+    ready_to_assess = sum(
+        1 for a in my_assessments
+        if a.status == ASSESSMENT_STATUS_SUBMITTED
+        and not (my_decisions.get(a.vendor_id) and my_decisions[a.vendor_id].assessment_id == a.id
+                 and my_decisions[a.vendor_id].status == DECISION_STATUS_FINAL)
+    )
+
     kpis = {
         "my_vendors": len(my_vendors),
+        "ready_to_assess": ready_to_assess,
         "pending_reviews": pending_reviews,
         "open_remediations": open_remediations,
         "overdue_items": overdue_items,
@@ -123,14 +131,16 @@ def get_workspace_data(db: Session, user: User) -> dict:
     # P2: Assessments awaiting review (SUBMITTED)
     for a in my_assessments:
         if a.status == ASSESSMENT_STATUS_SUBMITTED:
+            days_since = (now - a.submitted_at).days if a.submitted_at else 0
+            time_ctx = f"Submitted {days_since} day{'s' if days_since != 1 else ''} ago" if days_since > 0 else "Submitted today"
             action_items.append({
                 "priority": 2,
                 "type": "awaiting_review",
                 "icon": "bi-clipboard-check",
                 "color": "#fd7e14",
                 "title": f"{a.company_name}: {a.title}",
-                "subtitle": "Submitted — awaiting your review",
-                "link": f"/responses/{a.id}",
+                "subtitle": f"{time_ctx} — ready for your review",
+                "link": f"/assessments/{a.id}/decision",
                 "due_info": a.submitted_at.strftime("%Y-%m-%d") if a.submitted_at else None,
             })
 
@@ -278,6 +288,89 @@ def get_workspace_data(db: Session, user: User) -> dict:
             "user_name": act.user.display_name if act.user else None,
         })
 
+    # ===================== MY ASSESSMENTS TABLE =====================
+    new_threshold = now - timedelta(hours=48)
+    assessment_rows = []
+    for a in my_assessments:
+        # Skip REVIEWED with finalized decision — they're done
+        if a.status == ASSESSMENT_STATUS_REVIEWED:
+            decision = my_decisions.get(a.vendor_id)
+            if decision and decision.status == DECISION_STATUS_FINAL:
+                continue
+
+        # Days waiting (for SENT/IN_PROGRESS)
+        days_waiting = None
+        if a.status in (ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS) and a.sent_at:
+            days_waiting = (now - a.sent_at).days
+
+        # Days since submission (for SUBMITTED)
+        days_since_submitted = None
+        if a.status == ASSESSMENT_STATUS_SUBMITTED and a.submitted_at:
+            days_since_submitted = (now - a.submitted_at).days
+
+        # "New" badge — assigned/relevant timestamp within 48 hours
+        is_new = False
+        if a.status == ASSESSMENT_STATUS_SUBMITTED and a.submitted_at and a.submitted_at >= new_threshold:
+            is_new = True
+        elif a.status == ASSESSMENT_STATUS_SENT and a.sent_at and a.sent_at >= new_threshold:
+            is_new = True
+        elif a.created_at and a.created_at >= new_threshold:
+            is_new = True
+
+        # Action link and label
+        if a.status == ASSESSMENT_STATUS_SUBMITTED:
+            action_link = f"/assessments/{a.id}/decision"
+            action_label = "Review Now"
+            action_style = "btn-primary"
+            action_icon = "bi-clipboard-check"
+        elif a.status == ASSESSMENT_STATUS_DRAFT:
+            action_link = f"/questionnaire/{a.id}/edit"
+            action_label = "Edit"
+            action_style = "btn-outline-secondary"
+            action_icon = "bi-pencil"
+        elif a.status in (ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS):
+            action_link = f"/assessments/{a.id}/manage"
+            action_label = "Manage"
+            action_style = "btn-outline-primary"
+            action_icon = "bi-gear"
+        elif a.status == ASSESSMENT_STATUS_REVIEWED:
+            action_link = f"/assessments/{a.id}/decision"
+            action_label = "View"
+            action_style = "btn-outline-secondary"
+            action_icon = "bi-eye"
+        else:
+            action_link = f"/assessments/{a.id}/manage"
+            action_label = "View"
+            action_style = "btn-outline-secondary"
+            action_icon = "bi-eye"
+
+        assessment_rows.append({
+            "id": a.id,
+            "title": a.title,
+            "vendor_name": a.company_name,
+            "vendor_id": a.vendor_id,
+            "status": a.status,
+            "status_display": a.status.replace("_", " ").title(),
+            "days_waiting": days_waiting,
+            "days_since_submitted": days_since_submitted,
+            "is_new": is_new,
+            "question_count": len(a.questions) if a.questions else 0,
+            "action_link": action_link,
+            "action_label": action_label,
+            "action_style": action_style,
+            "action_icon": action_icon,
+        })
+
+    # Sort: SUBMITTED first, then SENT/IN_PROGRESS, then DRAFT, then REVIEWED
+    status_order = {
+        ASSESSMENT_STATUS_SUBMITTED: 0,
+        ASSESSMENT_STATUS_SENT: 1,
+        ASSESSMENT_STATUS_IN_PROGRESS: 1,
+        ASSESSMENT_STATUS_DRAFT: 2,
+        ASSESSMENT_STATUS_REVIEWED: 3,
+    }
+    assessment_rows.sort(key=lambda r: (status_order.get(r["status"], 9), -(r["days_since_submitted"] or 0)))
+
     # ===================== ADMIN ORG OVERVIEW =====================
     org_overview = None
     if user.role == "admin":
@@ -299,6 +392,7 @@ def get_workspace_data(db: Session, user: User) -> dict:
         "kpis": kpis,
         "action_items": action_items,
         "vendor_rows": vendor_rows,
+        "assessment_rows": assessment_rows,
         "recent_activities": activity_items,
         "org_overview": org_overview,
     }

@@ -112,16 +112,43 @@
         color: #9ca3af;
     }
 
-    .vendor-table-compact .table {
+    .workspace-table-compact .table {
         font-size: 0.85rem;
         margin-bottom: 0;
     }
-    .vendor-table-compact .table tbody tr {
+    .workspace-table-compact .table tbody tr {
         cursor: pointer;
         transition: background 0.1s;
     }
-    .vendor-table-compact .table tbody tr:hover {
+    .workspace-table-compact .table tbody tr:hover {
         background: #f0f4ff;
+    }
+    .badge-new {
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-size: 0.6rem;
+        font-weight: 700;
+        padding: 0.15rem 0.4rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        animation: pulse-new 2s ease-in-out infinite;
+        vertical-align: middle;
+        margin-left: 0.35rem;
+    }
+    @keyframes pulse-new {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    .assessment-status-badge {
+        padding: 0.2rem 0.5rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.7rem;
+    }
+    .days-context {
+        font-size: 0.7rem;
+        color: #6b7280;
     }
     .tier-badge-sm {
         display: inline-block;
@@ -206,7 +233,7 @@
 
 {# ==================== KPI ROW ==================== #}
 <div class="row g-3 mb-4">
-    <div class="col-6 col-lg-3">
+    <div class="col-6 col-lg">
         <a href="#myVendorsTable" class="kpi-link">
             <div class="kpi-card" style="border-left: 4px solid #2563eb;">
                 <div class="kpi-value" style="color: #2563eb;">{{ kpis.my_vendors }}</div>
@@ -214,7 +241,15 @@
             </div>
         </a>
     </div>
-    <div class="col-6 col-lg-3">
+    <div class="col-6 col-lg">
+        <a href="#myAssessments" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #10b981;">
+                <div class="kpi-value" style="color: #10b981;">{{ kpis.ready_to_assess }}</div>
+                <div class="kpi-label">Ready to Assess</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg">
         <a href="/assessments/tracker?status=SUBMITTED" class="kpi-link">
             <div class="kpi-card" style="border-left: 4px solid #f59e0b;">
                 <div class="kpi-value" style="color: #f59e0b;">{{ kpis.pending_reviews }}</div>
@@ -222,7 +257,7 @@
             </div>
         </a>
     </div>
-    <div class="col-6 col-lg-3">
+    <div class="col-6 col-lg">
         <a href="#actionItems" class="kpi-link">
             <div class="kpi-card" style="border-left: 4px solid #fd7e14;">
                 <div class="kpi-value" style="color: #fd7e14;">{{ kpis.open_remediations }}</div>
@@ -230,7 +265,7 @@
             </div>
         </a>
     </div>
-    <div class="col-6 col-lg-3">
+    <div class="col-6 col-lg">
         <a href="#actionItems" class="kpi-link">
             <div class="kpi-card" style="border-left: 4px solid #dc3545;">
                 <div class="kpi-value" style="color: #dc3545;">{{ kpis.overdue_items }}</div>
@@ -316,6 +351,105 @@
     </div>
 </div>
 
+{# ==================== MY ASSESSMENTS TABLE ==================== #}
+<div class="card mb-4" id="myAssessments">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-clipboard2-data me-1"></i>My Assessments</span>
+        {% if assessment_rows %}
+        <div class="d-flex align-items-center gap-2">
+            {% set submitted_count = assessment_rows|selectattr('status', 'equalto', 'SUBMITTED')|list|length %}
+            {% if submitted_count > 0 %}
+            <span class="badge bg-success rounded-pill">{{ submitted_count }} ready</span>
+            {% endif %}
+            <span class="text-muted small">{{ assessment_rows|length }} total</span>
+        </div>
+        {% endif %}
+    </div>
+    <div class="card-body p-0">
+        {% if assessment_rows %}
+        <div class="workspace-table-compact">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding:0.75rem 1rem;">Vendor</th>
+                        <th>Assessment</th>
+                        <th>Status</th>
+                        <th>Waiting</th>
+                        <th>Questions</th>
+                        <th class="text-end" style="padding-right:1rem;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in assessment_rows %}
+                    <tr onclick="window.location.href='{{ a.action_link }}'">
+                        <td style="padding:0.75rem 1rem;">
+                            {% if a.vendor_id %}
+                            <a href="/vendors/{{ a.vendor_id }}" class="text-decoration-none fw-semibold" onclick="event.stopPropagation();">{{ a.vendor_name }}</a>
+                            {% else %}
+                            <strong>{{ a.vendor_name }}</strong>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ a.title }}
+                            {% if a.is_new %}<span class="badge-new">New</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if a.status == 'SUBMITTED' %}
+                            <span class="assessment-status-badge" style="background:#d1fae5;color:#065f46;">Ready to Assess</span>
+                            {% elif a.status == 'DRAFT' %}
+                            <span class="assessment-status-badge" style="background:#f3f4f6;color:#6b7280;">Draft</span>
+                            {% elif a.status == 'SENT' %}
+                            <span class="assessment-status-badge" style="background:#dbeafe;color:#1e40af;">Sent</span>
+                            {% elif a.status == 'IN_PROGRESS' %}
+                            <span class="assessment-status-badge" style="background:#fef3c7;color:#92400e;">In Progress</span>
+                            {% elif a.status == 'REVIEWED' %}
+                            <span class="assessment-status-badge" style="background:#e0e7ff;color:#4338ca;">Reviewed</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if a.days_since_submitted is not none %}
+                            <span class="days-context">
+                                {% if a.days_since_submitted == 0 %}Submitted today
+                                {% elif a.days_since_submitted == 1 %}Submitted yesterday
+                                {% else %}{{ a.days_since_submitted }}d since submission
+                                {% endif %}
+                            </span>
+                            {% elif a.days_waiting is not none %}
+                            <span class="days-context">
+                                {% if a.days_waiting >= 14 %}
+                                <span class="text-danger fw-semibold">{{ a.days_waiting }}d waiting</span>
+                                {% elif a.days_waiting >= 7 %}
+                                <span class="text-warning fw-semibold">{{ a.days_waiting }}d waiting</span>
+                                {% else %}
+                                {{ a.days_waiting }}d waiting
+                                {% endif %}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="text-muted">{{ a.question_count }}</span></td>
+                        <td class="text-end" style="padding-right:1rem;" onclick="event.stopPropagation();">
+                            <a href="{{ a.action_link }}" class="btn btn-sm {{ a.action_style }}">
+                                <i class="bi {{ a.action_icon }} me-1"></i>{{ a.action_label }}
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-clipboard2"></i>
+            <h6>No assessments assigned</h6>
+            <p class="small">You don't have any assessments assigned yet. Check the assessment tracker for all assessments.</p>
+            <a href="/assessments/tracker" class="btn btn-outline-primary btn-sm"><i class="bi bi-kanban me-1"></i>Assessment Tracker</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 {# ==================== MY VENDORS TABLE ==================== #}
 <div class="card" id="myVendorsTable">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -326,7 +460,7 @@
     </div>
     <div class="card-body p-0">
         {% if vendor_rows %}
-        <div class="vendor-table-compact">
+        <div class="workspace-table-compact">
             <table class="table table-hover mb-0">
                 <thead>
                     <tr>

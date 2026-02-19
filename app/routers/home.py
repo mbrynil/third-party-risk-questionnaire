@@ -39,6 +39,7 @@ async def workspace(request: Request, db: Session = Depends(get_db), current_use
         "kpis": data["kpis"],
         "action_items": data["action_items"],
         "vendor_rows": data["vendor_rows"],
+        "assessment_rows": data["assessment_rows"],
         "recent_activities": data["recent_activities"],
         "org_overview": data["org_overview"],
     })
