@@ -540,6 +540,38 @@
     {% endif %}
 </div>
 
+{# ==================== ACTIVITY TIMELINE ==================== #}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Activity Timeline</h6></div>
+    {% if timeline %}
+    <div class="card-body py-3">
+        <div style="position:relative; padding-left: 28px;">
+            {% for event in timeline %}
+            <div style="position:relative; padding-bottom: {{ '0' if loop.last else '1.25rem' }};">
+                {# Vertical line #}
+                {% if not loop.last %}
+                <div style="position:absolute; left:-20px; top:10px; bottom:0; width:2px; background:{{ activity_colors.get(event.activity_type, '#dee2e6') }}20;"></div>
+                {% endif %}
+                {# Icon dot #}
+                <div style="position:absolute; left:-27px; top:2px; width:16px; height:16px; border-radius:50%; background:{{ activity_colors.get(event.activity_type, '#6c757d') }}; display:flex; align-items:center; justify-content:center;">
+                    <i class="{{ activity_icons.get(event.activity_type, 'bi-circle') }}" style="font-size:0.55rem; color:#fff;"></i>
+                </div>
+                <div>
+                    <div class="small">{{ event.description }}</div>
+                    <div class="text-muted" style="font-size:0.7rem;">{{ event.created_at.strftime('%b %d, %Y %H:%M') }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-4 text-muted">
+        <i class="bi bi-clock-history" style="font-size: 1.5rem;"></i>
+        <p class="mt-2 mb-0 small">No activity recorded yet.</p>
+    </div>
+    {% endif %}
+</div>
+
 {# ==================== ASSESSMENTS ==================== #}
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -561,10 +593,9 @@
                 <tr>
                     <th>Assessment</th>
                     <th>Status</th>
+                    <th>Sent To</th>
+                    <th>Reminders</th>
                     <th>Decision</th>
-                    <th>Risk</th>
-                    <th>Created</th>
-                    <th>Completed</th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
@@ -576,29 +607,72 @@
                 <tr>
                     <td>
                         <div class="fw-semibold">{{ q.title }}</div>
-                        <small class="text-muted">{{ q.questions|length }} questions</small>
+                        <small class="text-muted">{{ q.questions|length }} questions &middot; {{ q.created_at.strftime('%Y-%m-%d') }}</small>
                     </td>
                     <td>
                         {% if q.status == 'DRAFT' %}
                         <span class="badge bg-secondary">Draft</span>
                         {% elif q.status == 'SENT' %}
                         <span class="badge bg-primary">Sent</span>
-                        {% if q.sent_to_email %}
-                        <br><small class="text-muted"><i class="bi bi-envelope-at me-1"></i>{{ q.sent_to_email }}</small>
-                        {% endif %}
-                        {% if q.reminders_paused %}
-                        <br><span class="badge bg-secondary"><i class="bi bi-pause-circle me-1"></i>Reminders paused</span>
-                        {% elif reminder_counts.get(q.id, 0) > 0 %}
-                        <br><small class="text-muted"><i class="bi bi-bell me-1"></i>{{ reminder_counts.get(q.id, 0) }} reminder(s) sent</small>
-                        {% endif %}
                         {% elif q.status == 'IN_PROGRESS' %}
                         <span class="badge bg-warning text-dark">In Progress</span>
                         {% elif q.status == 'SUBMITTED' %}
                         <span class="badge bg-info">Submitted</span>
+                        {% if latest_response and latest_response.submitted_at %}
+                        <br><small class="text-muted">{{ latest_response.submitted_at.strftime('%Y-%m-%d') }}</small>
+                        {% endif %}
                         {% elif q.status == 'REVIEWED' %}
                         <span class="badge bg-success">Reviewed</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if q.sent_to_email %}
+                        <div>
+                            <i class="bi bi-envelope-fill text-primary me-1"></i>
+                            <strong class="small">{{ q.sent_to_email }}</strong>
+                        </div>
+                        {% if q.sent_at %}
+                        <small class="text-muted">
+                            <i class="bi bi-calendar-event me-1"></i>{{ q.sent_at.strftime('%b %d, %Y') }}
+                            {% if q.status in ['SENT', 'IN_PROGRESS'] %}
+                            {% set days_waiting = (current_date - q.sent_at.date()).days %}
+                            &middot;
+                            {% if days_waiting >= 14 %}
+                            <span class="text-danger fw-bold">{{ days_waiting }}d waiting</span>
+                            {% elif days_waiting >= 7 %}
+                            <span class="text-warning fw-bold">{{ days_waiting }}d waiting</span>
+                            {% else %}
+                            <span>{{ days_waiting }}d ago</span>
+                            {% endif %}
+                            {% endif %}
+                        </small>
+                        {% endif %}
+                        {% if q.expires_at %}
+                        <br><small class="text-muted">
+                            <i class="bi bi-hourglass-split me-1"></i>Expires {{ q.expires_at.strftime('%b %d') }}
+                        </small>
+                        {% endif %}
                         {% else %}
-                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Unknown</span>
+                        <span class="text-muted fst-italic small">Not sent via email</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% set r_count = reminder_counts.get(q.id, 0) %}
+                        {% if q.reminders_paused %}
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-pause-circle me-1"></i>Paused
+                        </span>
+                        {% if r_count > 0 %}
+                        <br><small class="text-muted">{{ r_count }} sent before pause</small>
+                        {% endif %}
+                        {% elif r_count > 0 %}
+                        <span class="badge bg-warning text-dark">
+                            <i class="bi bi-bell-fill me-1"></i>{{ r_count }} sent
+                        </span>
+                        {% elif q.sent_to_email and q.status in ['SENT', 'IN_PROGRESS'] %}
+                        <small class="text-muted">Auto-enabled</small>
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
                         {% endif %}
                     </td>
                     <td>
@@ -612,27 +686,16 @@
                             {% elif decision.decision_outcome == 'REJECT' %}
                             <span class="badge bg-danger">Rejected</span>
                             {% endif %}
-                        {% else %}
-                            <span class="text-muted">&mdash;</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if decision and decision.status == 'FINAL' and decision.overall_risk_rating %}
+                            {% if decision.overall_risk_rating %}
+                            <br>
                             {% if decision.overall_risk_rating in ['VERY_LOW', 'LOW'] %}
-                            <span class="badge bg-success">{{ decision.overall_risk_rating.replace('_', ' ').title() }}</span>
+                            <span class="badge bg-success mt-1">{{ decision.overall_risk_rating.replace('_', ' ').title() }}</span>
                             {% elif decision.overall_risk_rating == 'MODERATE' %}
-                            <span class="badge bg-warning text-dark">Moderate</span>
+                            <span class="badge bg-warning text-dark mt-1">Moderate</span>
                             {% else %}
-                            <span class="badge bg-danger">{{ decision.overall_risk_rating.replace('_', ' ').title() }}</span>
+                            <span class="badge bg-danger mt-1">{{ decision.overall_risk_rating.replace('_', ' ').title() }}</span>
                             {% endif %}
-                        {% else %}
-                            <span class="text-muted">&mdash;</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ q.created_at.strftime('%Y-%m-%d') }}</td>
-                    <td>
-                        {% if latest_response and latest_response.submitted_at %}
-                            {{ latest_response.submitted_at.strftime('%Y-%m-%d') }}
+                            {% endif %}
                         {% else %}
                             <span class="text-muted">&mdash;</span>
                         {% endif %}

@@ -25,6 +25,11 @@ from app.services.tiering import compute_inherent_risk_tier, get_effective_tier,
 from app.services.vendor_document_service import validate_document_upload, store_vendor_document
 from app.services.remediation_service import get_vendor_remediations, get_remediation_stats
 from app.services.reassessment_service import create_reassessment
+from app.services.activity_service import log_activity, get_vendor_timeline
+from models import (
+    ACTIVITY_VENDOR_CREATED, ACTIVITY_ASSESSMENT_CREATED, ACTIVITY_TIER_CHANGED,
+    ACTIVITY_ICONS, ACTIVITY_COLORS,
+)
 
 router = APIRouter()
 
@@ -119,6 +124,8 @@ async def create_vendor(
             pass
 
     db.add(vendor)
+    db.flush()
+    log_activity(db, vendor.id, ACTIVITY_VENDOR_CREATED, f"Vendor '{vendor.name}' created")
     db.commit()
 
     return RedirectResponse(url=f"/vendors/{vendor.id}?created=1", status_code=303)
@@ -182,6 +189,8 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
     import json
     score_history_json = json.dumps(score_history)
 
+    timeline = get_vendor_timeline(db, vendor_id)
+
     return templates.TemplateResponse("vendor_profile.html", {
         "request": request,
         "vendor": vendor,
@@ -203,6 +212,9 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         "score_history": score_history,
         "score_history_json": score_history_json,
         "reminder_counts": reminder_counts,
+        "timeline": timeline,
+        "activity_icons": ACTIVITY_ICONS,
+        "activity_colors": ACTIVITY_COLORS,
     })
 
 
@@ -442,8 +454,14 @@ async def set_tier_override(
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor not found")
 
-    vendor.tier_override = tier_override.strip() if tier_override.strip() in VALID_INHERENT_RISK_TIERS else None
+    new_override = tier_override.strip() if tier_override.strip() in VALID_INHERENT_RISK_TIERS else None
+    old_tier = get_effective_tier(vendor)
+    vendor.tier_override = new_override
     vendor.tier_notes = tier_notes.strip() or None
+    new_tier = get_effective_tier(vendor)
+    if old_tier != new_tier:
+        log_activity(db, vendor_id, ACTIVITY_TIER_CHANGED,
+                     f"Tier changed from {old_tier or 'None'} to {new_tier or 'None'}")
     db.commit()
 
     return RedirectResponse(url=f"/vendors/{vendor_id}?tier_updated=1", status_code=303)
@@ -511,6 +529,9 @@ async def create_vendor_assessment(
         db.flush()
 
         clone_template_to_assessment(db, tmpl.id, new_assessment.id)
+        log_activity(db, vendor.id, ACTIVITY_ASSESSMENT_CREATED,
+                     f"Assessment '{title.strip()}' created from template '{tmpl.name}'",
+                     assessment_id=new_assessment.id)
 
         db.commit()
         return RedirectResponse(url=f"/questionnaire/{new_assessment.id}/edit?from_template=1", status_code=303)
@@ -523,6 +544,10 @@ async def create_vendor_assessment(
             vendor_id=vendor.id,
         )
         db.add(new_assessment)
+        db.flush()
+        log_activity(db, vendor.id, ACTIVITY_ASSESSMENT_CREATED,
+                     f"Assessment '{title.strip()}' created from question bank",
+                     assessment_id=new_assessment.id)
         db.commit()
 
         return RedirectResponse(url=f"/create?vendor_id={vendor.id}&questionnaire_id={new_assessment.id}", status_code=303)

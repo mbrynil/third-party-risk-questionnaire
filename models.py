@@ -128,6 +128,7 @@ class AssessmentTemplate(Base):
     source_title = Column(String(255), nullable=True)
     source_company = Column(String(255), nullable=True)
     token = Column(String(64), unique=True, nullable=False, index=True)
+    suggested_tier = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     template_questions = relationship("TemplateQuestion", back_populates="template", cascade="all, delete-orphan")
@@ -199,6 +200,9 @@ class Assessment(Base):
     sent_to_email = Column(String(255), nullable=True)
     expires_at = Column(DateTime, nullable=True)
     reminders_paused = Column(Boolean, default=False)
+    first_reminder_days = Column(Integer, nullable=True)
+    reminder_frequency_days = Column(Integer, nullable=True)
+    max_reminders = Column(Integer, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -1148,7 +1152,7 @@ def backfill_vendor_new_columns():
             cursor.execute("ALTER TABLE assessments ADD COLUMN previous_assessment_id INTEGER")
         except sqlite3.OperationalError:
             pass
-    for col_name, col_type in [("sent_to_email", "VARCHAR(255)"), ("expires_at", "DATETIME"), ("reminders_paused", "BOOLEAN DEFAULT 0")]:
+    for col_name, col_type in [("sent_to_email", "VARCHAR(255)"), ("expires_at", "DATETIME"), ("reminders_paused", "BOOLEAN DEFAULT 0"), ("first_reminder_days", "INTEGER"), ("reminder_frequency_days", "INTEGER"), ("max_reminders", "INTEGER")]:
         if col_name not in existing_assessment_cols:
             try:
                 cursor.execute(f"ALTER TABLE assessments ADD COLUMN {col_name} {col_type}")
@@ -1157,6 +1161,199 @@ def backfill_vendor_new_columns():
 
     conn.commit()
     conn.close()
+
+
+# ==================== VENDOR ACTIVITY TIMELINE ====================
+
+ACTIVITY_VENDOR_CREATED = "VENDOR_CREATED"
+ACTIVITY_ASSESSMENT_CREATED = "ASSESSMENT_CREATED"
+ACTIVITY_ASSESSMENT_SENT = "ASSESSMENT_SENT"
+ACTIVITY_REMINDER_SENT = "REMINDER_SENT"
+ACTIVITY_VENDOR_SUBMITTED = "VENDOR_SUBMITTED"
+ACTIVITY_DECISION_FINALIZED = "DECISION_FINALIZED"
+ACTIVITY_TIER_CHANGED = "TIER_CHANGED"
+ACTIVITY_ONBOARDING_COMPLETE = "ONBOARDING_COMPLETE"
+
+ACTIVITY_ICONS = {
+    ACTIVITY_VENDOR_CREATED: "bi-building",
+    ACTIVITY_ASSESSMENT_CREATED: "bi-clipboard-plus",
+    ACTIVITY_ASSESSMENT_SENT: "bi-envelope-paper",
+    ACTIVITY_REMINDER_SENT: "bi-bell",
+    ACTIVITY_VENDOR_SUBMITTED: "bi-check2-circle",
+    ACTIVITY_DECISION_FINALIZED: "bi-shield-check",
+    ACTIVITY_TIER_CHANGED: "bi-arrow-left-right",
+    ACTIVITY_ONBOARDING_COMPLETE: "bi-magic",
+}
+
+ACTIVITY_COLORS = {
+    ACTIVITY_VENDOR_CREATED: "#6c757d",
+    ACTIVITY_ASSESSMENT_CREATED: "#0d6efd",
+    ACTIVITY_ASSESSMENT_SENT: "#6f42c1",
+    ACTIVITY_REMINDER_SENT: "#fd7e14",
+    ACTIVITY_VENDOR_SUBMITTED: "#198754",
+    ACTIVITY_DECISION_FINALIZED: "#0dcaf0",
+    ACTIVITY_TIER_CHANGED: "#ffc107",
+    ACTIVITY_ONBOARDING_COMPLETE: "#6f42c1",
+}
+
+
+class VendorActivity(Base):
+    __tablename__ = "vendor_activities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    activity_type = Column(String(50), nullable=False)
+    description = Column(Text, nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    metadata_json = Column(Text, nullable=True)
+
+    vendor = relationship("Vendor")
+
+
+# ==================== NOTIFICATIONS ====================
+
+NOTIF_ASSESSMENT_SUBMITTED = "ASSESSMENT_SUBMITTED"
+NOTIF_ESCALATION = "ESCALATION"
+NOTIF_ONBOARDING_COMPLETE = "ONBOARDING_COMPLETE"
+
+NOTIF_ICONS = {
+    NOTIF_ASSESSMENT_SUBMITTED: "bi-inbox-fill",
+    NOTIF_ESCALATION: "bi-exclamation-triangle-fill",
+    NOTIF_ONBOARDING_COMPLETE: "bi-magic",
+}
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    notification_type = Column(String(50), nullable=False)
+    message = Column(Text, nullable=False)
+    link = Column(String(500), nullable=True)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+
+
+def backfill_template_columns():
+    """Add suggested_tier column to assessment_templates for existing DBs."""
+    import sqlite3
+    conn = sqlite3.connect("./questionnaires.db")
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(assessment_templates)")
+    existing = {row[1] for row in cursor.fetchall()}
+    if "suggested_tier" not in existing:
+        try:
+            cursor.execute("ALTER TABLE assessment_templates ADD COLUMN suggested_tier VARCHAR(20)")
+        except sqlite3.OperationalError:
+            pass
+    conn.commit()
+    conn.close()
+
+
+def seed_default_templates():
+    """Create 3 seed templates from the question bank if no templates exist."""
+    import secrets
+    db = SessionLocal()
+    try:
+        if db.query(AssessmentTemplate).count() > 0:
+            return
+
+        bank_items = db.query(QuestionBankItem).filter(
+            QuestionBankItem.is_active == True
+        ).order_by(QuestionBankItem.category, QuestionBankItem.id).all()
+
+        if not bank_items:
+            return
+
+        # Group by category
+        categories = {}
+        for item in bank_items:
+            categories.setdefault(item.category, []).append(item)
+
+        # Tier 1: Comprehensive — all questions, HIGH weight
+        t1 = AssessmentTemplate(
+            name="Comprehensive Security Assessment",
+            description="Full-depth assessment covering all security domains. Recommended for Tier 1 (Critical Risk) vendors with access to restricted data or critical business functions.",
+            token=secrets.token_hex(32),
+            suggested_tier="Tier 1",
+        )
+        db.add(t1)
+        db.flush()
+        order = 0
+        for cat, items in categories.items():
+            for item in items:
+                db.add(TemplateQuestion(
+                    template_id=t1.id,
+                    question_text=item.text,
+                    order=order,
+                    weight="HIGH",
+                    category=cat,
+                    answer_options=item.answer_options,
+                ))
+                order += 1
+
+        # Tier 2: Standard — core categories, 2 per category, MEDIUM weight
+        core_categories = [
+            "Access Control", "Encryption", "Incident Response",
+            "Vulnerability Management", "SOC2", "BC/DR",
+            "Data Protection & Standard Encryption", "Continuous Monitoring",
+            "Cybersecurity Governance", "Backup & Recovery",
+        ]
+        t2 = AssessmentTemplate(
+            name="Standard Vendor Review",
+            description="Balanced assessment covering core security domains. Recommended for Tier 2 (Elevated Risk) vendors.",
+            token=secrets.token_hex(32),
+            suggested_tier="Tier 2",
+        )
+        db.add(t2)
+        db.flush()
+        order = 0
+        for cat in core_categories:
+            items = categories.get(cat, [])
+            for item in items[:2]:
+                db.add(TemplateQuestion(
+                    template_id=t2.id,
+                    question_text=item.text,
+                    order=order,
+                    weight="MEDIUM",
+                    category=cat,
+                    answer_options=item.answer_options,
+                ))
+                order += 1
+
+        # Tier 3: Lightweight — essential categories, 2 per category, LOW weight
+        essential_categories = [
+            "Access Control", "Encryption", "Incident Response",
+            "SOC2", "BC/DR",
+        ]
+        t3 = AssessmentTemplate(
+            name="Lightweight Vendor Screening",
+            description="Quick screening covering essential security basics. Recommended for Tier 3 (Standard Risk) vendors.",
+            token=secrets.token_hex(32),
+            suggested_tier="Tier 3",
+        )
+        db.add(t3)
+        db.flush()
+        order = 0
+        for cat in essential_categories:
+            items = categories.get(cat, [])
+            for item in items[:2]:
+                db.add(TemplateQuestion(
+                    template_id=t3.id,
+                    question_text=item.text,
+                    order=order,
+                    weight="LOW",
+                    category=cat,
+                    answer_options=item.answer_options,
+                ))
+                order += 1
+
+        db.commit()
+    finally:
+        db.close()
 
 
 def get_db():

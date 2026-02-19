@@ -16,6 +16,9 @@ from models import (
 from app.services.response_service import validate_answers, save_or_update_response
 from app.services.evidence_service import validate_upload, store_file
 from app.services.lifecycle import transition_to_submitted, transition_to_in_progress
+from app.services.activity_service import log_activity
+from app.services.notification_service import create_notification
+from models import ACTIVITY_VENDOR_SUBMITTED, NOTIF_ASSESSMENT_SUBMITTED
 
 router = APIRouter()
 
@@ -164,6 +167,15 @@ async def submit_vendor_response(
 
     if action == "submit":
         transition_to_submitted(db, assessment)
+        if assessment.vendor_id:
+            log_activity(db, assessment.vendor_id, ACTIVITY_VENDOR_SUBMITTED,
+                         f"Vendor submitted response for '{assessment.title}'",
+                         assessment_id=assessment.id)
+            create_notification(db, NOTIF_ASSESSMENT_SUBMITTED,
+                                f"{assessment.company_name} submitted '{assessment.title}' — ready for review",
+                                link=f"/assessments/{assessment.id}/decision",
+                                vendor_id=assessment.vendor_id,
+                                assessment_id=assessment.id)
     else:
         transition_to_in_progress(db, assessment)
 

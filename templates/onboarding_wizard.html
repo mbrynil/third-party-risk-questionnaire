@@ -1,0 +1,574 @@
+{% extends "base.html" %}
+
+{% block title %}Vendor Onboarding — RiskQ{% endblock %}
+
+{% block extra_head %}
+<style>
+    .wizard-stepper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0;
+        margin-bottom: 2rem;
+    }
+    .wizard-step-circle {
+        width: 40px; height: 40px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 1rem;
+        background: #e5e7eb; color: #9ca3af;
+        transition: all 0.3s;
+        flex-shrink: 0;
+    }
+    .wizard-step-circle.active {
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+    }
+    .wizard-step-circle.completed {
+        background: #198754; color: #fff;
+    }
+    .wizard-step-line {
+        width: 60px; height: 3px;
+        background: #e5e7eb;
+        transition: background 0.3s;
+    }
+    .wizard-step-line.completed { background: #198754; }
+    .wizard-step-label {
+        font-size: 0.7rem; color: #9ca3af;
+        text-align: center; margin-top: 4px;
+        white-space: nowrap;
+    }
+    .wizard-step-label.active { color: #2563eb; font-weight: 600; }
+    .wizard-step-label.completed { color: #198754; }
+    .wizard-panel { display: none; }
+    .wizard-panel.active { display: block; }
+    .template-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.25rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .template-card:hover { border-color: #93c5fd; background: #f0f7ff; }
+    .template-card.selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+    .recommended-badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #2563eb, #6366f1);
+        color: #fff;
+    }
+    .tier-preview {
+        display: inline-block;
+        padding: 0.3rem 0.75rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #fff;
+        transition: all 0.3s;
+    }
+    .review-row { display: flex; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid #f1f5f9; }
+    .review-label { color: #6b7280; font-weight: 500; min-width: 140px; font-size: 0.85rem; }
+    .review-value { font-weight: 600; font-size: 0.85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header text-center mb-4">
+    <h1><i class="bi bi-magic me-2"></i>Vendor Onboarding</h1>
+    <p class="text-muted">Guided setup: create a vendor, select a template, and send the assessment — all in one flow.</p>
+</div>
+
+{# ==================== STEPPER ==================== #}
+<div class="wizard-stepper">
+    {% for step in [("Vendor", 1), ("Assessment", 2), ("Contact & Send", 3), ("Review & Launch", 4)] %}
+    {% if not loop.first %}
+    <div class="wizard-step-line" id="line{{ loop.index - 1 }}"></div>
+    {% endif %}
+    <div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="wizard-step-circle{% if loop.index == 1 %} active{% endif %}" id="circle{{ loop.index }}">{{ loop.index }}</div>
+        <div class="wizard-step-label{% if loop.index == 1 %} active{% endif %}" id="label{{ loop.index }}">{{ step[0] }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<form method="post" action="/onboarding/launch" id="wizardForm">
+
+{# ==================== STEP 1: VENDOR ==================== #}
+<div class="wizard-panel active" id="step1">
+    <div class="card">
+        <div class="card-header"><h6 class="mb-0">Step 1: Vendor Details</h6></div>
+        <div class="card-body">
+            <div class="mb-3">
+                <div class="btn-group w-100" role="group">
+                    <input type="radio" class="btn-check" name="vendor_mode" id="modeNew" value="new" checked>
+                    <label class="btn btn-outline-primary" for="modeNew"><i class="bi bi-plus-circle me-1"></i>New Vendor</label>
+                    <input type="radio" class="btn-check" name="vendor_mode" id="modeExisting" value="existing">
+                    <label class="btn btn-outline-primary" for="modeExisting"><i class="bi bi-building me-1"></i>Existing Vendor</label>
+                </div>
+            </div>
+
+            <div id="newVendorFields">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Vendor Name <span class="text-danger">*</span></label>
+                        <input type="text" name="vendor_name" id="vendorName" class="form-control" placeholder="Acme Corp">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Industry</label>
+                        <select name="industry" class="form-select">
+                            <option value="">-- Select --</option>
+                            {% for i in industries %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Service Type</label>
+                        <select name="service_type" class="form-select">
+                            <option value="">-- Select --</option>
+                            {% for s in service_types %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Data Classification</label>
+                        <select name="data_classification" id="dataClass" class="form-select tier-input">
+                            <option value="">-- Select --</option>
+                            {% for d in data_classifications %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Business Criticality</label>
+                        <select name="business_criticality" id="bizCrit" class="form-select tier-input">
+                            <option value="">-- Select --</option>
+                            {% for b in business_criticalities %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Access Level</label>
+                        <select name="access_level" id="accessLvl" class="form-select tier-input">
+                            <option value="">-- Select --</option>
+                            {% for a in access_levels %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-8 d-flex align-items-end">
+                        <div>
+                            <label class="form-label">Computed Tier</label>
+                            <div>
+                                <span class="tier-preview" id="tierPreview" style="background:#6c757d;">Tier 3</span>
+                                <span class="text-muted small ms-2" id="tierLabel">Standard Risk</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="existingVendorFields" style="display:none;">
+                <label class="form-label">Select Vendor <span class="text-danger">*</span></label>
+                <select name="existing_vendor_id" id="existingVendorSelect" class="form-select">
+                    <option value="">-- Choose a vendor --</option>
+                    {% for v in vendors %}
+                    <option value="{{ v.id }}">{{ v.name }}{% if v.industry %} ({{ v.industry }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="mt-3 text-end">
+        <button type="button" class="btn btn-primary" onclick="goToStep(2)">Next: Select Template <i class="bi bi-arrow-right ms-1"></i></button>
+    </div>
+</div>
+
+{# ==================== STEP 2: ASSESSMENT ==================== #}
+<div class="wizard-panel" id="step2">
+    <div class="card">
+        <div class="card-header"><h6 class="mb-0">Step 2: Select Assessment Template</h6></div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Assessment Title</label>
+                <input type="text" name="assessment_title" id="assessmentTitle" class="form-control" placeholder="Security Assessment — Acme Corp">
+            </div>
+            <input type="hidden" name="template_id" id="selectedTemplateId" value="">
+            <div id="templateCards" class="row g-3">
+                <div class="text-center py-4 text-muted">Loading templates...</div>
+            </div>
+            <div id="templatePreview" class="mt-3" style="display:none;">
+                <div class="card bg-light">
+                    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 small">Question Preview</h6>
+                        <button type="button" class="btn-close btn-sm" onclick="document.getElementById('templatePreview').style.display='none'"></button>
+                    </div>
+                    <div class="card-body py-2" id="previewContent" style="max-height:300px;overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="mt-3 d-flex justify-content-between">
+        <button type="button" class="btn btn-outline-secondary" onclick="goToStep(1)"><i class="bi bi-arrow-left me-1"></i>Back</button>
+        <button type="button" class="btn btn-primary" onclick="goToStep(3)">Next: Contact & Send <i class="bi bi-arrow-right ms-1"></i></button>
+    </div>
+</div>
+
+{# ==================== STEP 3: CONTACT & SEND ==================== #}
+<div class="wizard-panel" id="step3">
+    <div class="card">
+        <div class="card-header"><h6 class="mb-0">Step 3: Contact & Send Options</h6></div>
+        <div class="card-body">
+            <div id="contactDropdownSection" style="display:none;" class="mb-3">
+                <label class="form-label"><i class="bi bi-person me-1"></i>Select Existing Contact</label>
+                <select id="contactDropdown" class="form-select">
+                    <option value="">Enter manually...</option>
+                </select>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Recipient Email <span class="text-danger">*</span></label>
+                    <input type="email" name="contact_email" id="contactEmail" class="form-control" placeholder="vendor@company.com" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Recipient Name</label>
+                    <input type="text" name="contact_name" id="contactName" class="form-control" placeholder="John Smith">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Custom Message <span class="text-muted">(optional)</span></label>
+                    <textarea name="custom_message" class="form-control" rows="3" placeholder="Add a personal note to the email..."></textarea>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Link Expires In</label>
+                    <select name="expiry_days" class="form-select">
+                        <option value="14">14 days</option>
+                        <option value="30" selected>30 days</option>
+                        <option value="60">60 days</option>
+                        <option value="90">90 days</option>
+                        <option value="0">No expiry</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-12">
+                    <label class="form-label"><i class="bi bi-bell me-1"></i>Automated Reminders</label>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">First Reminder After</label>
+                    <select name="first_reminder_days" id="firstReminderDays" class="form-select">
+                        <option value="3" selected>3 days</option>
+                        <option value="5">5 days</option>
+                        <option value="7">7 days</option>
+                        <option value="14">14 days</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Then Every</label>
+                    <select name="reminder_frequency_days" id="reminderFreqDays" class="form-select">
+                        <option value="3">3 days</option>
+                        <option value="5">5 days</option>
+                        <option value="7" selected>7 days</option>
+                        <option value="14">14 days</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted">Max Reminders</label>
+                    <select name="max_reminders" id="maxReminders" class="form-select">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3" selected>3</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="text-muted small" id="reminderSummary" style="line-height:1.3;">
+                        Reminders at day 3, 10, 17
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="mt-3 d-flex justify-content-between">
+        <button type="button" class="btn btn-outline-secondary" onclick="goToStep(2)"><i class="bi bi-arrow-left me-1"></i>Back</button>
+        <button type="button" class="btn btn-primary" onclick="goToStep(4)">Next: Review <i class="bi bi-arrow-right ms-1"></i></button>
+    </div>
+</div>
+
+{# ==================== STEP 4: REVIEW & LAUNCH ==================== #}
+<div class="wizard-panel" id="step4">
+    <div class="card">
+        <div class="card-header"><h6 class="mb-0">Step 4: Review & Launch</h6></div>
+        <div class="card-body">
+            <div id="reviewSummary"></div>
+            <div class="alert alert-info mt-3 mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>What happens next:</strong> A vendor record will be created (if new), an assessment will be generated from the selected template, and an invitation email will be sent to the contact. You'll be redirected to the vendor profile.
+            </div>
+        </div>
+    </div>
+    <div class="mt-3 d-flex justify-content-between">
+        <button type="button" class="btn btn-outline-secondary" onclick="goToStep(3)"><i class="bi bi-arrow-left me-1"></i>Back</button>
+        <button type="submit" class="btn btn-success btn-lg" id="launchBtn">
+            <i class="bi bi-rocket-takeoff me-2"></i>Launch Assessment
+        </button>
+    </div>
+</div>
+
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    var currentStep = 1;
+    var selectedTemplateId = null;
+    var selectedTemplateName = '';
+    var computedTier = 'Tier 3';
+
+    // Tier colors from server
+    var tierColors = {{ tier_colors | tojson }};
+    var tierLabels = {{ tier_labels | tojson }};
+
+    // --------------- STEPPER ---------------
+    window.goToStep = function(step) {
+        // Validate before advancing
+        if (step > currentStep) {
+            if (!validateStep(currentStep)) return;
+        }
+
+        document.querySelectorAll('.wizard-panel').forEach(function(p) { p.classList.remove('active'); });
+        document.getElementById('step' + step).classList.add('active');
+
+        for (var i = 1; i <= 4; i++) {
+            var circle = document.getElementById('circle' + i);
+            var label = document.getElementById('label' + i);
+            circle.className = 'wizard-step-circle';
+            label.className = 'wizard-step-label';
+            if (i < step) {
+                circle.classList.add('completed');
+                label.classList.add('completed');
+            } else if (i === step) {
+                circle.classList.add('active');
+                label.classList.add('active');
+            }
+        }
+        for (var j = 1; j <= 3; j++) {
+            var line = document.getElementById('line' + j);
+            line.className = 'wizard-step-line' + (j < step ? ' completed' : '');
+        }
+
+        currentStep = step;
+
+        if (step === 2) loadTemplates();
+        if (step === 3) loadContacts();
+        if (step === 4) buildReview();
+    };
+
+    function validateStep(step) {
+        if (step === 1) {
+            var mode = document.querySelector('input[name="vendor_mode"]:checked').value;
+            if (mode === 'new') {
+                var name = document.getElementById('vendorName').value.trim();
+                if (!name) { alert('Please enter a vendor name.'); return false; }
+            } else {
+                var sel = document.getElementById('existingVendorSelect').value;
+                if (!sel) { alert('Please select an existing vendor.'); return false; }
+            }
+        }
+        if (step === 2) {
+            if (!selectedTemplateId) { alert('Please select an assessment template.'); return false; }
+        }
+        if (step === 3) {
+            var email = document.getElementById('contactEmail').value.trim();
+            if (!email) { alert('Please enter a recipient email.'); return false; }
+        }
+        return true;
+    }
+
+    // --------------- VENDOR MODE TOGGLE ---------------
+    document.querySelectorAll('input[name="vendor_mode"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            var isNew = this.value === 'new';
+            document.getElementById('newVendorFields').style.display = isNew ? '' : 'none';
+            document.getElementById('existingVendorFields').style.display = isNew ? 'none' : '';
+        });
+    });
+
+    // --------------- LIVE TIER PREVIEW ---------------
+    document.querySelectorAll('.tier-input').forEach(function(el) {
+        el.addEventListener('change', function() {
+            var dc = document.getElementById('dataClass').value;
+            var bc = document.getElementById('bizCrit').value;
+            var al = document.getElementById('accessLvl').value;
+            fetch('/api/compute-tier?data_classification=' + encodeURIComponent(dc) + '&business_criticality=' + encodeURIComponent(bc) + '&access_level=' + encodeURIComponent(al))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    computedTier = data.tier;
+                    var badge = document.getElementById('tierPreview');
+                    badge.textContent = data.tier;
+                    badge.style.background = data.color;
+                    document.getElementById('tierLabel').textContent = data.label;
+                });
+        });
+    });
+
+    // --------------- LOAD TEMPLATES ---------------
+    function loadTemplates() {
+        var tier = computedTier;
+        var mode = document.querySelector('input[name="vendor_mode"]:checked').value;
+        if (mode === 'existing') tier = '';
+
+        fetch('/api/templates-for-tier?tier=' + encodeURIComponent(tier))
+            .then(function(r) { return r.json(); })
+            .then(function(templates) {
+                var container = document.getElementById('templateCards');
+                if (!templates.length) {
+                    container.innerHTML = '<div class="col-12 text-center text-muted py-4">No templates available. Create one in the Templates section first.</div>';
+                    return;
+                }
+                var html = '';
+                templates.forEach(function(t) {
+                    var selected = t.id == selectedTemplateId ? ' selected' : '';
+                    html += '<div class="col-md-4"><div class="template-card' + selected + '" data-id="' + t.id + '" data-name="' + t.name.replace(/"/g, '&quot;') + '">';
+                    if (t.recommended) html += '<div class="mb-2"><span class="recommended-badge">Recommended</span></div>';
+                    html += '<h6 class="mb-1">' + t.name + '</h6>';
+                    html += '<p class="text-muted small mb-1">' + t.description.substring(0, 120) + '</p>';
+                    html += '<div class="d-flex justify-content-between align-items-center mt-2">';
+                    html += '<span class="text-muted small">' + t.question_count + ' questions</span>';
+                    if (t.suggested_tier) html += '<span class="badge bg-secondary">' + t.suggested_tier + '</span>';
+                    html += '</div>';
+                    html += '<button type="button" class="btn btn-link btn-sm p-0 mt-1 preview-btn" data-id="' + t.id + '">Preview questions</button>';
+                    html += '</div></div>';
+                });
+                container.innerHTML = html;
+
+                // Click handlers
+                container.querySelectorAll('.template-card').forEach(function(card) {
+                    card.addEventListener('click', function(e) {
+                        if (e.target.classList.contains('preview-btn')) return;
+                        container.querySelectorAll('.template-card').forEach(function(c) { c.classList.remove('selected'); });
+                        card.classList.add('selected');
+                        selectedTemplateId = card.dataset.id;
+                        selectedTemplateName = card.dataset.name;
+                        document.getElementById('selectedTemplateId').value = selectedTemplateId;
+
+                        // Auto-fill assessment title
+                        var titleInput = document.getElementById('assessmentTitle');
+                        if (!titleInput.value.trim()) {
+                            var vendorNameVal = '';
+                            var mode = document.querySelector('input[name="vendor_mode"]:checked').value;
+                            if (mode === 'new') {
+                                vendorNameVal = document.getElementById('vendorName').value.trim();
+                            } else {
+                                var sel = document.getElementById('existingVendorSelect');
+                                vendorNameVal = sel.options[sel.selectedIndex].text.split(' (')[0];
+                            }
+                            titleInput.value = selectedTemplateName + (vendorNameVal ? ' — ' + vendorNameVal : '');
+                        }
+                    });
+                });
+
+                container.querySelectorAll('.preview-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        loadPreview(btn.dataset.id);
+                    });
+                });
+            });
+    }
+
+    function loadPreview(templateId) {
+        fetch('/api/template-preview/' + templateId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var html = '<div class="small text-muted mb-2">' + data.total + ' questions</div>';
+                Object.keys(data.categories).forEach(function(cat) {
+                    html += '<div class="fw-semibold small mt-2">' + cat + ' (' + data.categories[cat].length + ')</div>';
+                    html += '<ul class="list-unstyled ms-3 mb-1">';
+                    data.categories[cat].forEach(function(q) {
+                        html += '<li class="small text-muted">&bull; ' + q.substring(0, 100) + (q.length > 100 ? '...' : '') + '</li>';
+                    });
+                    html += '</ul>';
+                });
+                document.getElementById('previewContent').innerHTML = html;
+                document.getElementById('templatePreview').style.display = '';
+            });
+    }
+
+    // --------------- LOAD CONTACTS ---------------
+    function loadContacts() {
+        var mode = document.querySelector('input[name="vendor_mode"]:checked').value;
+        var section = document.getElementById('contactDropdownSection');
+        if (mode !== 'existing') { section.style.display = 'none'; return; }
+
+        var vendorId = document.getElementById('existingVendorSelect').value;
+        if (!vendorId) { section.style.display = 'none'; return; }
+
+        fetch('/api/vendor-contacts/' + vendorId)
+            .then(function(r) { return r.json(); })
+            .then(function(contacts) {
+                if (!contacts.length) { section.style.display = 'none'; return; }
+                section.style.display = '';
+                var dd = document.getElementById('contactDropdown');
+                dd.innerHTML = '<option value="">Enter manually...</option>';
+                contacts.forEach(function(c) {
+                    dd.innerHTML += '<option value="' + c.email + '" data-name="' + c.name + '">' + c.name + (c.role ? ' (' + c.role + ')' : '') + ' — ' + c.email + '</option>';
+                });
+            });
+    }
+
+    // --------------- REMINDER SUMMARY ---------------
+    function updateReminderSummary() {
+        var first = parseInt(document.getElementById('firstReminderDays').value);
+        var freq = parseInt(document.getElementById('reminderFreqDays').value);
+        var max = parseInt(document.getElementById('maxReminders').value);
+        var days = [];
+        for (var i = 0; i < max; i++) {
+            days.push(i === 0 ? first : first + freq * i);
+        }
+        document.getElementById('reminderSummary').textContent = 'Reminders at day ' + days.join(', ');
+    }
+    document.getElementById('firstReminderDays').addEventListener('change', updateReminderSummary);
+    document.getElementById('reminderFreqDays').addEventListener('change', updateReminderSummary);
+    document.getElementById('maxReminders').addEventListener('change', updateReminderSummary);
+
+    document.getElementById('contactDropdown').addEventListener('change', function() {
+        if (this.value) {
+            document.getElementById('contactEmail').value = this.value;
+            document.getElementById('contactName').value = this.options[this.selectedIndex].dataset.name || '';
+        }
+    });
+
+    // --------------- BUILD REVIEW ---------------
+    function buildReview() {
+        var mode = document.querySelector('input[name="vendor_mode"]:checked').value;
+        var vendorDisplay = '';
+        if (mode === 'new') {
+            vendorDisplay = document.getElementById('vendorName').value.trim() + ' <span class="badge bg-primary ms-1">New</span>';
+        } else {
+            var sel = document.getElementById('existingVendorSelect');
+            vendorDisplay = sel.options[sel.selectedIndex].text + ' <span class="badge bg-secondary ms-1">Existing</span>';
+        }
+
+        var title = document.getElementById('assessmentTitle').value.trim() || 'Security Assessment';
+        var email = document.getElementById('contactEmail').value.trim();
+        var name = document.getElementById('contactName').value.trim();
+
+        var html = '';
+        html += '<div class="review-row"><div class="review-label">Vendor</div><div class="review-value">' + vendorDisplay + '</div></div>';
+        if (mode === 'new') {
+            var dc = document.getElementById('dataClass').value;
+            var bc = document.getElementById('bizCrit').value;
+            if (dc) html += '<div class="review-row"><div class="review-label">Data Classification</div><div class="review-value">' + dc + '</div></div>';
+            if (bc) html += '<div class="review-row"><div class="review-label">Business Criticality</div><div class="review-value">' + bc + '</div></div>';
+            html += '<div class="review-row"><div class="review-label">Computed Tier</div><div class="review-value"><span class="tier-preview" style="background:' + (tierColors[computedTier] || '#6c757d') + ';font-size:0.75rem;padding:0.2rem 0.5rem;">' + computedTier + '</span></div></div>';
+        }
+        html += '<div class="review-row"><div class="review-label">Template</div><div class="review-value">' + (selectedTemplateName || '—') + '</div></div>';
+        html += '<div class="review-row"><div class="review-label">Assessment Title</div><div class="review-value">' + title + '</div></div>';
+        html += '<div class="review-row"><div class="review-label">Send To</div><div class="review-value">' + (name ? name + ' &lt;' + email + '&gt;' : email) + '</div></div>';
+
+        var reminderText = document.getElementById('reminderSummary').textContent;
+        html += '<div class="review-row"><div class="review-label">Reminders</div><div class="review-value">' + reminderText + '</div></div>';
+
+        document.getElementById('reviewSummary').innerHTML = html;
+    }
+
+})();
+</script>
+{% endblock %}

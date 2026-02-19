@@ -20,6 +20,9 @@ from models import (
     ensure_reminder_config,
 )
 from app.services.email_service import send_assessment_reminder, send_escalation_notice
+from app.services.activity_service import log_activity
+from app.services.notification_service import create_notification
+from models import ACTIVITY_REMINDER_SENT, NOTIF_ESCALATION
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +58,11 @@ def get_assessments_needing_reminders(db: Session, config: ReminderConfig) -> li
 
         days_since_sent = (now - assessment.sent_at).days
 
+        # Per-assessment overrides or global config
+        eff_first_reminder = assessment.first_reminder_days if assessment.first_reminder_days is not None else config.first_reminder_days
+        eff_frequency = assessment.reminder_frequency_days if assessment.reminder_frequency_days is not None else config.frequency_days
+        eff_max = assessment.max_reminders if assessment.max_reminders is not None else config.max_reminders
+
         # Get reminder history for this assessment
         reminders_sent = db.query(ReminderLog).filter(
             ReminderLog.assessment_id == assessment.id,
@@ -64,7 +72,7 @@ def get_assessments_needing_reminders(db: Session, config: ReminderConfig) -> li
         reminder_count = len(reminders_sent)
 
         # Check if max reminders reached
-        if reminder_count >= config.max_reminders:
+        if reminder_count >= eff_max:
             # Check if escalation is needed
             escalation_sent = db.query(ReminderLog).filter(
                 ReminderLog.assessment_id == assessment.id,
@@ -83,13 +91,13 @@ def get_assessments_needing_reminders(db: Session, config: ReminderConfig) -> li
         # Determine if it's time for a reminder
         if reminder_count == 0:
             # First reminder: wait first_reminder_days after sent_at
-            if days_since_sent < config.first_reminder_days:
+            if days_since_sent < eff_first_reminder:
                 continue
         else:
             # Subsequent reminders: wait frequency_days after last reminder
             last_reminder = reminders_sent[0]
             days_since_last = (now - last_reminder.sent_at).days
-            if days_since_last < config.frequency_days:
+            if days_since_last < eff_frequency:
                 continue
 
         # Check for final notice (close to expiry)
@@ -181,6 +189,11 @@ def _handle_reminder(
         reminder_type=REMINDER_TYPE_FINAL if is_final else REMINDER_TYPE_REMINDER,
     )
     db.add(log)
+    if assessment.vendor_id:
+        label = "Final notice" if is_final else f"Reminder #{reminder_number}"
+        log_activity(db, assessment.vendor_id, ACTIVITY_REMINDER_SENT,
+                     f"{label} sent to {assessment.sent_to_email} for '{assessment.title}'",
+                     assessment_id=assessment.id)
     db.commit()
 
     logger.info(
@@ -213,6 +226,12 @@ def _handle_escalation(
         reminder_type=REMINDER_TYPE_ESCALATION,
     )
     db.add(log)
+    if assessment.vendor_id:
+        create_notification(db, NOTIF_ESCALATION,
+                            f"Escalation: {assessment.company_name} non-responsive after {item['reminder_count']} reminders",
+                            link=f"/vendors/{assessment.vendor_id}",
+                            vendor_id=assessment.vendor_id,
+                            assessment_id=assessment.id)
     db.commit()
 
     logger.info(
