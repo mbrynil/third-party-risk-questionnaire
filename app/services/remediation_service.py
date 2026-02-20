@@ -113,6 +113,17 @@ def get_overdue_remediation_count(db: Session) -> int:
     ).count()
 
 
+def get_remediation_completion_rate(db: Session) -> float:
+    """Return remediation completion rate as a percentage (0-100)."""
+    total = db.query(RemediationItem).count()
+    if total == 0:
+        return 100.0
+    closed = db.query(RemediationItem).filter(
+        RemediationItem.status.in_([REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED])
+    ).count()
+    return round((closed / total) * 100, 1)
+
+
 def get_portfolio_remediation_summary(db: Session) -> dict:
     """Get portfolio-wide remediation summary for the print report."""
     now = datetime.utcnow()

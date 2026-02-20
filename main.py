@@ -21,6 +21,7 @@ from models import (
     seed_default_templates, seed_default_admin,
     seed_default_tiering_rules, ensure_scoring_config,
     backfill_sla_columns, ensure_sla_configs,
+    backfill_onboarding_column,
     SessionLocal,
     Assessment, Response, User, ensure_reminder_config,
     RESPONSE_STATUS_SUBMITTED,
@@ -38,6 +39,7 @@ backfill_auth_columns()
 backfill_new_feature_columns()
 backfill_approval_columns()
 backfill_sla_columns()
+backfill_onboarding_column()
 seed_question_bank()
 seed_risk_statements()
 seed_default_templates()

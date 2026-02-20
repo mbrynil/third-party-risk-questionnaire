@@ -3,21 +3,63 @@
 {% block title %}Response Submitted - RiskQ{% endblock %}
 
 {% block content %}
-<div class="text-center py-5">
-    <div class="mb-4">
-        <i class="bi bi-check-circle text-success" style="font-size: 5rem;"></i>
-    </div>
-    <h1 class="display-5 mb-3">Thank You!</h1>
-    
+<div class="py-5">
     <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="alert alert-success" role="alert">
-                <i class="bi bi-check-circle-fill me-2"></i>
-                Your responses have been submitted successfully.
+        <div class="col-md-7 col-lg-6">
+            <div class="text-center mb-4">
+                <div class="mb-3">
+                    <div style="width: 80px; height: 80px; border-radius: 50%; background: #d1e7dd; display: inline-flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-check-lg" style="font-size: 2.5rem; color: #198754;"></i>
+                    </div>
+                </div>
+                <h1 class="h3 fw-bold mb-2">Submission Received</h1>
+                <p class="text-muted">Thank you for completing the questionnaire. Your responses have been securely submitted.</p>
             </div>
-            <p class="text-muted">
-                The requesting organization will review your submission and may reach out if they have any follow-up questions.
-            </p>
+
+            <div class="card mb-4">
+                <div class="card-header fw-semibold">
+                    <i class="bi bi-signpost-split me-2"></i>What Happens Next
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-start mb-3">
+                        <div style="min-width: 36px; height: 36px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; margin-right: 0.75rem;">
+                            <span class="fw-bold text-primary">1</span>
+                        </div>
+                        <div>
+                            <div class="fw-semibold">Review</div>
+                            <div class="text-muted" style="font-size: 0.85rem;">Our risk team will review your responses and any uploaded evidence.</div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start mb-3">
+                        <div style="min-width: 36px; height: 36px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; margin-right: 0.75rem;">
+                            <span class="fw-bold text-primary">2</span>
+                        </div>
+                        <div>
+                            <div class="fw-semibold">Follow-up (if needed)</div>
+                            <div class="text-muted" style="font-size: 0.85rem;">If we need clarification, we'll send follow-up questions to the email you provided. You'll be able to respond using the same questionnaire link.</div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-start">
+                        <div style="min-width: 36px; height: 36px; border-radius: 50%; background: #eff6ff; display: flex; align-items: center; justify-content: center; margin-right: 0.75rem;">
+                            <span class="fw-bold text-primary">3</span>
+                        </div>
+                        <div>
+                            <div class="fw-semibold">Decision</div>
+                            <div class="text-muted" style="font-size: 0.85rem;">Once the assessment is complete, a risk decision will be finalized and communicated to your organization.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-light border-0">
+                <div class="card-body text-center" style="font-size: 0.85rem;">
+                    <i class="bi bi-clock me-1"></i>
+                    <span class="text-muted">Expected timeline: <strong>5-10 business days</strong></span>
+                    <div class="mt-2 text-muted">
+                        If you have questions, please contact the person who sent you this assessment.
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

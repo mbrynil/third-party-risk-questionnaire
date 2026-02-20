@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Card - {{ vendor.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background: #fff; font-size: 14px; line-height: 1.6; }
+        .rc-container { max-width: 900px; margin: 0 auto; padding: 2rem; }
+        .rc-actions {
+            position: fixed; top: 1rem; right: 1rem; z-index: 1000;
+            display: flex; gap: 0.5rem;
+        }
+        .rc-banner {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff; padding: 1.5rem 2rem; border-radius: 10px; margin-bottom: 1.5rem;
+        }
+        .rc-banner h1 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+        .rc-banner .meta-line { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.9; }
+        .tier-pill { padding: 0.2rem 0.75rem; border-radius: 20px; font-weight: 600; font-size: 0.75rem; background: rgba(255,255,255,0.2); }
+        .score-big {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 70px; height: 70px; border-radius: 50%; font-size: 1.75rem; font-weight: 700;
+            border: 4px solid currentColor;
+        }
+        .rating-pill { padding: 0.3rem 0.75rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem; }
+        .badge-risk-very_high { background: #f8d7da; color: #dc3545; }
+        .badge-risk-high { background: #fff3cd; color: #fd7e14; }
+        .badge-risk-moderate { background: #fff9e6; color: #b8860b; }
+        .badge-risk-low { background: #d1e7dd; color: #198754; }
+        .badge-risk-very_low { background: #d1e7dd; color: #198754; }
+        .facts-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
+        .fact-cell { background: #f9fafb; padding: 0.6rem 0.8rem; border-radius: 8px; }
+        .fact-label { font-size: 0.65rem; text-transform: uppercase; color: #6b7280; font-weight: 600; letter-spacing: 0.04em; }
+        .fact-value { font-size: 0.85rem; color: #111827; font-weight: 500; }
+        .section-title { font-size: 1rem; font-weight: 700; color: #1e3a5f; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.4rem; margin-bottom: 0.75rem; margin-top: 1.5rem; }
+        .cat-bar-wrap { margin-bottom: 0.5rem; }
+        .cat-bar-label { font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; }
+        .cat-bar-track { height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; }
+        .cat-bar-fill { height: 100%; border-radius: 5px; }
+        .score-timeline { display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
+        .score-point { text-align: center; padding: 0.3rem 0.5rem; border-radius: 6px; font-size: 0.7rem; border: 1px solid #e5e7eb; min-width: 50px; }
+        .score-point.current { border: 2px solid #2563eb; background: #eff6ff; }
+        .score-point .sp-score { font-weight: 700; font-size: 0.9rem; }
+        .score-point .sp-date { font-size: 0.6rem; color: #6b7280; }
+        .score-arrow { color: #9ca3af; font-size: 0.8rem; }
+        .rem-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+        .rem-cell { text-align: center; padding: 0.6rem; border-radius: 8px; }
+        .rem-cell .rem-count { font-size: 1.25rem; font-weight: 700; }
+        .rem-cell .rem-label { font-size: 0.65rem; text-transform: uppercase; font-weight: 600; color: #6b7280; }
+        .fw-tag { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600; margin: 0.1rem; }
+        .no-data { color: #9ca3af; font-style: italic; font-size: 0.85rem; }
+
+        @media print {
+            .rc-actions { display: none !important; }
+            body { font-size: 12px; }
+            .rc-container { max-width: 100%; padding: 0; }
+            @page { margin: 1.5cm; }
+            .rc-banner, .fact-cell, .cat-bar-fill, .score-point, .score-point.current, .rem-cell, .fw-tag, .rating-pill {
+                -webkit-print-color-adjust: exact; print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="rc-actions no-print">
+        <a href="/vendors/{{ vendor.id }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+        <a href="/vendors/{{ vendor.id }}/report-card.pdf" class="btn btn-success btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</a>
+        <button class="btn btn-primary btn-sm" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print</button>
+    </div>
+
+    <div class="rc-container">
+
+        {# ==================== HEADER ==================== #}
+        <div class="rc-banner">
+            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <div>
+                    <h1>{{ vendor.name }}</h1>
+                    <div class="mt-1" style="font-size: 0.85rem; opacity: 0.85;">Vendor Risk Report Card</div>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    {% if effective_tier %}
+                    <span class="tier-pill">{{ effective_tier }}</span>
+                    {% endif %}
+                    {% if latest_decision and latest_decision.overall_risk_rating %}
+                    <span class="rating-pill badge-risk-{{ latest_decision.overall_risk_rating|lower }}">
+                        {{ latest_decision.overall_risk_rating.replace('_', ' ').title() }} Risk
+                    </span>
+                    {% endif %}
+                    {% if overall_score is not none %}
+                    {% if overall_score >= 90 %}{% set sc_color = "#198754" %}
+                    {% elif overall_score >= 70 %}{% set sc_color = "#0dcaf0" %}
+                    {% elif overall_score >= 50 %}{% set sc_color = "#ffc107" %}
+                    {% else %}{% set sc_color = "#dc3545" %}{% endif %}
+                    <div class="score-big" style="color: {{ sc_color }}; border-color: {{ sc_color }};">{{ overall_score|int }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# ==================== QUICK FACTS ==================== #}
+        <div class="facts-grid">
+            <div class="fact-cell">
+                <div class="fact-label">Industry</div>
+                <div class="fact-value">{{ vendor.industry or '—' }}</div>
+            </div>
+            <div class="fact-cell">
+                <div class="fact-label">Service Type</div>
+                <div class="fact-value">{{ vendor.service_type or '—' }}</div>
+            </div>
+            <div class="fact-cell">
+                <div class="fact-label">Data Classification</div>
+                <div class="fact-value">{{ vendor.data_classification.replace('_', ' ').title() if vendor.data_classification else '—' }}</div>
+            </div>
+            <div class="fact-cell">
+                <div class="fact-label">Business Criticality</div>
+                <div class="fact-value">{{ vendor.business_criticality.replace('_', ' ').title() if vendor.business_criticality else '—' }}</div>
+            </div>
+            <div class="fact-cell">
+                <div class="fact-label">Access Level</div>
+                <div class="fact-value">{{ vendor.access_level.replace('_', ' ').title() if vendor.access_level else '—' }}</div>
+            </div>
+            <div class="fact-cell">
+                <div class="fact-label">Contract Status</div>
+                <div class="fact-value">
+                    {% if vendor.contract_end_date %}
+                    Ends {{ vendor.contract_end_date.strftime('%Y-%m-%d') }}
+                    {% else %}—{% endif %}
+                </div>
+            </div>
+            <div class="fact-cell">
+                <div class="fact-label">Assigned Analyst</div>
+                <div class="fact-value">{{ vendor.assigned_analyst.display_name if vendor.assigned_analyst else '—' }}</div>
+            </div>
+            <div class="fact-cell">
+                <div class="fact-label">Last Assessed</div>
+                <div class="fact-value">{{ latest_decision.finalized_at.strftime('%Y-%m-%d') if latest_decision and latest_decision.finalized_at else '—' }}</div>
+            </div>
+        </div>
+
+        {# ==================== ASSESSMENT HISTORY ==================== #}
+        {% if score_history %}
+        <h2 class="section-title"><i class="bi bi-clock-history me-2"></i>Assessment History</h2>
+        <div class="score-timeline mb-3">
+            {% for sh in score_history %}
+            {% if not loop.first %}<span class="score-arrow"><i class="bi bi-arrow-right"></i></span>{% endif %}
+            <div class="score-point {% if sh.is_current %}current{% endif %}">
+                {% if sh.score is not none %}
+                    {% if sh.score >= 90 %}{% set sh_c = "#198754" %}
+                    {% elif sh.score >= 70 %}{% set sh_c = "#0dcaf0" %}
+                    {% elif sh.score >= 50 %}{% set sh_c = "#ffc107" %}
+                    {% else %}{% set sh_c = "#dc3545" %}{% endif %}
+                <div class="sp-score" style="color: {{ sh_c }};">{{ sh.score }}</div>
+                {% else %}
+                <div class="sp-score text-muted">—</div>
+                {% endif %}
+                <div class="sp-date">{{ sh.date }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# ==================== CATEGORY RISK SUMMARY ==================== #}
+        {% if category_scores %}
+        <h2 class="section-title"><i class="bi bi-bar-chart me-2"></i>Category Risk Summary</h2>
+        {% for cat in category_scores %}
+        {% if cat.score is not none %}
+            {% if cat.score >= 90 %}{% set bar_c = "#198754" %}
+            {% elif cat.score >= 70 %}{% set bar_c = "#0dcaf0" %}
+            {% elif cat.score >= 50 %}{% set bar_c = "#ffc107" %}
+            {% else %}{% set bar_c = "#dc3545" %}{% endif %}
+        <div class="cat-bar-wrap">
+            <div class="cat-bar-label">
+                <span>{{ cat.category }}</span>
+                <span style="color: {{ bar_c }}; font-weight: 600;">{{ cat.score }}%
+                    {% if cat.flagged_count is defined and cat.flagged_count > 0 %}
+                    <span class="text-danger" style="font-size: 0.7rem;"><i class="bi bi-flag-fill me-1"></i>{{ cat.flagged_count }}</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="cat-bar-track">
+                <div class="cat-bar-fill" style="width: {{ cat.score }}%; background: {{ bar_c }};"></div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% if flagged_count > 0 %}
+        <div class="mt-2 text-danger" style="font-size: 0.8rem;">
+            <i class="bi bi-flag-fill me-1"></i>{{ flagged_count }} flagged item{{ 's' if flagged_count != 1 else '' }} requiring attention
+        </div>
+        {% endif %}
+        {% endif %}
+
+        {# ==================== OPEN ITEMS ==================== #}
+        <h2 class="section-title"><i class="bi bi-wrench me-2"></i>Open Items</h2>
+        <div class="rem-grid mb-3">
+            <div class="rem-cell" style="background: #f8d7da;">
+                <div class="rem-count text-danger">{{ rem_by_severity.CRITICAL }}</div>
+                <div class="rem-label">Critical</div>
+            </div>
+            <div class="rem-cell" style="background: #fff3cd;">
+                <div class="rem-count" style="color: #fd7e14;">{{ rem_by_severity.HIGH }}</div>
+                <div class="rem-label">High</div>
+            </div>
+            <div class="rem-cell" style="background: #d1ecf1;">
+                <div class="rem-count" style="color: #0c5460;">{{ rem_by_severity.MEDIUM }}</div>
+                <div class="rem-label">Medium</div>
+            </div>
+            <div class="rem-cell" style="background: #e2e3e5;">
+                <div class="rem-count" style="color: #6c757d;">{{ rem_by_severity.LOW }}</div>
+                <div class="rem-label">Low</div>
+            </div>
+        </div>
+        {% if active_exceptions > 0 %}
+        <div style="font-size: 0.8rem; color: #6b7280;">
+            <i class="bi bi-shield-exclamation me-1"></i>{{ active_exceptions }} active exception{{ 's' if active_exceptions != 1 else '' }} / waiver{{ 's' if active_exceptions != 1 else '' }}
+        </div>
+        {% endif %}
+
+        {# ==================== SLA STATUS ==================== #}
+        {% if sla.enabled %}
+        <h2 class="section-title"><i class="bi bi-clock me-2"></i>SLA Status</h2>
+        <div class="d-flex gap-4 mb-3" style="font-size: 0.85rem;">
+            <div>
+                <span class="fw-semibold {% if sla.breach_count > 0 %}text-danger{% else %}text-success{% endif %}">{{ sla.breach_count }}</span>
+                <span class="text-muted">breach{{ 'es' if sla.breach_count != 1 else '' }}</span>
+            </div>
+            <div>
+                <span class="fw-semibold {% if sla.at_risk_count > 0 %}text-warning{% else %}text-success{% endif %}">{{ sla.at_risk_count }}</span>
+                <span class="text-muted">at risk</span>
+            </div>
+            {% if sla.avg_response_days is not none %}
+            <div>
+                <span class="fw-semibold text-primary">{{ sla.avg_response_days }}</span>
+                <span class="text-muted">avg response days</span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# ==================== FRAMEWORK COVERAGE ==================== #}
+        {% if framework_coverage %}
+        <h2 class="section-title"><i class="bi bi-diagram-3 me-2"></i>Framework Coverage</h2>
+        <div class="mb-3">
+            {% set fw_colors = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626", "#4f46e5", "#0d9488"] %}
+            {% for fw in framework_coverage %}
+            <span class="fw-tag" style="background: {{ fw_colors[loop.index0 % fw_colors|length] }}15; color: {{ fw_colors[loop.index0 % fw_colors|length] }}; border: 1px solid {{ fw_colors[loop.index0 % fw_colors|length] }}30;">
+                {{ fw.label }} ({{ fw.count }})
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# ==================== FOOTER ==================== #}
+        <div class="text-center text-muted mt-4 pt-3 border-top" style="font-size: 0.75rem;">
+            Generated by RiskQ on {{ now.strftime('%Y-%m-%d %H:%M UTC') }}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -2,6 +2,75 @@
 
 {% block title %}{{ assessment.title }} - RiskQ{% endblock %}
 
+{% block extra_head %}
+<style>
+    .section-nav {
+        position: sticky;
+        top: 56px;
+        z-index: 100;
+        background: #fff;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 0.5rem 0;
+        margin-bottom: 1rem;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    .section-nav-item {
+        display: inline-block;
+        padding: 0.35rem 0.75rem;
+        margin-right: 0.25rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        text-decoration: none;
+        color: #4b5563;
+        background: #f3f4f6;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .section-nav-item:hover { background: #e5e7eb; color: #111827; }
+    .section-nav-item.active { background: #2563eb; color: #fff; }
+    .section-nav-badge {
+        display: inline-block;
+        padding: 0 0.4rem;
+        border-radius: 10px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        margin-left: 0.3rem;
+        background: rgba(0,0,0,0.1);
+    }
+    .section-header {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e3a5f;
+        padding: 0.75rem 0 0.5rem;
+        border-bottom: 2px solid #e5e7eb;
+        margin-bottom: 1rem;
+        scroll-margin-top: 120px;
+    }
+    .drop-zone {
+        border: 2px dashed #d1d5db;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+        color: #6b7280;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: #f9fafb;
+    }
+    .drop-zone.drag-over {
+        border-color: #2563eb;
+        background: #eff6ff;
+        color: #2563eb;
+    }
+    .drop-zone .drop-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+    .autosave-indicator {
+        font-size: 0.75rem;
+        transition: opacity 0.3s;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
     <h1>{{ assessment.title }}</h1>
@@ -60,7 +129,7 @@
             <div class="p-3 bg-light rounded mb-2">
                 <p class="mb-0">{{ followup.message }}</p>
             </div>
-            
+
             {% if followup.response_text %}
             <div class="ms-4 p-3 bg-success bg-opacity-10 rounded">
                 <small class="text-muted"><i class="bi bi-reply me-1"></i>Your response ({{ followup.responded_at.strftime('%Y-%m-%d %H:%M') if followup.responded_at else '' }}):</small>
@@ -83,25 +152,40 @@
 </div>
 {% endif %}
 
+{# ==================== PROGRESS BAR ==================== #}
 <div class="card mb-4 border-primary">
     <div class="card-body py-3">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <span class="fw-bold">
                 <i class="bi bi-check-circle me-2"></i>Progress
             </span>
-            <div>
-                <span id="last-saved" class="text-muted me-3" style="display: {% if existing_response and existing_response.last_saved_at %}inline{% else %}none{% endif %};">
+            <div class="d-flex align-items-center gap-3">
+                <span id="autosave-status" class="autosave-indicator text-muted" style="display:none;">
+                    <i class="bi bi-cloud-check me-1"></i><span id="autosave-text">Saved</span>
+                </span>
+                <span id="last-saved" class="text-muted" style="display: {% if existing_response and existing_response.last_saved_at %}inline{% else %}none{% endif %}; font-size: 0.8rem;">
                     <i class="bi bi-clock me-1"></i>Last saved: <span id="last-saved-time">{{ existing_response.last_saved_at.strftime('%Y-%m-%d %H:%M:%S') if existing_response and existing_response.last_saved_at else '' }}</span> UTC
                 </span>
                 <span id="progress-text" class="badge bg-primary">0 / {{ questions|length }} complete</span>
             </div>
         </div>
         <div class="progress" style="height: 10px;">
-            <div id="progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%;" 
+            <div id="progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%;"
                  aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
         </div>
     </div>
 </div>
+
+{# ==================== SECTION NAVIGATION ==================== #}
+{% if categories_ordered is defined and categories_ordered|length > 1 %}
+<div class="section-nav" id="sectionNav">
+    {% for cat in categories_ordered %}
+    <a class="section-nav-item" href="#section-{{ loop.index0 }}" data-section="{{ loop.index0 }}">
+        {{ cat }}<span class="section-nav-badge" id="secBadge{{ loop.index0 }}">0/0</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
 
 <form method="post" id="questionnaire-form">
     <div class="card mb-4">
@@ -112,16 +196,16 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="vendor_name" class="form-label">Company Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="vendor_name" name="vendor_name" required 
-                           placeholder="Your company name" 
+                    <input type="text" class="form-control" id="vendor_name" name="vendor_name" required
+                           placeholder="Your company name"
                            value="{{ existing_response.vendor_name if existing_response else (form_data.get('vendor_name', '') if form_data else '') }}"
                            {% if is_submitted or assessment_locked %}readonly{% endif %}>
                 </div>
                 <div class="col-md-6 mb-3">
                     <label for="vendor_email" class="form-label">Contact Email <span class="text-danger">*</span></label>
                     <div class="input-group">
-                        <input type="email" class="form-control" id="vendor_email" name="vendor_email" required 
-                               placeholder="your.email@company.com" 
+                        <input type="email" class="form-control" id="vendor_email" name="vendor_email" required
+                               placeholder="your.email@company.com"
                                value="{{ existing_response.vendor_email if existing_response else (form_data.get('vendor_email', '') if form_data else '') }}"
                                {% if is_submitted or assessment_locked %}readonly{% endif %}>
                         {% if not is_submitted and not assessment_locked %}
@@ -142,7 +226,20 @@
             <span class="badge bg-primary ms-2">{{ questions|length }} questions</span>
         </div>
         <div class="card-body">
+            {% set current_cat = namespace(value='') %}
+            {% set section_idx = namespace(value=-1) %}
             {% for question in questions %}
+            {% set q_cat = question.category or 'General' %}
+
+            {# Section headers when categories change #}
+            {% if q_cat != current_cat.value %}
+                {% set current_cat.value = q_cat %}
+                {% set section_idx.value = section_idx.value + 1 %}
+                <div class="section-header" id="section-{{ section_idx.value }}" data-section-idx="{{ section_idx.value }}">
+                    <i class="bi bi-folder2 me-2"></i>{{ q_cat }}
+                </div>
+            {% endif %}
+
             {% set saved_answer = none %}
             {% if existing_response %}
                 {% for ans in existing_response.answers %}
@@ -153,10 +250,10 @@
             {% endif %}
             {% set saved_choice = saved_answer.answer_choice if saved_answer else (form_data.get('choice_' ~ question.id, '') if form_data else '') %}
             {% set saved_notes = saved_answer.notes if saved_answer else (form_data.get('notes_' ~ question.id, '') if form_data else '') %}
-            
+
             {% set is_multi = question.answer_mode == 'MULTI' %}
             {% set saved_choices = saved_choice.split(',') if saved_choice and is_multi else [] %}
-            <div class="mb-4 {% if not loop.last %}pb-4 border-bottom{% endif %}" data-question-id="{{ question.id }}" data-answer-mode="{{ question.answer_mode }}">
+            <div class="mb-4 {% if not loop.last %}pb-4 border-bottom{% endif %}" data-question-id="{{ question.id }}" data-answer-mode="{{ question.answer_mode }}" data-category="{{ q_cat }}">
                 <div class="mb-3">
                     <span class="badge bg-secondary me-2">{{ loop.index }}</span>
                     <span class="fw-medium">{{ question.question_text }}</span>
@@ -164,7 +261,7 @@
                     <span class="badge bg-info text-dark ms-2" style="font-size: 0.7rem;"><i class="bi bi-check2-square me-1"></i>Select multiple</span>
                     {% endif %}
                 </div>
-                
+
                 {% set opts = question_options[question.id] if question_options is defined and question.id in question_options else ['yes','no','partial','na'] %}
                 {% set is_custom = question_has_custom[question.id] if question_has_custom is defined and question.id in question_has_custom else false %}
                 {% if is_multi %}
@@ -202,9 +299,9 @@
                     {% endfor %}
                 </div>
                 {% endif %}
-                
+
                 <div class="mt-2">
-                    <textarea class="form-control notes-field" name="notes_{{ question.id }}" 
+                    <textarea class="form-control notes-field" name="notes_{{ question.id }}"
                               rows="2" placeholder="Optional: Add notes or details..."
                               {% if is_submitted or assessment_locked %}readonly{% endif %}>{{ saved_notes or '' }}</textarea>
                 </div>
@@ -213,23 +310,23 @@
         </div>
     </div>
 
+    {# ==================== EVIDENCE UPLOADS (drag-and-drop) ==================== #}
     <div class="card mb-4">
         <div class="card-header">
             <i class="bi bi-paperclip me-2"></i>Evidence Uploads
             <span class="badge bg-secondary ms-2" id="file-count">0 files</span>
         </div>
         <div class="card-body">
-            <p class="text-muted mb-3">Upload supporting documents (PDF, Word, Excel, images). Max 10MB per file.</p>
-            
             <div id="evidence-list" class="mb-3"></div>
-            
+
             {% if not is_submitted and not assessment_locked %}
-            <div class="mb-3">
-                <input type="file" class="form-control" id="evidence-file-input" 
-                       accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg">
-                <div class="form-text">Allowed: PDF, DOCX, XLSX, PNG, JPG, JPEG</div>
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-icon"><i class="bi bi-cloud-arrow-up"></i></div>
+                <div class="fw-semibold">Drag & drop files here</div>
+                <div class="text-muted" style="font-size: 0.8rem;">or click to browse — PDF, DOCX, XLSX, PNG, JPG (max 10MB)</div>
+                <input type="file" id="evidence-file-input" style="display:none;" accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg">
             </div>
-            <div id="upload-status"></div>
+            <div id="upload-status" class="mt-2"></div>
             {% else %}
             <p class="text-muted mb-0"><i class="bi bi-lock me-1"></i>Uploads are disabled after submission.</p>
             {% endif %}
@@ -264,11 +361,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const vendorNameInput = document.getElementById('vendor_name');
     const lastSavedSpan = document.getElementById('last-saved');
     const lastSavedTime = document.getElementById('last-saved-time');
+    const autosaveStatus = document.getElementById('autosave-status');
+    const autosaveText = document.getElementById('autosave-text');
     const isSubmitted = {{ 'true' if is_submitted else 'false' }};
-    
+
     // Conditional Rules
     const conditionalRules = {{ conditional_rules|safe }};
-    
+
     function getQuestionAnswer(questionId) {
         const qDiv = document.querySelector(`[data-question-id="${questionId}"]`);
         if (!qDiv) return [];
@@ -282,85 +381,64 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return answers;
     }
-    
+
     function evaluateRule(rule) {
         const answers = getQuestionAnswer(rule.trigger_question_id);
         if (answers.length === 0) return false;
-        // Check if ANY selected answer is in trigger_values
         for (const ans of answers) {
             if (rule.trigger_values.includes(ans)) return true;
         }
         return false;
     }
-    
+
     function applyConditionalRules() {
-        // Build map of target questions to their rules
         const targetRulesMap = {};
         conditionalRules.forEach(rule => {
             const targetId = rule.target_question_id;
             if (!targetRulesMap[targetId]) targetRulesMap[targetId] = [];
             targetRulesMap[targetId].push(rule);
         });
-        
-        // For each target, check if ANY of its rules are triggered
+
         for (const [targetId, rules] of Object.entries(targetRulesMap)) {
             const targetDiv = document.querySelector(`[data-question-id="${targetId}"]`);
             if (!targetDiv) continue;
-            
+
             let shouldShow = false;
             let makeRequired = false;
-            
+
             for (const rule of rules) {
                 if (evaluateRule(rule)) {
                     shouldShow = true;
                     if (rule.make_required) makeRequired = true;
                 }
             }
-            
+
             if (shouldShow) {
                 targetDiv.style.display = '';
                 targetDiv.dataset.hidden = 'false';
-                if (makeRequired) {
-                    targetDiv.dataset.conditionalRequired = 'true';
-                } else {
-                    targetDiv.dataset.conditionalRequired = 'false';
-                }
+                targetDiv.dataset.conditionalRequired = makeRequired ? 'true' : 'false';
             } else {
                 targetDiv.style.display = 'none';
                 targetDiv.dataset.hidden = 'true';
                 targetDiv.dataset.conditionalRequired = 'false';
-                // Clear answers when hiding
                 targetDiv.querySelectorAll('.answer-choice:checked, .answer-multi:checked').forEach(input => {
                     input.checked = false;
                 });
-                targetDiv.querySelectorAll('textarea.notes-field').forEach(ta => {
-                    ta.value = '';
-                });
+                targetDiv.querySelectorAll('textarea.notes-field').forEach(ta => { ta.value = ''; });
             }
         }
         updateProgress();
+        updateSectionBadges();
     }
-    
-    // Initial evaluation
+
     if (conditionalRules.length > 0) {
-        // Mark all target questions as initially hidden
         conditionalRules.forEach(rule => {
             const targetDiv = document.querySelector(`[data-question-id="${rule.target_question_id}"]`);
-            if (targetDiv) {
-                targetDiv.dataset.isConditional = 'true';
-            }
+            if (targetDiv) targetDiv.dataset.isConditional = 'true';
         });
         applyConditionalRules();
     }
-    
-    function getVisibleQuestionCount() {
-        let count = 0;
-        document.querySelectorAll('[data-question-id]').forEach(qDiv => {
-            if (qDiv.dataset.hidden !== 'true') count++;
-        });
-        return count;
-    }
-    
+
     function updateProgress() {
         let answered = 0;
         let visibleTotal = 0;
@@ -369,19 +447,17 @@ document.addEventListener('DOMContentLoaded', function() {
             visibleTotal++;
             const answerMode = qDiv.dataset.answerMode;
             if (answerMode === 'MULTI') {
-                const checked = qDiv.querySelectorAll('.answer-multi:checked');
-                if (checked.length > 0) answered++;
+                if (qDiv.querySelectorAll('.answer-multi:checked').length > 0) answered++;
             } else {
-                const checked = qDiv.querySelector('.answer-choice:checked');
-                if (checked) answered++;
+                if (qDiv.querySelector('.answer-choice:checked')) answered++;
             }
         });
         const percentage = visibleTotal > 0 ? (answered / visibleTotal) * 100 : 0;
-        
+
         progressBar.style.width = percentage + '%';
         progressBar.setAttribute('aria-valuenow', percentage);
         progressText.textContent = answered + ' / ' + visibleTotal + ' complete';
-        
+
         if (answered === visibleTotal && visibleTotal > 0) {
             progressText.classList.remove('bg-primary');
             progressText.classList.add('bg-success');
@@ -400,61 +476,159 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
-    
+
+    // ==================== SECTION BADGES ====================
+    function updateSectionBadges() {
+        const sections = document.querySelectorAll('.section-header');
+        sections.forEach(header => {
+            const idx = header.dataset.sectionIdx;
+            const badge = document.getElementById('secBadge' + idx);
+            if (!badge) return;
+            const cat = header.textContent.trim();
+            let total = 0, answered = 0;
+            // Walk siblings until next section-header
+            let el = header.nextElementSibling;
+            while (el && !el.classList.contains('section-header')) {
+                if (el.dataset && el.dataset.questionId && el.dataset.hidden !== 'true') {
+                    total++;
+                    const answerMode = el.dataset.answerMode;
+                    if (answerMode === 'MULTI') {
+                        if (el.querySelectorAll('.answer-multi:checked').length > 0) answered++;
+                    } else {
+                        if (el.querySelector('.answer-choice:checked')) answered++;
+                    }
+                }
+                el = el.nextElementSibling;
+            }
+            badge.textContent = answered + '/' + total;
+        });
+    }
+
     function onAnswerChange() {
         if (conditionalRules.length > 0) {
             applyConditionalRules();
         } else {
             updateProgress();
+            updateSectionBadges();
+        }
+        markDirty();
+    }
+
+    if (!isSubmitted) {
+        document.querySelectorAll('.answer-choice').forEach(radio => radio.addEventListener('change', onAnswerChange));
+        document.querySelectorAll('.answer-multi').forEach(cb => cb.addEventListener('change', onAnswerChange));
+        document.querySelectorAll('.notes-field').forEach(ta => ta.addEventListener('input', function() { markDirty(); }));
+    }
+
+    updateProgress();
+    updateSectionBadges();
+
+    // ==================== SECTION NAV CLICK ====================
+    document.querySelectorAll('.section-nav-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    // ==================== AUTO-SAVE ====================
+    let isDirty = false;
+    let autoSaveTimer = null;
+    let isSaving = false;
+
+    function markDirty() {
+        isDirty = true;
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(doAutoSave, 30000);
+    }
+
+    async function doAutoSave() {
+        const email = vendorEmailInput.value.trim();
+        const name = vendorNameInput.value.trim();
+        if (!email || !isDirty || isSaving || isSubmitted) return;
+
+        isSaving = true;
+        autosaveStatus.style.display = 'inline';
+        autosaveText.textContent = 'Saving...';
+
+        // Collect answers
+        const answers = {};
+        document.querySelectorAll('[data-question-id]').forEach(qDiv => {
+            const qid = qDiv.dataset.questionId;
+            const answerMode = qDiv.dataset.answerMode;
+            let choice = '';
+            if (answerMode === 'MULTI') {
+                const checked = [];
+                qDiv.querySelectorAll('.answer-multi:checked').forEach(cb => checked.push(cb.value));
+                choice = checked.join(',');
+            } else {
+                const radio = qDiv.querySelector('.answer-choice:checked');
+                if (radio) choice = radio.value;
+            }
+            const notes = qDiv.querySelector('.notes-field') ? qDiv.querySelector('.notes-field').value : '';
+            if (choice || notes) {
+                answers[qid] = { choice: choice, notes: notes };
+            }
+        });
+
+        try {
+            const resp = await fetch('/api/vendor/{{ assessment.token }}/auto-save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vendor_name: name, vendor_email: email, answers: answers })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                isDirty = false;
+                autosaveText.textContent = 'Saved';
+                if (data.saved_at) {
+                    lastSavedTime.textContent = data.saved_at;
+                    lastSavedSpan.style.display = 'inline';
+                }
+                setTimeout(() => { autosaveStatus.style.display = 'none'; }, 3000);
+            } else {
+                autosaveText.textContent = 'Save failed';
+                setTimeout(() => { autosaveStatus.style.display = 'none'; }, 5000);
+            }
+        } catch (err) {
+            console.error('Auto-save error:', err);
+            autosaveText.textContent = 'Save failed';
+            setTimeout(() => { autosaveStatus.style.display = 'none'; }, 5000);
+        } finally {
+            isSaving = false;
         }
     }
-    
-    if (!isSubmitted) {
-        document.querySelectorAll('.answer-choice').forEach(function(radio) {
-            radio.addEventListener('change', onAnswerChange);
-        });
-        document.querySelectorAll('.answer-multi').forEach(function(checkbox) {
-            checkbox.addEventListener('change', onAnswerChange);
-        });
-    }
-    
-    updateProgress();
-    
+
+    // ==================== LOAD DRAFT ====================
     if (loadDraftBtn && !isSubmitted) {
         loadDraftBtn.addEventListener('click', async function() {
             const email = vendorEmailInput.value.trim();
-            if (!email) {
-                alert('Please enter your email address first.');
-                return;
-            }
-            
+            if (!email) { alert('Please enter your email address first.'); return; }
+
             loadDraftBtn.disabled = true;
             loadDraftBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-            
+
             try {
                 const response = await fetch(`/api/vendor/{{ assessment.token }}/check-draft?email=${encodeURIComponent(email)}`);
                 const data = await response.json();
-                
+
                 if (data.found) {
                     if (data.status === 'SUBMITTED') {
                         alert('This questionnaire has already been submitted. Reloading page...');
                         window.location.reload();
                         return;
                     }
-                    
-                    if (data.vendor_name) {
-                        vendorNameInput.value = data.vendor_name;
-                    }
-                    
+                    if (data.vendor_name) vendorNameInput.value = data.vendor_name;
+
                     for (const [questionId, answerData] of Object.entries(data.answers)) {
                         if (answerData.choice) {
                             const qDiv = document.querySelector(`[data-question-id="${questionId}"]`);
                             const answerMode = qDiv ? qDiv.dataset.answerMode : 'SINGLE';
                             if (answerMode === 'MULTI') {
-                                const choices = answerData.choice.split(',');
-                                choices.forEach(choice => {
-                                    const checkbox = document.querySelector(`input[name="multi_${questionId}[]"][value="${choice}"]`);
-                                    if (checkbox) checkbox.checked = true;
+                                answerData.choice.split(',').forEach(choice => {
+                                    const cb = document.querySelector(`input[name="multi_${questionId}[]"][value="${choice}"]`);
+                                    if (cb) cb.checked = true;
                                 });
                             } else {
                                 const radio = document.querySelector(`input[name="choice_${questionId}"][value="${answerData.choice}"]`);
@@ -462,21 +636,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             }
                         }
                         if (answerData.notes) {
-                            const notesField = document.querySelector(`textarea[name="notes_${questionId}"]`);
-                            if (notesField) notesField.value = answerData.notes;
+                            const nf = document.querySelector(`textarea[name="notes_${questionId}"]`);
+                            if (nf) nf.value = answerData.notes;
                         }
                     }
-                    
                     if (data.last_saved_at) {
                         lastSavedTime.textContent = data.last_saved_at;
                         lastSavedSpan.style.display = 'inline';
                     }
-                    
-                    if (conditionalRules.length > 0) {
-                        applyConditionalRules();
-                    } else {
-                        updateProgress();
-                    }
+                    if (conditionalRules.length > 0) applyConditionalRules();
+                    else { updateProgress(); updateSectionBadges(); }
                     loadEvidenceFiles();
                     alert('Draft loaded successfully!');
                 } else {
@@ -491,140 +660,115 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
+    // ==================== EVIDENCE UPLOAD (drag-drop + click) ====================
     const evidenceFileInput = document.getElementById('evidence-file-input');
     const evidenceList = document.getElementById('evidence-list');
     const fileCount = document.getElementById('file-count');
     const uploadStatus = document.getElementById('upload-status');
-    
+    const dropZone = document.getElementById('dropZone');
+
     function formatFileSize(bytes) {
         if (bytes < 1024) return bytes + ' B';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
         return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
-    
+
+    async function uploadFile(file) {
+        const email = vendorEmailInput.value.trim();
+        const name = vendorNameInput.value.trim();
+        if (!email) { alert('Please enter your email address before uploading files.'); return; }
+        if (file.size > 10 * 1024 * 1024) { alert('File too large. Maximum size is 10MB.'); return; }
+
+        if (uploadStatus) uploadStatus.innerHTML = '<div class="alert alert-info py-2"><span class="spinner-border spinner-border-sm me-2"></span>Uploading ' + file.name + '...</div>';
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('vendor_email', email);
+        formData.append('vendor_name', name);
+
+        try {
+            const response = await fetch('/vendor/{{ assessment.token }}/upload-evidence', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (data.success) {
+                if (uploadStatus) uploadStatus.innerHTML = '<div class="alert alert-success py-2"><i class="bi bi-check-circle me-2"></i>File uploaded!</div>';
+                loadEvidenceFiles();
+                setTimeout(() => { if (uploadStatus) uploadStatus.innerHTML = ''; }, 3000);
+            } else {
+                if (uploadStatus) uploadStatus.innerHTML = '<div class="alert alert-danger py-2"><i class="bi bi-exclamation-triangle me-2"></i>' + data.error + '</div>';
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            if (uploadStatus) uploadStatus.innerHTML = '<div class="alert alert-danger py-2">Error uploading file.</div>';
+        }
+    }
+
+    // Drop zone events
+    if (dropZone && !isSubmitted) {
+        dropZone.addEventListener('click', () => evidenceFileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files.length > 0) {
+                for (const f of e.dataTransfer.files) uploadFile(f);
+            }
+        });
+    }
+
+    if (evidenceFileInput && !isSubmitted) {
+        evidenceFileInput.addEventListener('change', function() {
+            if (this.files[0]) uploadFile(this.files[0]);
+            this.value = '';
+        });
+    }
+
     function renderEvidenceList(files) {
         fileCount.textContent = files.length + ' file' + (files.length !== 1 ? 's' : '');
-        
         if (files.length === 0) {
             evidenceList.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-folder2-open me-2"></i>No files uploaded yet.</p>';
             return;
         }
-        
         let html = '<div class="list-group">';
         files.forEach(file => {
-            html += `
-                <div class="list-group-item d-flex justify-content-between align-items-center" data-file-id="${file.id}">
-                    <div>
-                        <i class="bi bi-file-earmark me-2"></i>
-                        <a href="/evidence/${file.id}" target="_blank">${file.filename}</a>
-                        <small class="text-muted ms-2">${formatFileSize(file.size)}</small>
-                        <small class="text-muted ms-2">${file.uploaded_at}</small>
-                    </div>
-                    ${!isSubmitted ? `<button type="button" class="btn btn-sm btn-outline-danger delete-evidence-btn" data-id="${file.id}">
-                        <i class="bi bi-trash"></i>
-                    </button>` : ''}
-                </div>
-            `;
+            html += `<div class="list-group-item d-flex justify-content-between align-items-center" data-file-id="${file.id}">
+                <div><i class="bi bi-file-earmark me-2"></i><a href="/evidence/${file.id}" target="_blank">${file.filename}</a>
+                <small class="text-muted ms-2">${formatFileSize(file.size)}</small><small class="text-muted ms-2">${file.uploaded_at}</small></div>
+                ${!isSubmitted ? `<button type="button" class="btn btn-sm btn-outline-danger delete-evidence-btn" data-id="${file.id}"><i class="bi bi-trash"></i></button>` : ''}
+            </div>`;
         });
         html += '</div>';
         evidenceList.innerHTML = html;
-        
+
         if (!isSubmitted) {
             document.querySelectorAll('.delete-evidence-btn').forEach(btn => {
                 btn.addEventListener('click', async function() {
                     const fileId = this.dataset.id;
                     const email = vendorEmailInput.value.trim();
-                    if (!email) {
-                        alert('Please enter your email first.');
-                        return;
-                    }
+                    if (!email) { alert('Please enter your email first.'); return; }
                     if (!confirm('Delete this file?')) return;
-                    
                     try {
-                        const response = await fetch(`/vendor/{{ assessment.token }}/evidence/${fileId}?vendor_email=${encodeURIComponent(email)}`, {
-                            method: 'DELETE'
-                        });
+                        const response = await fetch(`/vendor/{{ assessment.token }}/evidence/${fileId}?vendor_email=${encodeURIComponent(email)}`, { method: 'DELETE' });
                         const data = await response.json();
-                        if (data.success) {
-                            loadEvidenceFiles();
-                        } else {
-                            alert(data.error || 'Error deleting file.');
-                        }
-                    } catch (error) {
-                        console.error('Delete error:', error);
-                        alert('Error deleting file.');
-                    }
+                        if (data.success) loadEvidenceFiles();
+                        else alert(data.error || 'Error deleting file.');
+                    } catch (error) { alert('Error deleting file.'); }
                 });
             });
         }
     }
-    
+
     async function loadEvidenceFiles() {
         const email = vendorEmailInput.value.trim();
-        if (!email) {
-            renderEvidenceList([]);
-            return;
-        }
-        
+        if (!email) { renderEvidenceList([]); return; }
         try {
             const response = await fetch(`/api/vendor/{{ assessment.token }}/evidence?email=${encodeURIComponent(email)}`);
             const data = await response.json();
             renderEvidenceList(data.files || []);
-        } catch (error) {
-            console.error('Error loading evidence:', error);
-        }
+        } catch (error) { console.error('Error loading evidence:', error); }
     }
-    
-    if (evidenceFileInput && !isSubmitted) {
-        evidenceFileInput.addEventListener('change', async function() {
-            const file = this.files[0];
-            if (!file) return;
-            
-            const email = vendorEmailInput.value.trim();
-            const name = vendorNameInput.value.trim();
-            if (!email) {
-                alert('Please enter your email address before uploading files.');
-                this.value = '';
-                return;
-            }
-            
-            if (file.size > 10 * 1024 * 1024) {
-                alert('File too large. Maximum size is 10MB.');
-                this.value = '';
-                return;
-            }
-            
-            uploadStatus.innerHTML = '<div class="alert alert-info"><span class="spinner-border spinner-border-sm me-2"></span>Uploading...</div>';
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('vendor_email', email);
-            formData.append('vendor_name', name);
-            
-            try {
-                const response = await fetch(`/vendor/{{ assessment.token }}/upload-evidence`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    uploadStatus.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>File uploaded successfully!</div>';
-                    loadEvidenceFiles();
-                    setTimeout(() => { uploadStatus.innerHTML = ''; }, 3000);
-                } else {
-                    uploadStatus.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>${data.error}</div>`;
-                }
-            } catch (error) {
-                console.error('Upload error:', error);
-                uploadStatus.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error uploading file.</div>';
-            }
-            
-            this.value = '';
-        });
-    }
-    
+
     {% if existing_response %}
     loadEvidenceFiles();
     {% endif %}

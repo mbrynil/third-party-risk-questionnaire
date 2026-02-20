@@ -461,6 +461,54 @@ def get_workspace_data(db: Session, user: User) -> dict:
             "sla_at_risk": sla.get("at_risk_count", 0) if sla.get("enabled") else None,
         }
 
+    # ===================== ONBOARDING STEPS =====================
+    onboarding_steps = None
+    if user.role in ("admin", "analyst") and not getattr(user, "onboarding_dismissed", False):
+        total_vendor_count = db.query(Vendor).count()
+        if total_vendor_count < 5:
+            total_assessments = db.query(Assessment).count()
+            total_submitted = db.query(Assessment).filter(
+                Assessment.status.in_([
+                    ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED,
+                ])
+            ).count()
+            total_decisions = db.query(AssessmentDecision).filter(
+                AssessmentDecision.status == DECISION_STATUS_FINAL,
+            ).count()
+
+            onboarding_steps = [
+                {
+                    "label": "Create your account",
+                    "done": True,
+                    "icon": "bi-person-check",
+                    "link": None,
+                },
+                {
+                    "label": "Add your first vendor",
+                    "done": total_vendor_count > 0,
+                    "icon": "bi-building-add",
+                    "link": "/vendors/new",
+                },
+                {
+                    "label": "Send an assessment",
+                    "done": total_assessments > 0,
+                    "icon": "bi-send",
+                    "link": "/create",
+                },
+                {
+                    "label": "Review a submission",
+                    "done": total_submitted > 0,
+                    "icon": "bi-clipboard-check",
+                    "link": "/responses",
+                },
+                {
+                    "label": "Finalize a decision",
+                    "done": total_decisions > 0,
+                    "icon": "bi-check2-square",
+                    "link": None,
+                },
+            ]
+
     return {
         "kpis": kpis,
         "action_items": action_items,
@@ -468,6 +516,7 @@ def get_workspace_data(db: Session, user: User) -> dict:
         "assessment_rows": assessment_rows,
         "recent_activities": activity_items,
         "org_overview": org_overview,
+        "onboarding_steps": onboarding_steps,
     }
 
 

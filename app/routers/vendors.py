@@ -26,6 +26,7 @@ from app.services.tiering import compute_inherent_risk_tier, get_effective_tier,
 from app.services.vendor_document_service import validate_document_upload, store_vendor_document
 from app.services.remediation_service import get_vendor_remediations, get_remediation_stats
 from app.services.reassessment_service import create_reassessment
+from app.services.export_service import generate_report_card_pdf
 from app.services.activity_service import log_activity, get_vendor_timeline
 from models import (
     ACTIVITY_VENDOR_CREATED, ACTIVITY_ASSESSMENT_CREATED, ACTIVITY_TIER_CHANGED,
@@ -354,6 +355,144 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         "offboarding_checklist": offboarding_checklist,
         "vendor_exceptions": vendor_exceptions,
     })
+
+
+# ==================== REPORT CARD ====================
+
+def _load_report_card_context(db, vendor_id):
+    """Load all data needed for the vendor report card."""
+    from app.services.scoring import compute_assessment_scores
+    from models import (
+        RiskSnapshot, RiskException, Question, Response,
+        RESPONSE_STATUS_SUBMITTED, EXCEPTION_STATUS_PENDING, EXCEPTION_STATUS_APPROVED,
+        QuestionBankItem, FRAMEWORK_DISPLAY,
+    )
+    from app.services.sla_service import get_sla_summary
+
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    effective_tier = get_effective_tier(vendor)
+
+    # Latest finalized decision
+    latest_decision = db.query(AssessmentDecision).filter(
+        AssessmentDecision.vendor_id == vendor_id,
+        AssessmentDecision.status == DECISION_STATUS_FINAL,
+    ).order_by(AssessmentDecision.finalized_at.desc()).first()
+
+    # Score history
+    RISK_LABELS = {"VERY_LOW": "Very Low", "LOW": "Low", "MODERATE": "Moderate", "HIGH": "High", "VERY_HIGH": "Very High"}
+    snapshots = db.query(RiskSnapshot).filter(
+        RiskSnapshot.vendor_id == vendor_id,
+    ).order_by(RiskSnapshot.snapshot_date.asc()).all()
+    score_history = []
+    for s in snapshots:
+        is_current = (s.decision_id == latest_decision.id) if latest_decision else False
+        score_history.append({
+            "date": s.snapshot_date.strftime("%Y-%m-%d") if s.snapshot_date else "",
+            "score": s.overall_score,
+            "rating": RISK_LABELS.get(s.risk_rating, s.risk_rating or ""),
+            "is_current": is_current,
+        })
+
+    # Category scores from latest assessment
+    category_scores = []
+    flagged_count = 0
+    overall_score = None
+    framework_coverage = []
+    if latest_decision and latest_decision.assessment:
+        assessment = latest_decision.assessment
+        questions = db.query(Question).filter(
+            Question.assessment_id == assessment.id,
+        ).order_by(Question.order).all()
+        response = db.query(Response).filter(
+            Response.assessment_id == assessment.id,
+            Response.status == RESPONSE_STATUS_SUBMITTED,
+        ).order_by(Response.submitted_at.desc()).first()
+        scores = compute_assessment_scores(questions, response)
+        category_scores = scores.get("category_scores", [])
+        flagged_count = len(scores.get("flagged_items", []))
+        overall_score = scores.get("overall_score")
+
+        # Framework coverage
+        bank_item_ids = [q.question_bank_item_id for q in questions if q.question_bank_item_id]
+        framework_counts = {}
+        if bank_item_ids:
+            bank_items = db.query(QuestionBankItem).filter(QuestionBankItem.id.in_(bank_item_ids)).all()
+            for bi in bank_items:
+                if bi.framework_ref:
+                    for fw in bi.framework_ref.split(","):
+                        fw = fw.strip()
+                        if fw:
+                            framework_counts[fw] = framework_counts.get(fw, 0) + 1
+        framework_coverage = [
+            {"key": k, "label": FRAMEWORK_DISPLAY.get(k, k), "count": v}
+            for k, v in sorted(framework_counts.items(), key=lambda x: -x[1])
+        ]
+
+    # Remediation counts by severity
+    from models import RemediationItem, REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED
+    open_rems = db.query(RemediationItem).filter(
+        RemediationItem.vendor_id == vendor_id,
+        RemediationItem.status.notin_([REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED]),
+    ).all()
+    rem_by_severity = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for r in open_rems:
+        if r.severity in rem_by_severity:
+            rem_by_severity[r.severity] += 1
+
+    # Active exceptions
+    active_exceptions = db.query(RiskException).filter(
+        RiskException.vendor_id == vendor_id,
+        RiskException.status.in_([EXCEPTION_STATUS_PENDING, EXCEPTION_STATUS_APPROVED]),
+    ).count()
+
+    # SLA status
+    sla = get_sla_summary(db)
+
+    return {
+        "vendor": vendor,
+        "effective_tier": effective_tier,
+        "latest_decision": latest_decision,
+        "score_history": score_history,
+        "category_scores": category_scores,
+        "flagged_count": flagged_count,
+        "overall_score": overall_score if overall_score is not None else (latest_decision.overall_score if latest_decision else None),
+        "rem_by_severity": rem_by_severity,
+        "total_open_rems": len(open_rems),
+        "active_exceptions": active_exceptions,
+        "sla": sla,
+        "framework_coverage": framework_coverage,
+    }
+
+
+@router.get("/vendors/{vendor_id}/report-card", response_class=HTMLResponse)
+async def vendor_report_card(request: Request, vendor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    ctx = _load_report_card_context(db, vendor_id)
+    return templates.TemplateResponse("vendor_report_card.html", {
+        "request": request,
+        "now": datetime.utcnow(),
+        **ctx,
+    })
+
+
+@router.get("/vendors/{vendor_id}/report-card.pdf")
+async def vendor_report_card_pdf(vendor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    from fastapi.responses import Response as FastAPIResponse
+    ctx = _load_report_card_context(db, vendor_id)
+    ctx["now"] = datetime.utcnow()
+    try:
+        pdf_bytes = generate_report_card_pdf(ctx)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    vendor_name = ctx["vendor"].name.replace(" ", "_")
+    filename = f"report_card_{vendor_name}.pdf"
+    return FastAPIResponse(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/vendors/{vendor_id}/edit", response_class=HTMLResponse)

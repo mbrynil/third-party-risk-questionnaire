@@ -13,7 +13,7 @@ from models import (
 )
 from app.services.token import generate_unique_token
 from app.services.vendor_service import find_or_create_vendor
-from app.services.portfolio import get_portfolio_data
+from app.services.portfolio import get_portfolio_data, get_executive_summary
 from app.services.remediation_service import get_portfolio_remediation_summary
 from app.services.reminder_service import get_reminder_stats
 from app.services.export_service import generate_portfolio_report_pdf, generate_vendor_list_csv
@@ -42,6 +42,7 @@ async def workspace(request: Request, db: Session = Depends(get_db), current_use
         "assessment_rows": data["assessment_rows"],
         "recent_activities": data["recent_activities"],
         "org_overview": data["org_overview"],
+        "onboarding_steps": data.get("onboarding_steps"),
     })
 
 
@@ -70,6 +71,27 @@ async def portfolio(request: Request, db: Session = Depends(get_db), current_use
         "assessment_templates": templates_list,
         "reminder_stats": reminder_stats,
         "analysts": analysts,
+    })
+
+
+# ==================== ONBOARDING DISMISS ====================
+
+@router.post("/api/onboarding/dismiss")
+async def dismiss_onboarding(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    current_user.onboarding_dismissed = True
+    db.commit()
+    return {"success": True}
+
+
+# ==================== EXECUTIVE DASHBOARD ====================
+
+@router.get("/executive", response_class=HTMLResponse)
+async def executive_dashboard(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    data = get_executive_summary(db)
+    return templates.TemplateResponse("executive_dashboard.html", {
+        "request": request,
+        "data": data,
+        "now": datetime.utcnow(),
     })
 
 

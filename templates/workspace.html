@@ -235,6 +235,61 @@
     </a>
 </div>
 
+{# ==================== ONBOARDING CHECKLIST ==================== #}
+{% if onboarding_steps %}
+<div class="card mb-4 onboarding-card" style="border: 2px solid #dbeafe; background: linear-gradient(135deg, #eff6ff 0%, #fff 100%);">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h5 class="mb-1" style="font-weight: 700; color: #1e3a5f;">
+                    <i class="bi bi-rocket-takeoff me-2"></i>Getting Started
+                </h5>
+                <p class="text-muted mb-0" style="font-size: 0.85rem;">Complete these steps to set up your vendor risk program.</p>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="dismissOnboarding()" title="Dismiss">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        {% set done_count = onboarding_steps|selectattr('done')|list|length %}
+        {% set total_count = onboarding_steps|length %}
+        {% set pct = ((done_count / total_count) * 100)|int if total_count > 0 else 0 %}
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <div class="progress flex-grow-1" style="height: 8px; border-radius: 4px;">
+                <div class="progress-bar" role="progressbar" style="width: {{ pct }}%; background: #2563eb; border-radius: 4px;" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <span style="font-size: 0.8rem; font-weight: 600; color: #4b5563;">{{ done_count }}/{{ total_count }}</span>
+        </div>
+
+        <div class="row g-2">
+            {% for step in onboarding_steps %}
+            <div class="col-12 col-md-6 col-xl">
+                <div class="d-flex align-items-center gap-2 p-2 rounded" style="background: {% if step.done %}#d1fae520{% else %}#fff{% endif %}; border: 1px solid {% if step.done %}#bbf7d0{% else %}#e5e7eb{% endif %};">
+                    {% if step.done %}
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #16a34a; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <i class="bi bi-check-lg text-white" style="font-size: 0.8rem;"></i>
+                    </div>
+                    {% else %}
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <i class="bi {{ step.icon }}" style="font-size: 0.75rem; color: #6b7280;"></i>
+                    </div>
+                    {% endif %}
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <div style="font-size: 0.8rem; font-weight: 600; {% if step.done %}color: #16a34a; text-decoration: line-through;{% else %}color: #1f2937;{% endif %}">
+                            {{ step.label }}
+                        </div>
+                    </div>
+                    {% if not step.done and step.link %}
+                    <a href="{{ step.link }}" class="btn btn-sm btn-primary" style="font-size: 0.7rem; padding: 0.2rem 0.6rem; white-space: nowrap;">Go</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# ==================== KPI ROW ==================== #}
 <div class="row g-3 mb-4">
     <div class="col-6 col-lg">
@@ -342,9 +397,10 @@
                 </div>
                 {% else %}
                 <div class="empty-state">
-                    <i class="bi bi-check-circle"></i>
-                    <h6>All caught up!</h6>
-                    <p class="small">No action items need your attention right now.</p>
+                    <i class="bi bi-check-circle" style="color: #10b981;"></i>
+                    <h6 style="color: #374151;">All caught up!</h6>
+                    <p class="small mb-2">No action items need your attention right now.</p>
+                    <a href="/assessments/tracker" class="btn btn-outline-primary btn-sm"><i class="bi bi-kanban me-1"></i>View Tracker</a>
                 </div>
                 {% endif %}
             </div>
@@ -379,9 +435,10 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="text-center py-3 text-muted small">
-                    <i class="bi bi-clock" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;"></i>
-                    No recent activity
+                <div class="text-center py-4 text-muted small">
+                    <i class="bi bi-clock-history" style="font-size:2rem;display:block;margin-bottom:0.5rem;color:#d1d5db;"></i>
+                    <p class="mb-1" style="color:#6b7280;">No recent activity</p>
+                    <span style="font-size:0.75rem;">Activity will appear here as you manage vendors and assessments.</span>
                 </div>
                 {% endif %}
             </div>
@@ -479,10 +536,13 @@
         </div>
         {% else %}
         <div class="empty-state">
-            <i class="bi bi-clipboard2"></i>
-            <h6>No assessments assigned</h6>
-            <p class="small">You don't have any assessments assigned yet. Check the assessment tracker for all assessments.</p>
-            <a href="/assessments/tracker" class="btn btn-outline-primary btn-sm"><i class="bi bi-kanban me-1"></i>Assessment Tracker</a>
+            <i class="bi bi-clipboard2-data" style="color: #d1d5db;"></i>
+            <h6 style="color: #374151;">No assessments yet</h6>
+            <p class="small mb-2">Assessments will appear here once vendors are assigned to you and questionnaires are sent.</p>
+            <div class="d-flex justify-content-center gap-2">
+                <a href="/create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Create Assessment</a>
+                <a href="/assessments/tracker" class="btn btn-outline-secondary btn-sm"><i class="bi bi-kanban me-1"></i>View Tracker</a>
+            </div>
         </div>
         {% endif %}
     </div>
@@ -562,13 +622,33 @@
         </div>
         {% else %}
         <div class="empty-state">
-            <i class="bi bi-person-plus"></i>
-            <h6>No vendors assigned</h6>
-            <p class="small">You don't have any vendors assigned yet. Browse the portfolio to see all vendors.</p>
-            <a href="/portfolio" class="btn btn-outline-primary btn-sm"><i class="bi bi-speedometer2 me-1"></i>View Portfolio</a>
+            <i class="bi bi-building" style="color: #d1d5db;"></i>
+            <h6 style="color: #374151;">No vendors assigned</h6>
+            <p class="small mb-2">Vendors will appear here once they're assigned to you. Add a vendor to get started.</p>
+            <div class="d-flex justify-content-center gap-2">
+                <a href="/vendors/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Add Vendor</a>
+                <a href="/portfolio" class="btn btn-outline-secondary btn-sm"><i class="bi bi-speedometer2 me-1"></i>View Portfolio</a>
+            </div>
         </div>
         {% endif %}
     </div>
 </div>
+
+{% if onboarding_steps %}
+<script>
+function dismissOnboarding() {
+    fetch('/api/onboarding/dismiss', { method: 'POST' })
+        .then(() => {
+            const card = document.querySelector('.onboarding-card');
+            if (card) {
+                card.style.transition = 'opacity 0.3s, transform 0.3s';
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(-10px)';
+                setTimeout(() => card.remove(), 300);
+            }
+        });
+}
+</script>
+{% endif %}
 
 {% endblock %}

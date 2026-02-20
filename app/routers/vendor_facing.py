@@ -62,6 +62,14 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
     question_options = {q.id: get_answer_options(q) for q in questions}
     question_has_custom = {q.id: has_custom_answer_options(q) for q in questions}
 
+    # Build ordered category list for section navigation
+    seen_cats = []
+    for q in questions:
+        cat = q.category or "General"
+        if cat not in seen_cats:
+            seen_cats.append(cat)
+    categories_ordered = seen_cats
+
     return templates.TemplateResponse("vendor_form.html", {
         "request": request,
         "assessment": assessment,
@@ -74,6 +82,7 @@ async def vendor_form(request: Request, token: str, email: Optional[str] = None,
         "ASSESSMENT_STATUS_REVIEWED": ASSESSMENT_STATUS_REVIEWED,
         "question_options": question_options,
         "question_has_custom": question_has_custom,
+        "categories_ordered": categories_ordered,
     })
 
 
@@ -228,6 +237,88 @@ async def check_draft(token: str, email: str, db: Session = Depends(get_db)):
         "last_saved_at": response.last_saved_at.strftime('%Y-%m-%d %H:%M:%S') if response.last_saved_at else None,
         "answers": answers_dict
     }
+
+
+@router.post("/api/vendor/{token}/auto-save")
+async def auto_save(request: Request, token: str, db: Session = Depends(get_db)):
+    """AJAX auto-save endpoint — silently saves draft answers."""
+    from models import Answer
+
+    assessment = db.query(Assessment).filter(Assessment.token == token).first()
+    if not assessment:
+        return JSONResponse(status_code=404, content={"error": "Assessment not found"})
+
+    if assessment.status in [ASSESSMENT_STATUS_SUBMITTED, ASSESSMENT_STATUS_REVIEWED]:
+        return JSONResponse(status_code=400, content={"error": "Already submitted"})
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON"})
+
+    vendor_name = (body.get("vendor_name") or "").strip()
+    vendor_email = (body.get("vendor_email") or "").strip()
+    answers = body.get("answers", {})
+
+    if not vendor_email:
+        return JSONResponse(status_code=400, content={"error": "Email required"})
+
+    # Find or create draft response
+    response = db.query(Response).filter(
+        Response.assessment_id == assessment.id,
+        Response.vendor_email == vendor_email,
+    ).order_by(Response.last_saved_at.desc()).first()
+
+    if response and response.status == RESPONSE_STATUS_SUBMITTED:
+        return JSONResponse(status_code=400, content={"error": "Already submitted"})
+
+    if not response:
+        response = Response(
+            assessment_id=assessment.id,
+            vendor_name=vendor_name or "Draft",
+            vendor_email=vendor_email,
+            status=RESPONSE_STATUS_DRAFT,
+        )
+        db.add(response)
+        db.flush()
+    else:
+        if vendor_name:
+            response.vendor_name = vendor_name
+
+    response.last_saved_at = datetime.utcnow()
+
+    # Update answers
+    questions = db.query(Question).filter(
+        Question.assessment_id == assessment.id,
+    ).all()
+    question_ids = {str(q.id) for q in questions}
+
+    existing_answers = {str(a.question_id): a for a in response.answers}
+
+    for qid_str, ans_data in answers.items():
+        if qid_str not in question_ids:
+            continue
+        choice = ans_data.get("choice", "")
+        notes = ans_data.get("notes", "")
+        if qid_str in existing_answers:
+            existing_answers[qid_str].answer_choice = choice or None
+            existing_answers[qid_str].notes = notes or None
+        else:
+            new_answer = Answer(
+                response_id=response.id,
+                question_id=int(qid_str),
+                answer_choice=choice or None,
+                notes=notes or None,
+            )
+            db.add(new_answer)
+
+    transition_to_in_progress(db, assessment)
+    db.commit()
+
+    return JSONResponse(content={
+        "success": True,
+        "saved_at": response.last_saved_at.strftime("%Y-%m-%d %H:%M:%S"),
+    })
 
 
 @router.post("/vendor/{token}/upload-evidence")

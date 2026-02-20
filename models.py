@@ -21,6 +21,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login_at = Column(DateTime, nullable=True)
+    onboarding_dismissed = Column(Boolean, default=False)
 
 
 VALID_ROLES = ["admin", "analyst", "viewer"]
@@ -1871,6 +1872,22 @@ def backfill_sla_columns():
     if "sla_enabled" not in existing:
         try:
             cursor.execute("ALTER TABLE reminder_config ADD COLUMN sla_enabled BOOLEAN DEFAULT 1")
+        except sqlite3.OperationalError:
+            pass
+    conn.commit()
+    conn.close()
+
+
+def backfill_onboarding_column():
+    """Add onboarding_dismissed column to users for existing DBs."""
+    import sqlite3
+    conn = sqlite3.connect("./questionnaires.db")
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(users)")
+    existing = {row[1] for row in cursor.fetchall()}
+    if "onboarding_dismissed" not in existing:
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN onboarding_dismissed BOOLEAN DEFAULT 0")
         except sqlite3.OperationalError:
             pass
     conn.commit()

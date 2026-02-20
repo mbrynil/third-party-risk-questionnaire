@@ -64,6 +64,12 @@ def generate_portfolio_report_pdf(context: dict) -> bytes:
     return render_html_to_pdf(html)
 
 
+def generate_report_card_pdf(context: dict) -> bytes:
+    """Render vendor_report_card.html → PDF."""
+    html = render_template_to_html("vendor_report_card.html", context)
+    return render_html_to_pdf(html)
+
+
 # ---------------------------------------------------------------------------
 # CSV helpers
 # ---------------------------------------------------------------------------

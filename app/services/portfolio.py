@@ -15,7 +15,8 @@ from models import (
 )
 from app.services.scoring import compute_assessment_scores, suggest_risk_level
 from app.services.tiering import get_effective_tier, TIER_COLORS, TIER_LABELS
-from app.services.remediation_service import get_open_remediation_count, get_overdue_remediation_count
+from app.services.remediation_service import get_open_remediation_count, get_overdue_remediation_count, get_remediation_completion_rate
+from app.services.sla_service import get_sla_summary
 
 
 RISK_LABELS = {
@@ -361,4 +362,169 @@ def get_portfolio_data(db: Session) -> dict:
         "vendors": vendor_rows,
         "heatmap": heatmap_meta,
         "trend_data": trend_data,
+    }
+
+
+def get_executive_summary(db: Session) -> dict:
+    """Aggregate data for the executive risk dashboard (read-only leadership view)."""
+    from models import RemediationItem
+
+    today = date.today()
+
+    vendors = db.query(Vendor).filter(Vendor.status == VENDOR_STATUS_ACTIVE).all()
+    total_vendors = len(vendors)
+
+    # All finalized decisions
+    all_decisions = (
+        db.query(AssessmentDecision)
+        .filter(AssessmentDecision.status == DECISION_STATUS_FINAL)
+        .order_by(AssessmentDecision.finalized_at.desc())
+        .all()
+    )
+
+    # Latest per vendor
+    latest_by_vendor = {}
+    for d in all_decisions:
+        if d.vendor_id not in latest_by_vendor:
+            latest_by_vendor[d.vendor_id] = d
+
+    # Portfolio risk score (avg of latest decision scores)
+    scored = [d.overall_score for d in latest_by_vendor.values() if d.overall_score is not None]
+    avg_score = round(sum(scored) / len(scored), 1) if scored else None
+
+    # SLA
+    sla = get_sla_summary(db)
+    sla_compliance = None
+    if sla.get("enabled"):
+        total_tracked = sla.get("breach_count", 0) + sla.get("at_risk_count", 0) + max(0, len(all_decisions) - sla.get("breach_count", 0) - sla.get("at_risk_count", 0))
+        if total_tracked > 0:
+            sla_compliance = round(((total_tracked - sla.get("breach_count", 0)) / total_tracked) * 100, 1)
+
+    # Remediation completion %
+    rem_completion = get_remediation_completion_rate(db)
+
+    # Headline KPIs
+    headline_kpis = {
+        "total_vendors": total_vendors,
+        "portfolio_risk_score": avg_score,
+        "sla_compliance": sla_compliance,
+        "remediation_completion": rem_completion,
+    }
+
+    # Risk posture: distribution + trend direction
+    risk_order = [
+        RISK_LEVEL_VERY_LOW, RISK_LEVEL_LOW, RISK_LEVEL_MODERATE,
+        RISK_LEVEL_HIGH, RISK_LEVEL_VERY_HIGH,
+    ]
+    risk_counts = {r: 0 for r in risk_order}
+    for d in latest_by_vendor.values():
+        if d.overall_risk_rating and d.overall_risk_rating in risk_counts:
+            risk_counts[d.overall_risk_rating] += 1
+
+    risk_distribution = {
+        "labels": [RISK_LABELS[r] for r in risk_order],
+        "counts": [risk_counts[r] for r in risk_order],
+        "colors": [RISK_COLORS[r] for r in risk_order],
+    }
+
+    # Trend direction from last 3 months of snapshots
+    three_months_ago = today - timedelta(days=90)
+    recent_snapshots = db.query(RiskSnapshot).filter(
+        RiskSnapshot.snapshot_date >= datetime.combine(three_months_ago, datetime.min.time()),
+        RiskSnapshot.overall_score != None,
+    ).order_by(RiskSnapshot.snapshot_date).all()
+
+    trend_direction = "stable"
+    if len(recent_snapshots) >= 2:
+        first_half = recent_snapshots[:len(recent_snapshots)//2]
+        second_half = recent_snapshots[len(recent_snapshots)//2:]
+        avg_first = sum(s.overall_score for s in first_half) / len(first_half)
+        avg_second = sum(s.overall_score for s in second_half) / len(second_half)
+        diff = avg_second - avg_first
+        if diff >= 3:
+            trend_direction = "improving"
+        elif diff <= -3:
+            trend_direction = "worsening"
+
+    # Top 5 riskiest vendors (lowest scores)
+    top_riskiest = []
+    vendor_map = {v.id: v for v in vendors}
+    sorted_decisions = sorted(
+        [(vid, d) for vid, d in latest_by_vendor.items() if d.overall_score is not None],
+        key=lambda x: x[1].overall_score
+    )
+    for vid, d in sorted_decisions[:5]:
+        v = vendor_map.get(vid)
+        if not v:
+            continue
+        eff_tier = get_effective_tier(v)
+        open_rems = db.query(RemediationItem).filter(
+            RemediationItem.vendor_id == vid,
+            RemediationItem.status.notin_(["CLOSED", "VERIFIED"]),
+        ).count()
+        top_riskiest.append({
+            "id": vid,
+            "name": v.name,
+            "score": d.overall_score,
+            "tier": eff_tier,
+            "rating": RISK_LABELS.get(d.overall_risk_rating, d.overall_risk_rating or ""),
+            "open_remediations": open_rems,
+        })
+
+    # Assessment pipeline
+    all_assessments = db.query(Assessment).all()
+    status_order = [
+        ASSESSMENT_STATUS_DRAFT, ASSESSMENT_STATUS_SENT,
+        ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
+        ASSESSMENT_STATUS_REVIEWED,
+    ]
+    status_counts = {s: 0 for s in status_order}
+    for a in all_assessments:
+        if a.status in status_counts:
+            status_counts[a.status] += 1
+    assessment_pipeline = {
+        "labels": [STATUS_LABELS[s] for s in status_order],
+        "counts": [status_counts[s] for s in status_order],
+        "colors": [STATUS_COLORS[s] for s in status_order],
+    }
+
+    # SLA stats
+    sla_stats = {
+        "enabled": sla.get("enabled", False),
+        "breach_count": sla.get("breach_count", 0),
+        "at_risk_count": sla.get("at_risk_count", 0),
+        "avg_response_days": sla.get("avg_response_days"),
+        "avg_review_days": sla.get("avg_review_days"),
+    }
+
+    # Overdue items
+    overdue_reviews = sum(
+        1 for d in latest_by_vendor.values()
+        if d.next_review_date and d.next_review_date.date() < today
+    )
+    overdue_remediations = get_overdue_remediation_count(db)
+
+    # Recent decisions (last 5)
+    recent_decisions = []
+    for d in all_decisions[:5]:
+        v = vendor_map.get(d.vendor_id)
+        recent_decisions.append({
+            "vendor_name": v.name if v else (d.assessment.company_name if d.assessment else "Unknown"),
+            "vendor_id": d.vendor_id,
+            "outcome": DECISION_LABELS.get(d.decision_outcome, d.decision_outcome or ""),
+            "risk_rating": RISK_LABELS.get(d.overall_risk_rating, d.overall_risk_rating or ""),
+            "score": d.overall_score,
+            "date": d.finalized_at.strftime("%Y-%m-%d") if d.finalized_at else "",
+        })
+
+    return {
+        "headline_kpis": headline_kpis,
+        "risk_distribution": risk_distribution,
+        "trend_direction": trend_direction,
+        "top_riskiest": top_riskiest,
+        "assessment_pipeline": assessment_pipeline,
+        "sla": sla_stats,
+        "overdue_reviews": overdue_reviews,
+        "overdue_remediations": overdue_remediations,
+        "recent_decisions": recent_decisions,
     }

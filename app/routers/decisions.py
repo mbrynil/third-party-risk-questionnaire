@@ -33,6 +33,8 @@ from models import (
     NOTIF_APPROVAL_REQUESTED, NOTIF_DECISION_APPROVED,
     RiskSnapshot, User, QuestionBankItem, FRAMEWORK_DISPLAY,
     AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_DECISION,
+    RemediationItem, RiskException,
+    EXCEPTION_STATUS_PENDING, EXCEPTION_STATUS_APPROVED,
 )
 
 router = APIRouter()
@@ -118,6 +120,34 @@ def _load_decision_context(db: Session, assessment_id: int):
         for k, v in sorted(framework_counts.items(), key=lambda x: -x[1])
     ]
 
+    # Remediation items for this decision
+    remediation_items = db.query(RemediationItem).filter(
+        RemediationItem.decision_id == decision.id
+    ).order_by(RemediationItem.severity).all() if decision.id else []
+
+    # Active exceptions/waivers for this vendor
+    vendor_exceptions = db.query(RiskException).filter(
+        RiskException.vendor_id == vendor.id,
+        RiskException.status.in_([EXCEPTION_STATUS_PENDING, EXCEPTION_STATUS_APPROVED]),
+    ).order_by(RiskException.created_at.desc()).all()
+
+    # Score history from RiskSnapshot
+    snapshots = db.query(RiskSnapshot).filter(
+        RiskSnapshot.vendor_id == vendor.id,
+    ).order_by(RiskSnapshot.snapshot_date.asc()).all()
+    RISK_LABELS = {"VERY_LOW": "Very Low", "LOW": "Low", "MODERATE": "Moderate", "HIGH": "High", "VERY_HIGH": "Very High"}
+    score_history = []
+    for s in snapshots:
+        is_current = (s.decision_id == decision.id) if decision.id else False
+        score_history.append({
+            "date": s.snapshot_date.strftime("%Y-%m-%d") if s.snapshot_date else "",
+            "score": s.overall_score,
+            "rating": RISK_LABELS.get(s.risk_rating, s.risk_rating or ""),
+            "is_current": is_current,
+        })
+
+    effective_tier = get_effective_tier(vendor)
+
     return {
         "assessment": assessment,
         "vendor": vendor,
@@ -132,6 +162,10 @@ def _load_decision_context(db: Session, assessment_id: int):
         "followup_total": followup_total,
         "followup_open": followup_open,
         "framework_coverage": framework_coverage,
+        "remediation_items": remediation_items,
+        "vendor_exceptions": vendor_exceptions,
+        "score_history": score_history,
+        "effective_tier": effective_tier,
     }
 
 
@@ -216,6 +250,11 @@ async def assessment_report_page(request: Request, assessment_id: int, db: Sessi
         "evidence_files": ctx["evidence_files"],
         "follow_ups": ctx["follow_ups"],
         "now": datetime.utcnow(),
+        "framework_coverage": ctx["framework_coverage"],
+        "remediation_items": ctx["remediation_items"],
+        "vendor_exceptions": ctx["vendor_exceptions"],
+        "score_history": ctx["score_history"],
+        "effective_tier": ctx["effective_tier"],
     })
 
 
@@ -238,6 +277,11 @@ async def assessment_report_pdf(assessment_id: int, db: Session = Depends(get_db
         "evidence_files": ctx["evidence_files"],
         "follow_ups": ctx["follow_ups"],
         "now": datetime.utcnow(),
+        "framework_coverage": ctx["framework_coverage"],
+        "remediation_items": ctx["remediation_items"],
+        "vendor_exceptions": ctx["vendor_exceptions"],
+        "score_history": ctx["score_history"],
+        "effective_tier": ctx["effective_tier"],
     }
     try:
         pdf_bytes = generate_assessment_report_pdf(template_ctx)

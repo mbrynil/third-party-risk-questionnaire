@@ -17,25 +17,43 @@
             margin: 0 auto;
             padding: 2rem;
         }
-        .report-header {
-            border-bottom: 3px solid #1e3a5f;
-            padding-bottom: 1.5rem;
+        .report-banner {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 10px;
             margin-bottom: 2rem;
         }
-        .report-header h1 {
-            color: #1e3a5f;
+        .report-banner h1 {
             font-weight: 700;
-            font-size: 1.75rem;
-            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
         }
-        .report-header .company-name {
-            color: #6b7280;
-            font-size: 1rem;
+        .report-banner .subtitle {
+            opacity: 0.85;
+            font-size: 0.9rem;
+        }
+        .banner-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-top: 0.75rem;
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+        .banner-meta span { white-space: nowrap; }
+        .tier-pill {
+            display: inline-block;
+            padding: 0.2rem 0.75rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.2);
         }
         .meta-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 1rem;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
             background: #f9fafb;
             padding: 1rem;
             border-radius: 8px;
@@ -46,14 +64,14 @@
             flex-direction: column;
         }
         .meta-label {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             text-transform: uppercase;
             color: #6b7280;
             font-weight: 600;
             letter-spacing: 0.05em;
         }
         .meta-value {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             color: #111827;
             font-weight: 500;
         }
@@ -73,11 +91,11 @@
             font-weight: 700;
             font-size: 1.1rem;
         }
-        .badge-risk-very-high { background: #f8d7da; color: #dc3545; }
+        .badge-risk-very_high { background: #f8d7da; color: #dc3545; }
         .badge-risk-high { background: #fff3cd; color: #fd7e14; }
         .badge-risk-moderate { background: #fff9e6; color: #b8860b; }
         .badge-risk-low { background: #d1e7dd; color: #198754; }
-        .badge-risk-very-low { background: #d1e7dd; color: #198754; }
+        .badge-risk-very_low { background: #d1e7dd; color: #198754; }
         .badge-outcome-approve { background: #d1e7dd; color: #198754; }
         .badge-outcome-approve_with_conditions { background: #fff3cd; color: #fd7e14; }
         .badge-outcome-needs_follow_up { background: #fff3cd; color: #b8860b; }
@@ -220,6 +238,40 @@
             right: 1rem;
             z-index: 1000;
         }
+        .fw-tag {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            margin: 0.15rem;
+        }
+        .score-timeline {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .score-point {
+            text-align: center;
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            border: 1px solid #e5e7eb;
+            min-width: 60px;
+        }
+        .score-point.current {
+            border: 2px solid #2563eb;
+            background: #eff6ff;
+        }
+        .score-point .sp-score { font-weight: 700; font-size: 1rem; }
+        .score-point .sp-date { font-size: 0.65rem; color: #6b7280; }
+        .score-arrow { color: #9ca3af; font-size: 0.9rem; }
+        .severity-critical { color: #dc3545; }
+        .severity-high { color: #fd7e14; }
+        .severity-medium { color: #ffc107; }
+        .severity-low { color: #6c757d; }
 
         @media print {
             .print-btn, .no-print {
@@ -233,6 +285,13 @@
                 max-width: 100%;
                 padding: 0;
             }
+            @page {
+                margin: 1.5cm;
+            }
+            .report-banner {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
             .category-block, .evidence-item, .followup-item {
                 page-break-inside: avoid;
                 break-inside: avoid;
@@ -245,8 +304,9 @@
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-            .decision-badge, .weight-badge, .eval-badge,
-            .category-bar-fill, .findings-block, .remediation-block, .rationale-block {
+            .decision-badge, .weight-badge, .eval-badge, .fw-tag,
+            .category-bar-fill, .findings-block, .remediation-block, .rationale-block,
+            .score-point, .score-point.current {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
@@ -259,54 +319,78 @@
 </head>
 <body>
     <div class="print-btn no-print d-flex gap-2">
+        <a href="/assessments/{{ assessment.id }}/decision" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back
+        </a>
         <a href="/assessments/{{ assessment.id }}/report.pdf" class="btn btn-success">
             <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
         </a>
         <button class="btn btn-primary" onclick="window.print()">
-            <i class="bi bi-printer me-1"></i>Print / Save PDF
+            <i class="bi bi-printer me-1"></i>Print
         </button>
     </div>
 
     <div class="report-container">
 
-        {# ==================== HEADER ==================== #}
-        <div class="report-header">
-            <p class="company-name mb-1">{{ assessment.company_name }}</p>
-            <h1>{{ assessment.title }}</h1>
-            <p class="text-muted mb-0">Vendor Risk Assessment Report</p>
+        {# ==================== PROFESSIONAL HEADER BANNER ==================== #}
+        <div class="report-banner">
+            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <div>
+                    <h1>{{ vendor.name }}</h1>
+                    <div class="subtitle">{{ assessment.title }} — Vendor Risk Assessment Report</div>
+                </div>
+                <div class="text-end">
+                    {% if effective_tier %}
+                    <span class="tier-pill">{{ effective_tier }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="banner-meta">
+                {% if decision.decided_by %}
+                <span><i class="bi bi-person me-1"></i>{{ decision.decided_by.display_name }}</span>
+                {% endif %}
+                {% if decision.finalized_at %}
+                <span><i class="bi bi-check-circle me-1"></i>Finalized {{ decision.finalized_at.strftime('%Y-%m-%d') }}</span>
+                {% endif %}
+                <span><i class="bi bi-file-text me-1"></i>Generated {{ now.strftime('%Y-%m-%d') }}</span>
+                {% if decision.overall_risk_rating %}
+                <span><i class="bi bi-shield me-1"></i>{{ decision.overall_risk_rating.replace('_', ' ').title() }} Risk</span>
+                {% endif %}
+            </div>
         </div>
 
-        {# ==================== META GRID ==================== #}
+        {# ==================== VENDOR CONTEXT ==================== #}
         <div class="meta-grid">
             <div class="meta-item">
-                <span class="meta-label">Vendor</span>
-                <span class="meta-value">{{ vendor.name }}</span>
+                <span class="meta-label">Industry</span>
+                <span class="meta-value">{{ vendor.industry or 'N/A' }}</span>
             </div>
             <div class="meta-item">
-                <span class="meta-label">Contact</span>
-                <span class="meta-value">{{ response.vendor_email if response else 'N/A' }}</span>
+                <span class="meta-label">Service Type</span>
+                <span class="meta-value">{{ vendor.service_type or 'N/A' }}</span>
             </div>
             <div class="meta-item">
-                <span class="meta-label">Assessment Date</span>
-                <span class="meta-value">{{ response.submitted_at.strftime('%Y-%m-%d %H:%M UTC') if response and response.submitted_at else 'N/A' }}</span>
+                <span class="meta-label">Data Classification</span>
+                <span class="meta-value">{{ vendor.data_classification.replace('_', ' ').title() if vendor.data_classification else 'N/A' }}</span>
             </div>
             <div class="meta-item">
-                <span class="meta-label">Report Date</span>
-                <span class="meta-value">{{ now.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+                <span class="meta-label">Business Criticality</span>
+                <span class="meta-value">{{ vendor.business_criticality.replace('_', ' ').title() if vendor.business_criticality else 'N/A' }}</span>
             </div>
-            {% if decision.decided_by %}
             <div class="meta-item">
-                <span class="meta-label">Reviewed By</span>
-                <span class="meta-value">{{ decision.decided_by.display_name }}</span>
+                <span class="meta-label">Access Level</span>
+                <span class="meta-value">{{ vendor.access_level.replace('_', ' ').title() if vendor.access_level else 'N/A' }}</span>
             </div>
-            {% endif %}
+            <div class="meta-item">
+                <span class="meta-label">Contract End</span>
+                <span class="meta-value">{{ vendor.contract_end_date.strftime('%Y-%m-%d') if vendor.contract_end_date else 'N/A' }}</span>
+            </div>
         </div>
 
         {# ==================== EXECUTIVE SUMMARY ==================== #}
         <h2 class="section-title"><i class="bi bi-clipboard-data me-2"></i>Executive Summary</h2>
 
         <div class="text-center mb-4">
-            {# Decision badges #}
             <div class="d-flex justify-content-center gap-3 flex-wrap mb-4">
                 {% if decision.overall_risk_rating %}
                 <span class="decision-badge badge-risk-{{ decision.overall_risk_rating|lower }}">
@@ -320,7 +404,6 @@
                 {% endif %}
             </div>
 
-            {# Score circle #}
             {% set score = scores.overall_score %}
             {% if score is not none %}
                 {% if score >= 90 %}
@@ -345,7 +428,6 @@
                     <text x="80" y="94" text-anchor="middle" font-size="13" fill="#6c757d">out of 100</text>
                 </svg>
 
-                {# Stats row #}
                 <div class="stat-row">
                     <div class="stat-item" style="background: #f8f9fa;">
                         <div class="stat-value text-primary">{{ total_questions }}</div>
@@ -374,6 +456,41 @@
             </div>
             {% endif %}
         </div>
+
+        {# ==================== SCORE HISTORY TIMELINE ==================== #}
+        {% if score_history and score_history|length > 1 %}
+        <h2 class="section-title"><i class="bi bi-clock-history me-2"></i>Score History</h2>
+        <div class="score-timeline mb-4">
+            {% for sh in score_history %}
+            {% if not loop.first %}<span class="score-arrow"><i class="bi bi-arrow-right"></i></span>{% endif %}
+            <div class="score-point {% if sh.is_current %}current{% endif %}">
+                {% if sh.score is not none %}
+                    {% if sh.score >= 90 %}{% set sh_color = "#198754" %}
+                    {% elif sh.score >= 70 %}{% set sh_color = "#0dcaf0" %}
+                    {% elif sh.score >= 50 %}{% set sh_color = "#ffc107" %}
+                    {% else %}{% set sh_color = "#dc3545" %}{% endif %}
+                <div class="sp-score" style="color: {{ sh_color }};">{{ sh.score }}</div>
+                {% else %}
+                <div class="sp-score text-muted">--</div>
+                {% endif %}
+                <div class="sp-date">{{ sh.date }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# ==================== FRAMEWORK COVERAGE ==================== #}
+        {% if framework_coverage %}
+        <h2 class="section-title"><i class="bi bi-diagram-3 me-2"></i>Framework Coverage</h2>
+        <div class="mb-4">
+            {% set fw_colors = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#dc2626", "#4f46e5", "#0d9488"] %}
+            {% for fw in framework_coverage %}
+            <span class="fw-tag" style="background: {{ fw_colors[loop.index0 % fw_colors|length] }}15; color: {{ fw_colors[loop.index0 % fw_colors|length] }}; border: 1px solid {{ fw_colors[loop.index0 % fw_colors|length] }}30;">
+                {{ fw.label }} ({{ fw.count }})
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         {# ==================== IMPACT ASSESSMENT ==================== #}
         <h2 class="section-title"><i class="bi bi-graph-up me-2"></i>Impact Assessment</h2>
@@ -511,10 +628,72 @@
         <div class="findings-block">{{ decision.key_findings }}</div>
         {% endif %}
 
-        {# ==================== REMEDIATION ==================== #}
+        {# ==================== REMEDIATION REQUIREMENTS (free text) ==================== #}
         {% if decision.remediation_required %}
         <h2 class="section-title"><i class="bi bi-tools me-2"></i>Remediation Requirements</h2>
         <div class="remediation-block">{{ decision.remediation_required }}</div>
+        {% endif %}
+
+        {# ==================== REMEDIATION ITEMS TABLE ==================== #}
+        {% if remediation_items %}
+        <h2 class="section-title"><i class="bi bi-list-check me-2"></i>Remediation Items ({{ remediation_items|length }})</h2>
+        <table class="table table-sm" style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th style="width:80px">Severity</th>
+                    <th>Item</th>
+                    <th style="width:100px">Status</th>
+                    <th style="width:100px">Due Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rem in remediation_items %}
+                <tr>
+                    <td>
+                        <span class="weight-badge {% if rem.severity == 'CRITICAL' %}weight-critical{% elif rem.severity == 'HIGH' %}weight-high{% elif rem.severity == 'MEDIUM' %}weight-medium{% else %}weight-low{% endif %}">
+                            {{ rem.severity }}
+                        </span>
+                    </td>
+                    <td>{{ rem.title[:100] }}{% if rem.title|length > 100 %}...{% endif %}</td>
+                    <td>
+                        <span class="eval-badge {% if rem.status == 'CLOSED' or rem.status == 'VERIFIED' %}eval-meets{% elif rem.status == 'IN_PROGRESS' %}eval-partial{% else %}eval-dnm{% endif %}">
+                            {{ rem.status.replace('_', ' ').title() }}
+                        </span>
+                    </td>
+                    <td class="text-muted">{{ rem.due_date.strftime('%Y-%m-%d') if rem.due_date else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {# ==================== ACTIVE EXCEPTIONS / WAIVERS ==================== #}
+        {% if vendor_exceptions %}
+        <h2 class="section-title"><i class="bi bi-shield-exclamation me-2"></i>Active Exceptions / Waivers ({{ vendor_exceptions|length }})</h2>
+        <table class="table table-sm" style="font-size: 0.85rem;">
+            <thead>
+                <tr>
+                    <th>Exception</th>
+                    <th style="width:90px">Status</th>
+                    <th>Risk Accepted</th>
+                    <th style="width:100px">Expires</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exc in vendor_exceptions %}
+                <tr>
+                    <td>{{ exc.title[:100] }}{% if exc.title|length > 100 %}...{% endif %}</td>
+                    <td>
+                        <span class="eval-badge {% if exc.status == 'APPROVED' %}eval-meets{% else %}eval-partial{% endif %}">
+                            {{ exc.status.title() }}
+                        </span>
+                    </td>
+                    <td class="text-muted">{{ exc.risk_accepted[:80] if exc.risk_accepted else '—' }}{% if exc.risk_accepted and exc.risk_accepted|length > 80 %}...{% endif %}</td>
+                    <td class="text-muted">{{ exc.expires_at.strftime('%Y-%m-%d') if exc.expires_at else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% endif %}
 
         {# ==================== RATIONALE ==================== #}
