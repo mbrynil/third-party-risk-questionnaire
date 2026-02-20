@@ -53,6 +53,13 @@
                         <tr class="question-row" data-text="{{ item.text|lower }}">
                             <td class="w-50">
                                 <span class="{% if not item.is_active %}text-muted text-decoration-line-through{% endif %}">{{ item.text }}</span>
+                                {% if item.framework_ref %}
+                                <div class="mt-1">
+                                    {% for fw in item.framework_ref.split(',') %}
+                                    <span class="badge bg-light text-primary border border-primary-subtle" style="font-size:0.65rem;">{{ fw.strip() }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if has_custom_answer_options(item) %}

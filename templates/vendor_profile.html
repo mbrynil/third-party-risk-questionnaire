@@ -122,6 +122,136 @@
     </div>
 </div>
 
+{# ==================== HEALTH SUMMARY CARD ==================== #}
+{% set _latest_decision = namespace(obj=None) %}
+{% set _next_review = namespace(date=None) %}
+{% for aid, dec in decisions.items() %}
+    {% if dec.status == 'FINAL' %}
+        {% if not _latest_decision.obj or (dec.finalized_at and (not _latest_decision.obj.finalized_at or dec.finalized_at > _latest_decision.obj.finalized_at)) %}
+            {% set _latest_decision.obj = dec %}
+        {% endif %}
+        {% if dec.next_review_date %}
+            {% if not _next_review.date or dec.next_review_date > _next_review.date %}
+                {% set _next_review.date = dec.next_review_date %}
+            {% endif %}
+        {% endif %}
+    {% endif %}
+{% endfor %}
+{% set _last_assessed = namespace(date=None) %}
+{% for q in assessments %}
+    {% for r in q.responses %}
+        {% if r.status == 'SUBMITTED' and r.submitted_at %}
+            {% if not _last_assessed.date or r.submitted_at > _last_assessed.date %}
+                {% set _last_assessed.date = r.submitted_at %}
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+{% set _overdue_count = namespace(val=0) %}
+{% for rem in remediations %}
+    {% if rem.due_date and rem.due_date.date() < current_date and rem.status not in ['CLOSED', 'VERIFIED'] %}
+        {% set _overdue_count.val = _overdue_count.val + 1 %}
+    {% endif %}
+{% endfor %}
+{% set _contract_status = namespace(label='N/A', color='secondary') %}
+{% if vendor.contract_end_date %}
+    {% if vendor.contract_end_date < current_date %}
+        {% set _contract_status.label = 'Expired' %}
+        {% set _contract_status.color = 'danger' %}
+    {% elif (vendor.contract_end_date - current_date).days <= 90 %}
+        {% set _contract_status.label = 'Expiring' %}
+        {% set _contract_status.color = 'warning' %}
+    {% else %}
+        {% set _contract_status.label = 'Active' %}
+        {% set _contract_status.color = 'success' %}
+    {% endif %}
+{% endif %}
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-body py-3 px-3">
+        <div class="row g-3 text-center">
+            {# 1. Tier #}
+            <div class="col">
+                <div class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;">Tier</div>
+                {% if effective_tier %}
+                <span class="badge" style="background:{{ tier_colors.get(effective_tier, '#6c757d') }};color:#fff;font-size:0.8rem;">{{ effective_tier }}</span>
+                {% else %}
+                <span class="text-muted small">&mdash;</span>
+                {% endif %}
+            </div>
+            {# 2. Risk Rating #}
+            <div class="col">
+                <div class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;">Risk Rating</div>
+                {% if _latest_decision.obj and _latest_decision.obj.overall_risk_rating %}
+                    {% set _rr = _latest_decision.obj.overall_risk_rating %}
+                    {% if _rr in ['VERY_LOW', 'LOW'] %}
+                    <span class="badge bg-success" style="font-size:0.8rem;">{{ _rr.replace('_', ' ').title() }}</span>
+                    {% elif _rr == 'MODERATE' %}
+                    <span class="badge bg-warning text-dark" style="font-size:0.8rem;">Moderate</span>
+                    {% else %}
+                    <span class="badge bg-danger" style="font-size:0.8rem;">{{ _rr.replace('_', ' ').title() }}</span>
+                    {% endif %}
+                {% else %}
+                <span class="text-muted small">&mdash;</span>
+                {% endif %}
+            </div>
+            {# 3. Score #}
+            <div class="col">
+                <div class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;">Score</div>
+                {% if _latest_decision.obj and _latest_decision.obj.overall_score is not none %}
+                <span class="fw-bold" style="font-size:1.1rem;">{{ _latest_decision.obj.overall_score }}%</span>
+                {% else %}
+                <span class="text-muted small">&mdash;</span>
+                {% endif %}
+            </div>
+            {# 4. Open Items #}
+            <div class="col">
+                <div class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;">Open Items</div>
+                {% if remediation_stats.open > 0 %}
+                <span class="fw-bold text-danger" style="font-size:1.1rem;">{{ remediation_stats.open }}</span>
+                {% else %}
+                <span class="fw-bold text-success" style="font-size:1.1rem;">0</span>
+                {% endif %}
+            </div>
+            {# 5. Overdue #}
+            <div class="col">
+                <div class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;">Overdue</div>
+                {% if _overdue_count.val > 0 %}
+                <span class="fw-bold text-danger" style="font-size:1.1rem;"><i class="bi bi-exclamation-triangle-fill me-1" style="font-size:0.8rem;"></i>{{ _overdue_count.val }}</span>
+                {% else %}
+                <span class="fw-bold text-success" style="font-size:1.1rem;">0</span>
+                {% endif %}
+            </div>
+            {# 6. Contract Status #}
+            <div class="col">
+                <div class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;">Contract</div>
+                <span class="badge bg-{{ _contract_status.color }}{% if _contract_status.color == 'warning' %} text-dark{% endif %}" style="font-size:0.8rem;">{{ _contract_status.label }}</span>
+            </div>
+            {# 7. Last Assessed #}
+            <div class="col">
+                <div class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;">Last Assessed</div>
+                {% if _last_assessed.date %}
+                <span class="fw-semibold small">{{ _last_assessed.date.strftime('%Y-%m-%d') }}</span>
+                {% else %}
+                <span class="text-muted small">&mdash;</span>
+                {% endif %}
+            </div>
+            {# 8. Next Review #}
+            <div class="col">
+                <div class="text-muted small text-uppercase mb-1" style="font-size:0.7rem;">Next Review</div>
+                {% if _next_review.date %}
+                    {% if _next_review.date.date() < current_date %}
+                    <span class="fw-semibold small text-danger"><i class="bi bi-exclamation-circle me-1"></i>{{ _next_review.date.strftime('%Y-%m-%d') }}</span>
+                    {% else %}
+                    <span class="fw-semibold small">{{ _next_review.date.strftime('%Y-%m-%d') }}</span>
+                    {% endif %}
+                {% else %}
+                <span class="text-muted small">&mdash;</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 {# ==================== OVERVIEW CARD ==================== #}
 <div class="card mb-4">
     <div class="card-header"><h6 class="mb-0">Overview</h6></div>
@@ -492,6 +622,96 @@
     {% endif %}
 </div>
 
+{# ==================== EXCEPTIONS & WAIVERS ==================== #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">
+            Exceptions & Waivers
+            {% if vendor_exceptions %}
+            <span class="badge bg-secondary ms-2">{{ vendor_exceptions|length }}</span>
+            {% endif %}
+        </h6>
+        {% set current_user = request.state.current_user %}
+        {% if current_user and current_user.role in ['admin', 'analyst'] %}
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#requestExceptionModal">
+            <i class="bi bi-plus-lg me-1"></i>Request Exception
+        </button>
+        {% endif %}
+    </div>
+    {% if vendor_exceptions %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Created By</th>
+                    <th>Expires</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exc in vendor_exceptions %}
+                <tr>
+                    <td>
+                        <div class="fw-semibold">{{ exc.title[:80] }}{% if exc.title|length > 80 %}...{% endif %}</div>
+                        {% if exc.risk_accepted %}
+                        <small class="text-muted">{{ exc.risk_accepted[:60] }}{% if exc.risk_accepted|length > 60 %}...{% endif %}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if exc.status == 'PENDING' %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        {% elif exc.status == 'APPROVED' %}
+                        <span class="badge bg-success">Approved</span>
+                        {% elif exc.status == 'REJECTED' %}
+                        <span class="badge bg-danger">Rejected</span>
+                        {% elif exc.status == 'EXPIRED' %}
+                        <span class="badge bg-secondary">Expired</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ exc.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if exc.created_by %}
+                        {{ exc.created_by.display_name }}
+                        {% else %}
+                        <span class="text-muted">--</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if exc.expires_at %}
+                        {{ exc.expires_at.strftime('%Y-%m-%d') }}
+                        {% else %}
+                        <span class="text-muted">No expiry</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if exc.status == 'PENDING' and current_user and current_user.role == 'admin' %}
+                        <form method="post" action="/exceptions/{{ exc.id }}/approve" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Approve"><i class="bi bi-check-lg"></i></button>
+                        </form>
+                        <form method="post" action="/exceptions/{{ exc.id }}/reject" style="display:inline;"
+                              onsubmit="return confirm('Reject this exception?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Reject"><i class="bi bi-x-lg"></i></button>
+                        </form>
+                        {% elif exc.status == 'APPROVED' and exc.approved_by %}
+                        <small class="text-muted">by {{ exc.approved_by.display_name }}</small>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-4 text-muted">
+        <i class="bi bi-shield-exclamation" style="font-size: 1.5rem;"></i>
+        <p class="mt-2 mb-0 small">No exceptions or waivers.</p>
+    </div>
+    {% endif %}
+</div>
+
 {# ==================== REMEDIATIONS ==================== #}
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -581,9 +801,16 @@
     <div class="card-header"><h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Activity Timeline</h6></div>
     {% if timeline %}
     <div class="card-body py-3">
+        <div class="mb-3 d-flex flex-wrap gap-2" id="activityFilters">
+            <button class="btn btn-sm btn-primary rounded-pill activity-filter active" data-filter="all">All</button>
+            <button class="btn btn-sm btn-outline-secondary rounded-pill activity-filter" data-filter="ASSESSMENT_CREATED,ASSESSMENT_SENT,VENDOR_SUBMITTED">Assessments</button>
+            <button class="btn btn-sm btn-outline-secondary rounded-pill activity-filter" data-filter="DECISION_FINALIZED">Decisions</button>
+            <button class="btn btn-sm btn-outline-secondary rounded-pill activity-filter" data-filter="VENDOR_CREATED,TIER_CHANGED,ANALYST_ASSIGNED">Changes</button>
+            <button class="btn btn-sm btn-outline-secondary rounded-pill activity-filter" data-filter="REMINDER_SENT">Reminders</button>
+        </div>
         <div style="position:relative; padding-left: 28px;">
             {% for event in timeline %}
-            <div style="position:relative; padding-bottom: {{ '0' if loop.last else '1.25rem' }};">
+            <div style="position:relative; padding-bottom: {{ '0' if loop.last else '1.25rem' }};" data-activity-type="{{ event.activity_type }}">
                 {# Vertical line #}
                 {% if not loop.last %}
                 <div style="position:absolute; left:-20px; top:10px; bottom:0; width:2px; background:{{ activity_colors.get(event.activity_type, '#dee2e6') }}20;"></div>
@@ -874,6 +1101,47 @@
 {% endfor %}
 
 {# ==================== MODALS ==================== #}
+
+{# Request Exception Modal #}
+<div class="modal fade" id="requestExceptionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/vendors/{{ vendor.id }}/exceptions">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-shield-exclamation me-2"></i>Request Exception / Waiver</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required placeholder="e.g., Waiver for missing SOC 2 report">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Risk Accepted</label>
+                        <input type="text" name="risk_accepted" class="form-control" placeholder="Describe the risk being accepted">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Justification</label>
+                        <textarea name="justification" class="form-control" rows="3" placeholder="Why is this exception needed?"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" rows="2" placeholder="Additional details..."></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Expiry Date</label>
+                        <input type="date" name="expires_at" class="form-control">
+                        <small class="text-muted">Leave blank for no expiry.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 {# Add Contact Modal #}
 <div class="modal fade" id="addContactModal" tabindex="-1" aria-hidden="true">
@@ -1178,6 +1446,29 @@ document.querySelectorAll('.contact-select').forEach(function(select) {
             emailInput.value = '';
             nameInput.value = '';
         }
+    });
+});
+</script>
+
+<script>
+document.querySelectorAll('.activity-filter').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.activity-filter').forEach(function(b) {
+            b.classList.remove('btn-primary', 'active');
+            b.classList.add('btn-outline-secondary');
+        });
+        this.classList.remove('btn-outline-secondary');
+        this.classList.add('btn-primary', 'active');
+
+        var filter = this.dataset.filter;
+        var types = filter === 'all' ? null : filter.split(',');
+        document.querySelectorAll('[data-activity-type]').forEach(function(ev) {
+            if (!types || types.indexOf(ev.dataset.activityType) !== -1) {
+                ev.style.display = '';
+            } else {
+                ev.style.display = 'none';
+            }
+        });
     });
 });
 </script>

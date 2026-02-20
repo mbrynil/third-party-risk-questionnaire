@@ -14,11 +14,21 @@ from models import (
 )
 from app.services.reminder_service import get_reminder_stats
 from app.services.scheduler import run_now
-from app.services.auth_service import require_role
+from app.services.auth_service import require_login, require_role
 
 router = APIRouter()
 
 _admin_dep = require_role("admin")
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_hub(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    from models import TieringRule, ScoringConfig
+    tiering_count = db.query(TieringRule).count()
+    return templates.TemplateResponse("settings_hub.html", {
+        "request": request,
+        "tiering_count": tiering_count,
+    })
 
 
 @router.get("/settings/reminders", response_class=HTMLResponse)

@@ -1,6 +1,9 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
-from models import AssessmentDecision, DECISION_STATUS_DRAFT, DECISION_STATUS_FINAL
+from models import (
+    AssessmentDecision, DECISION_STATUS_DRAFT, DECISION_STATUS_FINAL,
+    DECISION_STATUS_PENDING_APPROVAL,
+)
 
 
 def get_or_create_decision(db: Session, assessment_id: int, vendor_id: int) -> AssessmentDecision:
@@ -44,6 +47,9 @@ def save_decision(
     if decision.status == DECISION_STATUS_FINAL:
         return False, "Assessment already finalized"
 
+    if decision.status == DECISION_STATUS_PENDING_APPROVAL:
+        return False, "Decision is pending approval and cannot be edited"
+
     decision.data_sensitivity = data_sensitivity or None
     decision.business_criticality = business_criticality or None
     decision.impact_rating = impact_rating or None
@@ -73,3 +79,40 @@ def save_decision(
         decision.finalized_at = datetime.utcnow()
 
     return True, None
+
+
+def requires_tier1_approval(vendor) -> bool:
+    """Check if vendor is Tier 1 and requires maker/checker approval."""
+    from app.services.tiering import get_effective_tier
+    tier = get_effective_tier(vendor)
+    return tier == "Tier 1"
+
+
+def submit_for_approval(decision: AssessmentDecision):
+    """Move decision to PENDING_APPROVAL state for maker/checker flow."""
+    decision.status = DECISION_STATUS_PENDING_APPROVAL
+    decision.requires_approval = True
+    decision.approval_status = "PENDING"
+    decision.finalized_at = datetime.utcnow()
+
+
+def approve_decision(db: Session, decision: AssessmentDecision, approved_by_id: int,
+                     approval_notes: str = None):
+    """Admin approves a pending decision → FINAL."""
+    decision.status = DECISION_STATUS_FINAL
+    decision.approval_status = "APPROVED"
+    decision.approved_by_id = approved_by_id
+    decision.approval_notes = approval_notes
+    decision.approved_at = datetime.utcnow()
+
+
+def reject_decision(db: Session, decision: AssessmentDecision, approved_by_id: int,
+                    approval_notes: str = None):
+    """Admin rejects a pending decision → back to DRAFT."""
+    decision.status = DECISION_STATUS_DRAFT
+    decision.approval_status = "REJECTED"
+    decision.approved_by_id = approved_by_id
+    decision.approval_notes = approval_notes
+    decision.approved_at = datetime.utcnow()
+    decision.requires_approval = False
+    decision.finalized_at = None

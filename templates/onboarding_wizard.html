@@ -116,6 +116,7 @@
                     <div class="col-md-6">
                         <label class="form-label">Vendor Name <span class="text-danger">*</span></label>
                         <input type="text" name="vendor_name" id="vendorName" class="form-control" placeholder="Acme Corp">
+                        <div id="duplicateWarning" class="alert alert-warning mt-2 py-2 small" style="display:none;"></div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Industry</label>
@@ -569,6 +570,35 @@
         document.getElementById('reviewSummary').innerHTML = html;
     }
 
+})();
+
+// Duplicate vendor name detection
+(function(){
+    var nameInput = document.getElementById('vendorName');
+    var warning = document.getElementById('duplicateWarning');
+    if (!nameInput || !warning) return;
+    var timer = null;
+    nameInput.addEventListener('input', function() {
+        clearTimeout(timer);
+        var val = this.value.trim();
+        if (val.length < 2) { warning.style.display = 'none'; return; }
+        timer = setTimeout(function() {
+            fetch('/api/check-vendor-name?name=' + encodeURIComponent(val))
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    if (data.similar && data.similar.length > 0) {
+                        var html = '<i class="bi bi-exclamation-triangle me-1"></i><strong>Possible duplicates found:</strong><br>';
+                        data.similar.forEach(function(v) {
+                            html += '<a href="/vendors/' + v.id + '" target="_blank">' + v.name + '</a> (' + Math.round(v.similarity * 100) + '% match)<br>';
+                        });
+                        warning.innerHTML = html;
+                        warning.style.display = 'block';
+                    } else {
+                        warning.style.display = 'none';
+                    }
+                });
+        }, 400);
+    });
 })();
 </script>
 {% endblock %}

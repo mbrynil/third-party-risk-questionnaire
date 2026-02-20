@@ -34,6 +34,7 @@ class QuestionBankItem(Base):
     text = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     answer_options = Column(Text, nullable=True)
+    framework_ref = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -366,8 +367,9 @@ class ConditionalRule(Base):
 
 
 DECISION_STATUS_DRAFT = "DRAFT"
+DECISION_STATUS_PENDING_APPROVAL = "PENDING_APPROVAL"
 DECISION_STATUS_FINAL = "FINAL"
-VALID_DECISION_STATUSES = [DECISION_STATUS_DRAFT, DECISION_STATUS_FINAL]
+VALID_DECISION_STATUSES = [DECISION_STATUS_DRAFT, DECISION_STATUS_PENDING_APPROVAL, DECISION_STATUS_FINAL]
 
 RISK_LEVEL_VERY_LOW = "VERY_LOW"
 RISK_LEVEL_LOW = "LOW"
@@ -406,9 +408,17 @@ class AssessmentDecision(Base):
     finalized_at = Column(DateTime, nullable=True)
     decided_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
+    # Multi-approver (maker/checker) fields
+    requires_approval = Column(Boolean, default=False)
+    approval_status = Column(String(20), nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approval_notes = Column(Text, nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+
     vendor = relationship("Vendor")
     assessment = relationship("Assessment")
     decided_by = relationship("User", foreign_keys=[decided_by_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
 
 
 # ==================== REMEDIATION ====================
@@ -1407,6 +1417,86 @@ VENDOR_STATUS_OFFBOARDING = "OFFBOARDING"
 VALID_VENDOR_STATUSES = [VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED, VENDOR_STATUS_OFFBOARDING]
 
 
+# ==================== RISK EXCEPTION / WAIVER ====================
+
+EXCEPTION_STATUS_PENDING = "PENDING"
+EXCEPTION_STATUS_APPROVED = "APPROVED"
+EXCEPTION_STATUS_REJECTED = "REJECTED"
+EXCEPTION_STATUS_EXPIRED = "EXPIRED"
+VALID_EXCEPTION_STATUSES = [EXCEPTION_STATUS_PENDING, EXCEPTION_STATUS_APPROVED, EXCEPTION_STATUS_REJECTED, EXCEPTION_STATUS_EXPIRED]
+
+ACTIVITY_EXCEPTION_CREATED = "EXCEPTION_CREATED"
+ACTIVITY_EXCEPTION_APPROVED = "EXCEPTION_APPROVED"
+NOTIF_EXCEPTION_REQUESTED = "EXCEPTION_REQUESTED"
+NOTIF_EXCEPTION_APPROVED = "EXCEPTION_APPROVED"
+
+
+class RiskException(Base):
+    __tablename__ = "risk_exceptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+    decision_id = Column(Integer, ForeignKey("assessment_decisions.id"), nullable=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    risk_accepted = Column(Text, nullable=True)
+    justification = Column(Text, nullable=True)
+    status = Column(String(20), default=EXCEPTION_STATUS_PENDING, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    vendor = relationship("Vendor")
+    assessment = relationship("Assessment")
+    decision = relationship("AssessmentDecision")
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
+
+
+# ==================== VENDOR INTAKE REQUEST ====================
+
+INTAKE_STATUS_PENDING = "PENDING"
+INTAKE_STATUS_APPROVED = "APPROVED"
+INTAKE_STATUS_REJECTED = "REJECTED"
+INTAKE_STATUS_CONVERTED = "CONVERTED"
+VALID_INTAKE_STATUSES = [INTAKE_STATUS_PENDING, INTAKE_STATUS_APPROVED, INTAKE_STATUS_REJECTED, INTAKE_STATUS_CONVERTED]
+
+VALID_INTAKE_URGENCIES = ["LOW", "MEDIUM", "HIGH"]
+
+NOTIF_INTAKE_SUBMITTED = "INTAKE_SUBMITTED"
+NOTIF_INTAKE_APPROVED = "INTAKE_APPROVED"
+NOTIF_INTAKE_REJECTED = "INTAKE_REJECTED"
+NOTIF_APPROVAL_REQUESTED = "APPROVAL_REQUESTED"
+NOTIF_DECISION_APPROVED = "DECISION_APPROVED"
+
+
+class VendorIntakeRequest(Base):
+    __tablename__ = "vendor_intake_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    requested_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    vendor_name = Column(String(255), nullable=False)
+    business_justification = Column(Text, nullable=True)
+    department = Column(String(255), nullable=True)
+    service_description = Column(Text, nullable=True)
+    data_types_shared = Column(Text, nullable=True)
+    estimated_contract_value = Column(String(100), nullable=True)
+    urgency = Column(String(20), default="MEDIUM", nullable=False)
+    status = Column(String(20), default=INTAKE_STATUS_PENDING, nullable=False)
+    reviewed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_notes = Column(Text, nullable=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    requested_by = relationship("User", foreign_keys=[requested_by_id])
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_id])
+    vendor = relationship("Vendor")
+
+
 def backfill_new_feature_columns():
     """Add columns for offboarding, comments, scoring config, etc."""
     import sqlite3
@@ -1419,6 +1509,39 @@ def backfill_new_feature_columns():
     if "offboarding_checklist" not in vendor_cols:
         try:
             cursor.execute("ALTER TABLE vendors ADD COLUMN offboarding_checklist TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+    conn.commit()
+    conn.close()
+
+
+def backfill_approval_columns():
+    """Add multi-approver columns to assessment_decisions."""
+    import sqlite3
+    conn = sqlite3.connect("./questionnaires.db")
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(assessment_decisions)")
+    existing = {row[1] for row in cursor.fetchall()}
+    for col_name, col_type in [
+        ("requires_approval", "BOOLEAN DEFAULT 0"),
+        ("approval_status", "VARCHAR(20)"),
+        ("approved_by_id", "INTEGER"),
+        ("approval_notes", "TEXT"),
+        ("approved_at", "DATETIME"),
+    ]:
+        if col_name not in existing:
+            try:
+                cursor.execute(f"ALTER TABLE assessment_decisions ADD COLUMN {col_name} {col_type}")
+            except sqlite3.OperationalError:
+                pass
+
+    # framework_ref on question_bank_items
+    cursor.execute("PRAGMA table_info(question_bank_items)")
+    qbi_cols = {row[1] for row in cursor.fetchall()}
+    if "framework_ref" not in qbi_cols:
+        try:
+            cursor.execute("ALTER TABLE question_bank_items ADD COLUMN framework_ref VARCHAR(255)")
         except sqlite3.OperationalError:
             pass
 

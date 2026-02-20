@@ -232,6 +232,16 @@ async def vendor_import_confirm(
     return RedirectResponse(url=f"/vendors?message={msg}&message_type=success", status_code=303)
 
 
+@router.get("/api/check-vendor-name")
+async def check_vendor_name(name: str = "", db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    """Check for similar vendor names (fuzzy duplicate detection)."""
+    from app.services.vendor_service import find_similar_vendors
+    if len(name.strip()) < 2:
+        return {"similar": []}
+    results = find_similar_vendors(db, name.strip())
+    return {"similar": results}
+
+
 @router.get("/vendors/{vendor_id}", response_class=HTMLResponse)
 async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
@@ -298,6 +308,10 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         User.role.in_(["admin", "analyst"]),
     ).order_by(User.display_name).all()
 
+    # Vendor exceptions
+    from app.services.exception_service import get_vendor_exceptions
+    vendor_exceptions = get_vendor_exceptions(db, vendor_id)
+
     # Parse offboarding checklist
     import json as _json
     offboarding_checklist = []
@@ -333,6 +347,7 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         "activity_colors": ACTIVITY_COLORS,
         "analysts": analysts,
         "offboarding_checklist": offboarding_checklist,
+        "vendor_exceptions": vendor_exceptions,
     })
 
 

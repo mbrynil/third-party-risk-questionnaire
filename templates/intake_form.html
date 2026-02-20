@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}New Vendor Intake Request - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="/intake">Vendor Intake</a></li>
+        <li class="breadcrumb-item active">New Request</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-box-arrow-in-right me-2"></i>New Vendor Intake Request</h1>
+    <p class="text-muted">Submit a request to onboard a new vendor for risk assessment</p>
+</div>
+
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    {{ error }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" action="/intake">
+            <div class="mb-3">
+                <label for="vendor_name" class="form-label">Vendor Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="vendor_name" name="vendor_name" required placeholder="Enter the vendor or company name">
+            </div>
+
+            <div class="mb-3">
+                <label for="department" class="form-label">Department</label>
+                <input type="text" class="form-control" id="department" name="department" placeholder="e.g., Engineering, Marketing, Finance">
+            </div>
+
+            <div class="mb-3">
+                <label for="service_description" class="form-label">Service Description</label>
+                <textarea class="form-control" id="service_description" name="service_description" rows="3" placeholder="Describe the service or product the vendor will provide"></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="business_justification" class="form-label">Business Justification</label>
+                <textarea class="form-control" id="business_justification" name="business_justification" rows="3" placeholder="Why is this vendor needed? What problem does it solve?"></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="data_types_shared" class="form-label">Data Types Shared</label>
+                <textarea class="form-control" id="data_types_shared" name="data_types_shared" rows="2" placeholder="e.g., PII, financial data, health records, none"></textarea>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="estimated_contract_value" class="form-label">Estimated Contract Value</label>
+                    <input type="text" class="form-control" id="estimated_contract_value" name="estimated_contract_value" placeholder="e.g., $50,000/year">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="urgency" class="form-label">Urgency</label>
+                    <select class="form-select" id="urgency" name="urgency">
+                        {% for u in urgencies %}
+                        <option value="{{ u }}" {% if u == 'MEDIUM' %}selected{% endif %}>{{ u }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-send me-1"></i>Submit Request
+                </button>
+                <a href="/intake" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

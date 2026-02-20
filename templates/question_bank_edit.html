@@ -109,6 +109,15 @@
                         <input type="hidden" id="custom_options" name="custom_options" value="">
                     </div>
 
+                    <div class="mb-3">
+                        <label for="framework_ref" class="form-label">Framework References</label>
+                        <input type="text" id="framework_ref" name="framework_ref"
+                               class="form-control"
+                               value="{{ item.framework_ref if item and item.framework_ref else '' }}"
+                               placeholder="e.g., NIST CSF 2.0, ISO 27001:2022, SIG Core">
+                        <div class="form-text">Comma-separated framework tags. These will appear as badges on the question bank list.</div>
+                    </div>
+
                     {% if item %}
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="is_active" name="is_active"

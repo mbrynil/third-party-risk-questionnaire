@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}{% if vendor %}{{ vendor.name }} — Exceptions{% else %}Exceptions & Waivers{% endif %} - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        {% if vendor %}
+        <li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+        <li class="breadcrumb-item"><a href="/vendors/{{ vendor.id }}">{{ vendor.name }}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Exceptions</li>
+        {% else %}
+        <li class="breadcrumb-item active" aria-current="page">Exceptions</li>
+        {% endif %}
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-0" style="font-weight: 700; color: #1e3a5f;">
+            {% if vendor %}{{ vendor.name }} — {% endif %}Exceptions & Waivers
+            <span class="badge bg-secondary ms-2" style="font-size: 0.6em;">{{ all_exceptions|length }}</span>
+        </h1>
+        <p class="text-muted mb-0">Manage risk exceptions and waivers</p>
+    </div>
+    {% if vendor %}
+    {% set current_user = request.state.current_user %}
+    {% if current_user and current_user.role in ['admin', 'analyst'] %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#requestExceptionModal">
+        <i class="bi bi-plus-lg me-2"></i>Request Exception
+    </button>
+    {% endif %}
+    {% endif %}
+</div>
+
+{% set msg = request.query_params.get('message') %}
+{% set msg_type = request.query_params.get('message_type', 'success') %}
+{% if msg %}
+<div class="alert alert-{{ msg_type }} alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if pending|length > 0 %}
+<div class="alert alert-warning py-2 mb-4">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    <strong>{{ pending|length }}</strong> exception{{ 's' if pending|length != 1 else '' }} pending approval.
+</div>
+{% endif %}
+
+<div class="card">
+    {% if all_exceptions %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    {% if not vendor %}
+                    <th>Vendor</th>
+                    {% endif %}
+                    <th>Status</th>
+                    <th>Created By</th>
+                    <th>Created At</th>
+                    <th>Expires</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exc in all_exceptions %}
+                <tr>
+                    <td>
+                        <div class="fw-semibold">{{ exc.title }}</div>
+                        {% if exc.risk_accepted %}
+                        <small class="text-muted">Risk: {{ exc.risk_accepted[:60] }}{% if exc.risk_accepted|length > 60 %}...{% endif %}</small>
+                        {% endif %}
+                    </td>
+                    {% if not vendor %}
+                    <td>
+                        {% if exc.vendor %}
+                        <a href="/vendors/{{ exc.vendor.id }}" class="text-decoration-none">{{ exc.vendor.name }}</a>
+                        {% else %}
+                        <span class="text-muted">--</span>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                    <td>
+                        {% if exc.status == 'PENDING' %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        {% elif exc.status == 'APPROVED' %}
+                        <span class="badge bg-success">Approved</span>
+                        {% elif exc.status == 'REJECTED' %}
+                        <span class="badge bg-danger">Rejected</span>
+                        {% elif exc.status == 'EXPIRED' %}
+                        <span class="badge bg-secondary">Expired</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ exc.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if exc.created_by %}
+                        {{ exc.created_by.display_name }}
+                        {% else %}
+                        <span class="text-muted">--</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if exc.created_at %}
+                        {{ exc.created_at.strftime('%Y-%m-%d') }}
+                        {% else %}
+                        <span class="text-muted">--</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if exc.expires_at %}
+                        {{ exc.expires_at.strftime('%Y-%m-%d') }}
+                        {% else %}
+                        <span class="text-muted">No expiry</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% set current_user = request.state.current_user %}
+                        {% if exc.status == 'PENDING' and current_user and current_user.role == 'admin' %}
+                        <form method="post" action="/exceptions/{{ exc.id }}/approve" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Approve">
+                                <i class="bi bi-check-lg"></i> Approve
+                            </button>
+                        </form>
+                        <form method="post" action="/exceptions/{{ exc.id }}/reject" style="display:inline;"
+                              onsubmit="return confirm('Reject this exception?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Reject">
+                                <i class="bi bi-x-lg"></i> Reject
+                            </button>
+                        </form>
+                        {% elif exc.status == 'APPROVED' and exc.approved_by %}
+                        <small class="text-muted">by {{ exc.approved_by.display_name }}</small>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-shield-exclamation" style="font-size: 2.5rem;"></i>
+        <h6 class="mt-3">No exceptions or waivers</h6>
+        <p class="small">Risk exceptions will appear here when requested.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% if vendor %}
+{# Request Exception Modal #}
+<div class="modal fade" id="requestExceptionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/vendors/{{ vendor.id }}/exceptions">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-shield-exclamation me-2"></i>Request Exception / Waiver</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required placeholder="e.g., Waiver for missing SOC 2 report">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Risk Accepted</label>
+                        <input type="text" name="risk_accepted" class="form-control" placeholder="Describe the risk being accepted">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Justification</label>
+                        <textarea name="justification" class="form-control" rows="3" placeholder="Why is this exception needed?"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" rows="2" placeholder="Additional details..."></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Expiry Date</label>
+                        <input type="date" name="expires_at" class="form-control">
+                        <small class="text-muted">Leave blank for no expiry.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

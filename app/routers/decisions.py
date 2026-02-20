@@ -8,10 +8,14 @@ from app import templates
 from models import (
     get_db, Assessment, Question, Response, Vendor, AssessmentDecision,
     RESPONSE_STATUS_SUBMITTED,
-    DECISION_STATUS_FINAL,
+    DECISION_STATUS_FINAL, DECISION_STATUS_PENDING_APPROVAL,
     VALID_RISK_LEVELS, VALID_DECISION_OUTCOMES,
 )
-from app.services.decision_service import get_or_create_decision, save_decision
+from app.services.decision_service import (
+    get_or_create_decision, save_decision,
+    requires_tier1_approval, submit_for_approval,
+    approve_decision, reject_decision,
+)
 from app.services.scoring import compute_assessment_scores
 from app.services.risk_statements import match_risk_statements
 from app.services.lifecycle import transition_to_reviewed
@@ -23,9 +27,42 @@ from app.services.activity_service import log_activity
 from app.services.export_service import generate_assessment_report_pdf
 from app.services.auth_service import require_login, require_role
 from app.services.notification_service import create_notification
-from models import ACTIVITY_DECISION_FINALIZED, NOTIF_DECISION_FINALIZED, RiskSnapshot, User
+from models import (
+    ACTIVITY_DECISION_FINALIZED, NOTIF_DECISION_FINALIZED,
+    NOTIF_APPROVAL_REQUESTED, NOTIF_DECISION_APPROVED,
+    RiskSnapshot, User,
+)
 
 router = APIRouter()
+
+
+@router.get("/assessments/{assessment_id}/decision/summary", response_class=HTMLResponse)
+async def decision_summary_page(request: Request, assessment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    decision = db.query(AssessmentDecision).filter(
+        AssessmentDecision.assessment_id == assessment_id
+    ).first()
+
+    if not decision or decision.status != DECISION_STATUS_FINAL:
+        return RedirectResponse(url=f"/assessments/{assessment_id}/decision", status_code=303)
+
+    vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
+
+    from models import RemediationItem
+    rem_count = db.query(RemediationItem).filter(
+        RemediationItem.decision_id == decision.id
+    ).count()
+
+    return templates.TemplateResponse("decision_summary.html", {
+        "request": request,
+        "assessment": assessment,
+        "vendor": vendor,
+        "decision": decision,
+        "rem_count": rem_count,
+    })
 
 
 def _load_decision_context(db: Session, assessment_id: int):
@@ -222,6 +259,55 @@ async def auto_generate_draft(assessment_id: int, db: Session = Depends(get_db),
     )
 
 
+def _complete_finalization(db: Session, decision: AssessmentDecision, assessment: Assessment,
+                           assessment_id: int, decision_outcome: str | None, current_user: User):
+    """Shared post-finalize logic: scores, remediations, notifications, snapshot."""
+    transition_to_reviewed(db, assessment)
+    if assessment.vendor_id:
+        outcome_label = (decision_outcome or "").replace("_", " ").title()
+        log_activity(db, assessment.vendor_id, ACTIVITY_DECISION_FINALIZED,
+                     f"Decision finalized for '{assessment.title}': {outcome_label}",
+                     assessment_id=assessment.id, user_id=current_user.id)
+
+    # Persist overall_score on the decision
+    ctx = _load_decision_context(db, assessment_id)
+    scores = ctx["scores"]
+    if scores.get("overall_score") is not None:
+        decision.overall_score = int(scores["overall_score"])
+
+    # Auto-generate remediation items from risk statements
+    risk_suggestions = ctx["risk_suggestions"]
+    remediation_data = []
+    for rs in risk_suggestions:
+        remediation_data.append({
+            "risk_statement_id": rs.get("id"),
+            "severity": rs.get("severity", "MEDIUM"),
+            "category": rs.get("category", ""),
+            "finding": rs.get("finding_text", ""),
+            "remediation": rs.get("remediation_text", ""),
+        })
+    auto_generate_remediations(db, decision, remediation_data)
+
+    # Create notification for decision finalization
+    create_notification(
+        db, NOTIF_DECISION_FINALIZED,
+        f"Decision finalized for {assessment.company_name}: {(decision_outcome or '').replace('_', ' ').title()}",
+        link=f"/assessments/{assessment_id}/decision",
+        vendor_id=assessment.vendor_id,
+        assessment_id=assessment_id,
+    )
+
+    # Record risk snapshot for historical trends
+    db.add(RiskSnapshot(
+        vendor_id=assessment.vendor_id,
+        assessment_id=assessment_id,
+        decision_id=decision.id,
+        overall_score=decision.overall_score,
+        risk_rating=decision.overall_risk_rating,
+        decision_outcome=decision.decision_outcome,
+    ))
+
+
 @router.post("/assessments/{assessment_id}/decision", response_class=HTMLResponse)
 async def save_assessment_decision(
     request: Request,
@@ -279,59 +365,35 @@ async def save_assessment_decision(
 
     if action == "finalize" and success:
         decision.decided_by_id = current_user.id
-        transition_to_reviewed(db, assessment)
-        if assessment.vendor_id:
-            outcome_label = (decision_outcome or "").replace("_", " ").title()
-            log_activity(db, assessment.vendor_id, ACTIVITY_DECISION_FINALIZED,
-                         f"Decision finalized for '{assessment.title}': {outcome_label}",
-                         assessment_id=assessment.id, user_id=current_user.id)
+        vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
 
-        # Persist overall_score on the decision
-        ctx = _load_decision_context(db, assessment_id)
-        scores = ctx["scores"]
-        if scores.get("overall_score") is not None:
-            decision.overall_score = int(scores["overall_score"])
+        # Tier 1 vendors require admin approval (maker/checker)
+        if requires_tier1_approval(vendor) and current_user.role != "admin":
+            submit_for_approval(decision)
+            db.commit()
 
-        # Auto-generate remediation items from risk statements
-        risk_suggestions = ctx["risk_suggestions"]
-        remediation_data = []
-        for rs in risk_suggestions:
-            remediation_data.append({
-                "risk_statement_id": rs.get("id"),
-                "severity": rs.get("severity", "MEDIUM"),
-                "category": rs.get("category", ""),
-                "finding": rs.get("finding_text", ""),
-                "remediation": rs.get("remediation_text", ""),
-            })
-        rem_count = auto_generate_remediations(db, decision, remediation_data)
+            create_notification(
+                db, NOTIF_APPROVAL_REQUESTED,
+                f"Decision for {assessment.company_name} requires approval ({(decision_outcome or '').replace('_', ' ').title()})",
+                link=f"/assessments/{assessment_id}/decision",
+                vendor_id=assessment.vendor_id,
+                assessment_id=assessment_id,
+            )
+            db.commit()
 
-        # Create notification for decision finalization
-        create_notification(
-            db, NOTIF_DECISION_FINALIZED,
-            f"Decision finalized for {assessment.company_name}: {(decision_outcome or '').replace('_', ' ').title()}",
-            link=f"/assessments/{assessment_id}/decision",
-            vendor_id=assessment.vendor_id,
-            assessment_id=assessment_id,
-        )
+            return RedirectResponse(
+                url=f"/assessments/{assessment_id}/decision?message=Decision submitted for admin approval (Tier 1 vendor)&message_type=info",
+                status_code=303
+            )
 
-        # Record risk snapshot for historical trends
-        db.add(RiskSnapshot(
-            vendor_id=assessment.vendor_id,
-            assessment_id=assessment_id,
-            decision_id=decision.id,
-            overall_score=decision.overall_score,
-            risk_rating=decision.overall_risk_rating,
-            decision_outcome=decision.decision_outcome,
-        ))
+        # Direct finalize for Tier 2/3 or admin users
+        _complete_finalization(db, decision, assessment, assessment_id, decision_outcome, current_user)
 
     db.commit()
 
     if action == "finalize":
-        msg = "Assessment finalized successfully"
-        if rem_count > 0:
-            msg += f" — {rem_count} remediation items created"
         return RedirectResponse(
-            url=f"/vendors/{assessment.vendor_id}?message={msg}&message_type=success",
+            url=f"/assessments/{assessment_id}/decision/summary",
             status_code=303
         )
     else:
@@ -339,3 +401,80 @@ async def save_assessment_decision(
             url=f"/assessments/{assessment_id}/decision?message=Draft saved&message_type=success",
             status_code=303
         )
+
+
+@router.post("/assessments/{assessment_id}/decision/approve")
+async def approve_assessment_decision(
+    assessment_id: int,
+    approval_notes: str = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Admin approves a pending decision (maker/checker for Tier 1)."""
+    assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    decision = db.query(AssessmentDecision).filter(
+        AssessmentDecision.assessment_id == assessment_id
+    ).first()
+    if not decision:
+        raise HTTPException(status_code=404, detail="Decision not found")
+
+    if decision.status != DECISION_STATUS_PENDING_APPROVAL:
+        return RedirectResponse(
+            url=f"/assessments/{assessment_id}/decision?message=Decision is not pending approval&message_type=warning",
+            status_code=303
+        )
+
+    approve_decision(db, decision, current_user.id, approval_notes)
+    _complete_finalization(db, decision, assessment, assessment_id,
+                           decision.decision_outcome, current_user)
+
+    create_notification(
+        db, NOTIF_DECISION_APPROVED,
+        f"Decision approved for {assessment.company_name} by {current_user.display_name}",
+        link=f"/assessments/{assessment_id}/decision",
+        vendor_id=assessment.vendor_id,
+        assessment_id=assessment_id,
+    )
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/assessments/{assessment_id}/decision/summary",
+        status_code=303
+    )
+
+
+@router.post("/assessments/{assessment_id}/decision/reject")
+async def reject_assessment_decision(
+    assessment_id: int,
+    approval_notes: str = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Admin rejects a pending decision back to DRAFT."""
+    assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    decision = db.query(AssessmentDecision).filter(
+        AssessmentDecision.assessment_id == assessment_id
+    ).first()
+    if not decision:
+        raise HTTPException(status_code=404, detail="Decision not found")
+
+    if decision.status != DECISION_STATUS_PENDING_APPROVAL:
+        return RedirectResponse(
+            url=f"/assessments/{assessment_id}/decision?message=Decision is not pending approval&message_type=warning",
+            status_code=303
+        )
+
+    reject_decision(db, decision, current_user.id, approval_notes)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/assessments/{assessment_id}/decision?message=Decision rejected and returned to draft&message_type=warning",
+        status_code=303
+    )

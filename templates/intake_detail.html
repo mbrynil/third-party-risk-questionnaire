@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Intake Request: {{ intake.vendor_name }} - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="/intake">Vendor Intake</a></li>
+        <li class="breadcrumb-item active">Detail</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-box-arrow-in-right me-2"></i>{{ intake.vendor_name }}</h1>
+    <p class="text-muted">
+        Intake request submitted {{ intake.created_at.strftime('%Y-%m-%d %H:%M') if intake.created_at else '' }}
+        {% if intake.status == 'PENDING' %}
+        <span class="badge bg-warning text-dark ms-2">PENDING</span>
+        {% elif intake.status == 'APPROVED' %}
+        <span class="badge bg-success ms-2">APPROVED</span>
+        {% elif intake.status == 'REJECTED' %}
+        <span class="badge bg-danger ms-2">REJECTED</span>
+        {% elif intake.status == 'CONVERTED' %}
+        <span class="badge bg-primary ms-2">CONVERTED</span>
+        {% endif %}
+    </p>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">Request Details</h6>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Vendor Name</div>
+                    <div class="col-sm-8 fw-semibold">{{ intake.vendor_name }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Department</div>
+                    <div class="col-sm-8">{{ intake.department or '—' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Service Description</div>
+                    <div class="col-sm-8">{{ intake.service_description or '—' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Business Justification</div>
+                    <div class="col-sm-8">{{ intake.business_justification or '—' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Data Types Shared</div>
+                    <div class="col-sm-8">{{ intake.data_types_shared or '—' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Estimated Contract Value</div>
+                    <div class="col-sm-8">{{ intake.estimated_contract_value or '—' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Urgency</div>
+                    <div class="col-sm-8">
+                        {% if intake.urgency == 'HIGH' %}
+                        <span class="badge bg-danger">HIGH</span>
+                        {% elif intake.urgency == 'MEDIUM' %}
+                        <span class="badge bg-warning text-dark">MEDIUM</span>
+                        {% else %}
+                        <span class="badge bg-success">LOW</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Requested By</div>
+                    <div class="col-sm-8">{{ intake.requested_by.display_name if intake.requested_by else '—' }}</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4 text-muted">Submitted</div>
+                    <div class="col-sm-8">{{ intake.created_at.strftime('%Y-%m-%d %H:%M') if intake.created_at else '—' }}</div>
+                </div>
+            </div>
+        </div>
+
+        {% if intake.status in ('APPROVED', 'REJECTED', 'CONVERTED') %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">Review Information</h6>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Decision</div>
+                    <div class="col-sm-8">
+                        {% if intake.status == 'REJECTED' %}
+                        <span class="badge bg-danger">REJECTED</span>
+                        {% elif intake.status == 'CONVERTED' %}
+                        <span class="badge bg-primary">CONVERTED TO VENDOR</span>
+                        {% else %}
+                        <span class="badge bg-success">APPROVED</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Reviewed By</div>
+                    <div class="col-sm-8">{{ intake.reviewed_by.display_name if intake.reviewed_by else '—' }}</div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-sm-4 text-muted">Review Notes</div>
+                    <div class="col-sm-8">{{ intake.review_notes or '—' }}</div>
+                </div>
+                {% if intake.vendor_id %}
+                <div class="row">
+                    <div class="col-sm-4 text-muted">Vendor Record</div>
+                    <div class="col-sm-8">
+                        <a href="/vendors/{{ intake.vendor_id }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-building me-1"></i>View Vendor
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                {% if intake.updated_at %}
+                <div class="row mt-3">
+                    <div class="col-sm-4 text-muted">Reviewed On</div>
+                    <div class="col-sm-8">{{ intake.updated_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        {% if intake.status == 'PENDING' and request.state.current_user and request.state.current_user.role in ('admin', 'analyst') %}
+        <div class="card mb-4 border-success">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0"><i class="bi bi-check-circle me-1"></i>Approve</h6>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/intake/{{ intake.id }}/approve">
+                    <div class="mb-3">
+                        <label for="approve_notes" class="form-label">Review Notes</label>
+                        <textarea class="form-control" id="approve_notes" name="review_notes" rows="3" placeholder="Optional notes about the approval"></textarea>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="create_vendor_flag" name="create_vendor_flag">
+                        <label class="form-check-label" for="create_vendor_flag">
+                            Create vendor record automatically
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-check-lg me-1"></i>Approve Request
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h6 class="mb-0"><i class="bi bi-x-circle me-1"></i>Reject</h6>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/intake/{{ intake.id }}/reject">
+                    <div class="mb-3">
+                        <label for="reject_notes" class="form-label">Rejection Reason</label>
+                        <textarea class="form-control" id="reject_notes" name="review_notes" rows="3" placeholder="Provide a reason for rejection"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-x-lg me-1"></i>Reject Request
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="mt-3">
+            <a href="/intake" class="btn btn-outline-secondary w-100">
+                <i class="bi bi-arrow-left me-1"></i>Back to Intake List
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

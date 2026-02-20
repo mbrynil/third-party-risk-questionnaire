@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
@@ -142,6 +143,56 @@ async def assessment_tracker_csv(db: Session = Depends(get_db), current_user: Us
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/assessments/calendar", response_class=HTMLResponse)
+async def reassessment_calendar(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    """Reassessment calendar — shows upcoming review dates by month."""
+    from models import AssessmentDecision, Vendor, DECISION_STATUS_FINAL
+    from app.services.tiering import get_effective_tier, TIER_COLORS
+
+    decisions = db.query(AssessmentDecision).filter(
+        AssessmentDecision.status == DECISION_STATUS_FINAL,
+        AssessmentDecision.next_review_date != None,
+    ).all()
+
+    now = datetime.utcnow()
+    total = len(decisions)
+    overdue = sum(1 for d in decisions if d.next_review_date < now)
+    this_month = sum(1 for d in decisions if d.next_review_date.year == now.year and d.next_review_date.month == now.month)
+
+    # Group by month
+    by_month = defaultdict(list)
+    for d in decisions:
+        key = d.next_review_date.strftime("%Y-%m")
+        vendor = d.vendor
+        effective_tier = get_effective_tier(vendor) if vendor else None
+        by_month[key].append({
+            "decision": d,
+            "vendor": vendor,
+            "tier": effective_tier,
+            "overdue": d.next_review_date < now,
+        })
+
+    months = sorted(by_month.keys())
+
+    # Get analysts for filter
+    analysts = db.query(User).filter(
+        User.is_active == True,
+        User.role.in_(["admin", "analyst"]),
+    ).order_by(User.display_name).all()
+
+    return templates.TemplateResponse("reassessment_calendar.html", {
+        "request": request,
+        "months": months,
+        "by_month": dict(by_month),
+        "total": total,
+        "overdue_count": overdue,
+        "this_month": this_month,
+        "tier_colors": TIER_COLORS,
+        "analysts": analysts,
+        "now": now,
+    })
 
 
 @router.get("/questionnaire/{assessment_id}/edit", response_class=HTMLResponse)

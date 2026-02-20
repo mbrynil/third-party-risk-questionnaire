@@ -152,6 +152,11 @@
                             <i class="bi bi-kanban me-1"></i>Tracker
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/assessments/calendar">
+                            <i class="bi bi-calendar3 me-1"></i>Calendar
+                        </a>
+                    </li>
                     {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
                     <li class="nav-item">
                         <a class="nav-link" href="/risk-library">
@@ -176,6 +181,11 @@
                         </a>
                     </li>
                     {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/intake/new">
+                            <i class="bi bi-box-arrow-in-right me-1"></i>Intake
+                        </a>
+                    </li>
                     <li class="nav-item me-2" style="position:relative;" id="searchBarWrap">
                         <div class="input-group input-group-sm" style="width:220px;">
                             <input type="text" class="form-control form-control-sm" id="globalSearchInput" placeholder="Search..." autocomplete="off" style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.2);color:#fff;font-size:0.8rem;">
@@ -202,6 +212,10 @@
                             <i class="bi bi-gear me-1"></i>Settings
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/settings">
+                                <i class="bi bi-gear me-2"></i>Settings Hub
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="/settings/reminders">
                                 <i class="bi bi-bell me-2"></i>Reminders
                             </a></li>

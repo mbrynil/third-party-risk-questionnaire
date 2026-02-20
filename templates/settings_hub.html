@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Settings</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-gear me-2"></i>Settings</h1>
+    <p>Manage platform configuration, rules, and user accounts</p>
+</div>
+
+<div class="row g-4">
+    {% if request.state.current_user and request.state.current_user.role == 'admin' %}
+    <!-- Scoring Thresholds -->
+    <div class="col-md-6 col-lg-4">
+        <a href="/settings/scoring" class="text-decoration-none">
+            <div class="card h-100" style="transition: transform 0.15s, box-shadow 0.15s; cursor: pointer;"
+                 onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';"
+                 onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                <div class="card-body text-center py-4">
+                    <i class="bi bi-sliders fs-1 text-primary d-block mb-3"></i>
+                    <h5 class="card-title text-dark">Scoring Thresholds</h5>
+                    <p class="card-text text-muted small">Configure risk rating score thresholds</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Tiering Rules -->
+    <div class="col-md-6 col-lg-4">
+        <a href="/settings/tiering" class="text-decoration-none">
+            <div class="card h-100" style="transition: transform 0.15s, box-shadow 0.15s; cursor: pointer;"
+                 onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';"
+                 onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                <div class="card-body text-center py-4">
+                    <i class="bi bi-diagram-3 fs-1 text-primary d-block mb-3"></i>
+                    <h5 class="card-title text-dark">Tiering Rules</h5>
+                    <p class="card-text text-muted small">Manage vendor risk tiering rules</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Reminders -->
+    <div class="col-md-6 col-lg-4">
+        <a href="/settings/reminders" class="text-decoration-none">
+            <div class="card h-100" style="transition: transform 0.15s, box-shadow 0.15s; cursor: pointer;"
+                 onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';"
+                 onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                <div class="card-body text-center py-4">
+                    <i class="bi bi-bell fs-1 text-primary d-block mb-3"></i>
+                    <h5 class="card-title text-dark">Reminders</h5>
+                    <p class="card-text text-muted small">Configure automated reminder settings</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- User Management -->
+    <div class="col-md-6 col-lg-4">
+        <a href="/admin/users" class="text-decoration-none">
+            <div class="card h-100" style="transition: transform 0.15s, box-shadow 0.15s; cursor: pointer;"
+                 onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';"
+                 onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                <div class="card-body text-center py-4">
+                    <i class="bi bi-people fs-1 text-primary d-block mb-3"></i>
+                    <h5 class="card-title text-dark">User Management</h5>
+                    <p class="card-text text-muted small">Manage user accounts and roles</p>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Email Log -->
+    <div class="col-md-6 col-lg-4">
+        <a href="/email-log" class="text-decoration-none">
+            <div class="card h-100" style="transition: transform 0.15s, box-shadow 0.15s; cursor: pointer;"
+                 onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';"
+                 onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                <div class="card-body text-center py-4">
+                    <i class="bi bi-envelope-paper fs-1 text-primary d-block mb-3"></i>
+                    <h5 class="card-title text-dark">Email Log</h5>
+                    <p class="card-text text-muted small">View sent email history</p>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    <!-- My Account (visible to all) -->
+    <div class="col-md-6 col-lg-4">
+        <a href="/account" class="text-decoration-none">
+            <div class="card h-100" style="transition: transform 0.15s, box-shadow 0.15s; cursor: pointer;"
+                 onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';"
+                 onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                <div class="card-body text-center py-4">
+                    <i class="bi bi-person fs-1 text-primary d-block mb-3"></i>
+                    <h5 class="card-title text-dark">My Account</h5>
+                    <p class="card-text text-muted small">Update your profile and password</p>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}
