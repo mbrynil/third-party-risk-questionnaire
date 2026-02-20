@@ -56,7 +56,7 @@
                                 {% if item.framework_ref %}
                                 <div class="mt-1">
                                     {% for fw in item.framework_ref.split(',') %}
-                                    <span class="badge bg-light text-primary border border-primary-subtle" style="font-size:0.65rem;">{{ fw.strip() }}</span>
+                                    <span class="badge bg-light text-primary border border-primary-subtle" style="font-size:0.65rem;">{{ framework_display.get(fw.strip(), fw.strip()) }}</span>
                                     {% endfor %}
                                 </div>
                                 {% endif %}

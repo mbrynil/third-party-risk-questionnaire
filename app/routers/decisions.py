@@ -30,7 +30,7 @@ from app.services.notification_service import create_notification
 from models import (
     ACTIVITY_DECISION_FINALIZED, NOTIF_DECISION_FINALIZED,
     NOTIF_APPROVAL_REQUESTED, NOTIF_DECISION_APPROVED,
-    RiskSnapshot, User,
+    RiskSnapshot, User, QuestionBankItem, FRAMEWORK_DISPLAY,
 )
 
 router = APIRouter()
@@ -98,6 +98,24 @@ def _load_decision_context(db: Session, assessment_id: int):
     followup_total = len(follow_ups)
     followup_open = sum(1 for f in follow_ups if not f.response_text)
 
+    # Compute framework coverage from question bank items
+    bank_item_ids = [q.question_bank_item_id for q in questions if q.question_bank_item_id]
+    framework_counts = {}
+    if bank_item_ids:
+        bank_items = db.query(QuestionBankItem).filter(
+            QuestionBankItem.id.in_(bank_item_ids)
+        ).all()
+        for bi in bank_items:
+            if bi.framework_ref:
+                for fw in bi.framework_ref.split(","):
+                    fw = fw.strip()
+                    if fw:
+                        framework_counts[fw] = framework_counts.get(fw, 0) + 1
+    framework_coverage = [
+        {"key": k, "label": FRAMEWORK_DISPLAY.get(k, k), "count": v}
+        for k, v in sorted(framework_counts.items(), key=lambda x: -x[1])
+    ]
+
     return {
         "assessment": assessment,
         "vendor": vendor,
@@ -111,6 +129,7 @@ def _load_decision_context(db: Session, assessment_id: int):
         "evidence_count": evidence_count,
         "followup_total": followup_total,
         "followup_open": followup_open,
+        "framework_coverage": framework_coverage,
     }
 
 
@@ -167,6 +186,7 @@ async def assessment_decision_page(request: Request, assessment_id: int, db: Ses
         "effective_tier": effective_tier,
         "suggested_review_date": suggested_review_date.strftime("%Y-%m-%d") if suggested_review_date else None,
         "delta": delta,
+        "framework_coverage": ctx["framework_coverage"],
     })
 
 

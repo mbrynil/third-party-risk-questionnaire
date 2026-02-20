@@ -110,12 +110,21 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="framework_ref" class="form-label">Framework References</label>
-                        <input type="text" id="framework_ref" name="framework_ref"
-                               class="form-control"
-                               value="{{ item.framework_ref if item and item.framework_ref else '' }}"
-                               placeholder="e.g., NIST CSF 2.0, ISO 27001:2022, SIG Core">
-                        <div class="form-text">Comma-separated framework tags. These will appear as badges on the question bank list.</div>
+                        <label class="form-label">Framework Mapping</label>
+                        <div class="form-text mb-2">Select all frameworks this question aligns with. Used for compliance coverage tracking.</div>
+                        {% set selected_frameworks = (item.framework_ref or '').split(',') if item and item.framework_ref else [] %}
+                        <div class="row g-2">
+                            {% for key, label in available_frameworks %}
+                            <div class="col-md-4 col-sm-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="frameworks"
+                                           value="{{ key }}" id="fw_{{ key }}"
+                                           {% if key in selected_frameworks %}checked{% endif %}>
+                                    <label class="form-check-label small" for="fw_{{ key }}">{{ label }}</label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
                     </div>
 
                     {% if item %}

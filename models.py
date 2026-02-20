@@ -34,8 +34,28 @@ class QuestionBankItem(Base):
     text = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     answer_options = Column(Text, nullable=True)
-    framework_ref = Column(String(255), nullable=True)
+    framework_ref = Column(Text, nullable=True)  # comma-separated framework keys
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# Industry-standard frameworks for question mapping
+AVAILABLE_FRAMEWORKS = [
+    ("NIST_CSF_2", "NIST CSF 2.0"),
+    ("ISO_27001", "ISO 27001:2022"),
+    ("SOC_2", "SOC 2"),
+    ("NIST_800_53", "NIST SP 800-53 Rev 5"),
+    ("CIS_V8", "CIS Controls v8"),
+    ("SIG", "SIG / SIG Lite"),
+    ("PCI_DSS_4", "PCI DSS v4.0"),
+    ("HIPAA", "HIPAA"),
+    ("GDPR", "GDPR"),
+    ("CSA_CCM_4", "CSA CCM v4"),
+    ("COBIT_2019", "COBIT 2019"),
+    ("CMMC_2", "CMMC 2.0"),
+]
+
+# Lookup dict for display names
+FRAMEWORK_DISPLAY = {key: label for key, label in AVAILABLE_FRAMEWORKS}
 
 
 VENDOR_STATUS_ACTIVE = "ACTIVE"

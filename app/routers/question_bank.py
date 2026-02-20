@@ -1,10 +1,12 @@
+from typing import List
+
 from fastapi import APIRouter, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 import json
 
 from app import templates
-from models import get_db, QuestionBankItem, User, get_answer_options, has_custom_answer_options
+from models import get_db, QuestionBankItem, User, get_answer_options, has_custom_answer_options, AVAILABLE_FRAMEWORKS, FRAMEWORK_DISPLAY
 from app.services.auth_service import require_login, require_role
 
 router = APIRouter()
@@ -33,6 +35,7 @@ async def question_bank_list(request: Request, db: Session = Depends(get_db), cu
         "total_count": len(items),
         "get_answer_options": get_answer_options,
         "has_custom_answer_options": has_custom_answer_options,
+        "framework_display": FRAMEWORK_DISPLAY,
         "message": message,
         "message_type": message_type,
     })
@@ -45,6 +48,7 @@ async def question_bank_new(request: Request, db: Session = Depends(get_db), cur
         "request": request,
         "item": None,
         "categories": categories,
+        "available_frameworks": AVAILABLE_FRAMEWORKS,
     })
 
 
@@ -55,7 +59,7 @@ async def question_bank_create(
     text: str = Form(...),
     answer_type: str = Form("standard"),
     custom_options: str = Form(""),
-    framework_ref: str = Form(""),
+    frameworks: List[str] = Form([]),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
@@ -68,6 +72,7 @@ async def question_bank_create(
             "request": request,
             "item": None,
             "categories": categories,
+            "available_frameworks": AVAILABLE_FRAMEWORKS,
             "error": "Category and question text are required.",
         })
 
@@ -77,12 +82,14 @@ async def question_bank_create(
         if len(options) >= 2:
             answer_options = json.dumps(options)
 
+    framework_ref = ",".join(frameworks) if frameworks else None
+
     item = QuestionBankItem(
         category=category,
         text=text,
         is_active=True,
         answer_options=answer_options,
-        framework_ref=framework_ref.strip() or None,
+        framework_ref=framework_ref,
     )
     db.add(item)
     db.commit()
@@ -106,6 +113,7 @@ async def question_bank_edit(request: Request, item_id: int, db: Session = Depen
         "categories": categories,
         "get_answer_options": get_answer_options,
         "has_custom_answer_options": has_custom_answer_options,
+        "available_frameworks": AVAILABLE_FRAMEWORKS,
     })
 
 
@@ -117,7 +125,7 @@ async def question_bank_update(
     text: str = Form(...),
     answer_type: str = Form("standard"),
     custom_options: str = Form(""),
-    framework_ref: str = Form(""),
+    frameworks: List[str] = Form([]),
     is_active: str = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
@@ -137,13 +145,14 @@ async def question_bank_update(
             "categories": categories,
             "get_answer_options": get_answer_options,
             "has_custom_answer_options": has_custom_answer_options,
+            "available_frameworks": AVAILABLE_FRAMEWORKS,
             "error": "Category and question text are required.",
         })
 
     item.category = category
     item.text = text
     item.is_active = is_active == "on"
-    item.framework_ref = framework_ref.strip() or None
+    item.framework_ref = ",".join(frameworks) if frameworks else None
 
     if answer_type == "custom" and custom_options.strip():
         options = [line.strip() for line in custom_options.strip().split('\n') if line.strip()]
