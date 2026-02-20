@@ -1,0 +1,61 @@
+{# Reusable comments section. Include with: {% include "partials/comments.html" with context %} #}
+{# Required context: comment_entity_type, comment_entity_id #}
+
+<div class="card mt-4" id="comments-section">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-chat-left-text me-2"></i>Internal Notes</span>
+        <span class="badge bg-secondary" id="comment-count">...</span>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/api/comments/{{ comment_entity_type }}/{{ comment_entity_id }}" class="mb-3">
+            <div class="input-group">
+                <textarea name="body" class="form-control" rows="2" placeholder="Add an internal note..." required style="resize:vertical;"></textarea>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-send"></i></button>
+            </div>
+        </form>
+        <div id="comments-list">
+            <div class="text-center text-muted py-2"><small>Loading notes...</small></div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var entityType = '{{ comment_entity_type }}';
+    var entityId = '{{ comment_entity_id }}';
+    var currentUserId = {{ request.state.current_user.id if request.state.current_user else 0 }};
+
+    function loadComments() {
+        fetch('/api/comments/' + entityType + '/' + entityId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var list = document.getElementById('comments-list');
+                var countEl = document.getElementById('comment-count');
+                countEl.textContent = data.comments.length;
+                if (!data.comments.length) {
+                    list.innerHTML = '<div class="text-center text-muted py-2"><small>No notes yet</small></div>';
+                    return;
+                }
+                var html = '';
+                data.comments.forEach(function(c) {
+                    html += '<div class="d-flex gap-2 py-2 border-bottom">' +
+                        '<div class="flex-shrink-0"><i class="bi bi-person-circle" style="font-size:1.5rem;color:#6c757d;"></i></div>' +
+                        '<div class="flex-grow-1">' +
+                        '<div class="d-flex justify-content-between align-items-start">' +
+                        '<strong class="small">' + c.user_name + '</strong>' +
+                        '<span class="text-muted" style="font-size:0.7rem;">' + c.created_at + '</span>' +
+                        '</div>' +
+                        '<div class="small mt-1" style="white-space:pre-wrap;">' + c.body.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' +
+                        (c.is_mine ? '<form method="post" action="/api/comments/' + c.id + '/delete" class="mt-1">' +
+                            '<input type="hidden" name="entity_type" value="' + entityType + '">' +
+                            '<input type="hidden" name="entity_id" value="' + entityId + '">' +
+                            '<button type="submit" class="btn btn-link btn-sm text-danger p-0" style="font-size:0.7rem;">Delete</button></form>' : '') +
+                        '</div></div>';
+                });
+                list.innerHTML = html;
+            });
+    }
+
+    loadComments();
+})();
+</script>

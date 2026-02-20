@@ -22,7 +22,8 @@ from app.services.tiering import get_effective_tier
 from app.services.activity_service import log_activity
 from app.services.export_service import generate_assessment_report_pdf
 from app.services.auth_service import require_login, require_role
-from models import ACTIVITY_DECISION_FINALIZED, User
+from app.services.notification_service import create_notification
+from models import ACTIVITY_DECISION_FINALIZED, NOTIF_DECISION_FINALIZED, RiskSnapshot, User
 
 router = APIRouter()
 
@@ -303,6 +304,25 @@ async def save_assessment_decision(
                 "remediation": rs.get("remediation_text", ""),
             })
         rem_count = auto_generate_remediations(db, decision, remediation_data)
+
+        # Create notification for decision finalization
+        create_notification(
+            db, NOTIF_DECISION_FINALIZED,
+            f"Decision finalized for {assessment.company_name}: {(decision_outcome or '').replace('_', ' ').title()}",
+            link=f"/assessments/{assessment_id}/decision",
+            vendor_id=assessment.vendor_id,
+            assessment_id=assessment_id,
+        )
+
+        # Record risk snapshot for historical trends
+        db.add(RiskSnapshot(
+            vendor_id=assessment.vendor_id,
+            assessment_id=assessment_id,
+            decision_id=decision.id,
+            overall_score=decision.overall_score,
+            risk_rating=decision.overall_risk_rating,
+            decision_outcome=decision.decision_outcome,
+        ))
 
     db.commit()
 

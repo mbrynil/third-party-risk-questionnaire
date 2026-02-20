@@ -17,13 +17,15 @@ from models import (
     backfill_question_categories, backfill_question_bank_item_ids,
     backfill_vendor_new_columns, backfill_decision_scores,
     backfill_template_columns, backfill_auth_columns,
+    backfill_new_feature_columns,
     seed_default_templates, seed_default_admin,
+    seed_default_tiering_rules, ensure_scoring_config,
     SessionLocal,
     Assessment, Response, User, ensure_reminder_config,
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
 )
-from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations, settings, notifications, onboarding, admin
+from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations, settings, notifications, onboarding, admin, comments, search
 from app.routers import auth as auth_router
 from app.services.auth_service import get_current_user
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -32,18 +34,21 @@ init_db()
 backfill_vendor_new_columns()
 backfill_template_columns()
 backfill_auth_columns()
+backfill_new_feature_columns()
 seed_question_bank()
 seed_risk_statements()
 seed_default_templates()
 seed_default_admin()
+seed_default_tiering_rules()
 backfill_question_categories()
 backfill_question_bank_item_ids()
 backfill_decision_scores()
 
-# Ensure default reminder config exists
+# Ensure default configs exist
 _db = SessionLocal()
 try:
     ensure_reminder_config(_db)
+    ensure_scoring_config(_db)
 finally:
     _db.close()
 
@@ -106,6 +111,8 @@ app.include_router(settings.router)
 app.include_router(notifications.router)
 app.include_router(onboarding.router)
 app.include_router(admin.router)
+app.include_router(comments.router)
+app.include_router(search.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -2,7 +2,7 @@ from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 
 from models import (
-    Vendor, Assessment, AssessmentDecision, Question, Response,
+    Vendor, Assessment, AssessmentDecision, Question, Response, RiskSnapshot,
     VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED,
     ASSESSMENT_STATUS_DRAFT, ASSESSMENT_STATUS_SENT,
     ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
@@ -328,6 +328,22 @@ def get_portfolio_data(db: Session) -> dict:
         "rows": heatmap,
     }
 
+    # --- Historical Trend (from RiskSnapshot) ---
+    snapshots = db.query(RiskSnapshot).order_by(RiskSnapshot.snapshot_date).all()
+    trend_data = {"labels": [], "scores": []}
+    if snapshots:
+        # Group by month and compute average score
+        monthly = {}
+        for s in snapshots:
+            if s.overall_score is not None and s.snapshot_date:
+                month_key = s.snapshot_date.strftime("%Y-%m")
+                monthly.setdefault(month_key, []).append(s.overall_score)
+        for month_key in sorted(monthly.keys()):
+            scores_list = monthly[month_key]
+            avg = round(sum(scores_list) / len(scores_list), 1)
+            trend_data["labels"].append(month_key)
+            trend_data["scores"].append(avg)
+
     return {
         "kpis": {
             "total_active_vendors": total_active_vendors,
@@ -344,4 +360,5 @@ def get_portfolio_data(db: Session) -> dict:
         "category_analysis": category_analysis,
         "vendors": vendor_rows,
         "heatmap": heatmap_meta,
+        "trend_data": trend_data,
     }

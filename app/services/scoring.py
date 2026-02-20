@@ -20,15 +20,23 @@ EVAL_SCORE = {
 }
 
 
-def suggest_risk_level(score: float) -> str:
-    """Map a 0-100 score to a risk level string."""
-    if score >= 90:
+def suggest_risk_level(score: float, config=None) -> str:
+    """Map a 0-100 score to a risk level string.
+
+    If a ScoringConfig is passed, use its thresholds; otherwise use defaults.
+    """
+    very_low_min = config.very_low_min if config else 90
+    low_min = config.low_min if config else 70
+    moderate_min = config.moderate_min if config else 50
+    high_min = config.high_min if config else 30
+
+    if score >= very_low_min:
         return RISK_LEVEL_VERY_LOW
-    elif score >= 70:
+    elif score >= low_min:
         return RISK_LEVEL_LOW
-    elif score >= 50:
+    elif score >= moderate_min:
         return RISK_LEVEL_MODERATE
-    elif score >= 30:
+    elif score >= high_min:
         return RISK_LEVEL_HIGH
     else:
         return RISK_LEVEL_VERY_HIGH

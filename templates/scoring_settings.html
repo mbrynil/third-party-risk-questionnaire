@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Scoring Thresholds - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item">Settings</li>
+        <li class="breadcrumb-item active" aria-current="page">Scoring Thresholds</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-sliders me-2"></i>Scoring Thresholds</h1>
+    <p>Configure the score boundaries used to suggest risk levels during assessment decisions.</p>
+</div>
+
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show">
+    Scoring thresholds updated successfully.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">Risk Level Thresholds</div>
+            <div class="card-body">
+                <form method="post" action="/settings/scoring">
+                    <p class="text-muted small mb-4">Scores at or above each threshold are assigned the corresponding risk level. Values must be descending.</p>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <span class="badge" style="background:#198754;">Very Low</span> — Score &ge;
+                        </label>
+                        <input type="number" name="very_low_min" class="form-control" min="1" max="100" value="{{ config.very_low_min }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <span class="badge" style="background:#20c997;">Low</span> — Score &ge;
+                        </label>
+                        <input type="number" name="low_min" class="form-control" min="1" max="99" value="{{ config.low_min }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <span class="badge" style="background:#fd7e14;">Moderate</span> — Score &ge;
+                        </label>
+                        <input type="number" name="moderate_min" class="form-control" min="1" max="98" value="{{ config.moderate_min }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <span class="badge" style="background:#dc3545;">High</span> — Score &ge;
+                        </label>
+                        <input type="number" name="high_min" class="form-control" min="0" max="97" value="{{ config.high_min }}">
+                    </div>
+
+                    <p class="text-muted small"><strong>Very High</strong> — below the High threshold.</p>
+
+                    <button type="submit" class="btn btn-primary">Save Thresholds</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">Preview</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead><tr><th>Risk Level</th><th>Score Range</th></tr></thead>
+                        <tbody>
+                            <tr><td><span class="badge" style="background:#198754;">Very Low</span></td><td>{{ config.very_low_min }}–100</td></tr>
+                            <tr><td><span class="badge" style="background:#20c997;">Low</span></td><td>{{ config.low_min }}–{{ config.very_low_min - 1 }}</td></tr>
+                            <tr><td><span class="badge" style="background:#fd7e14;">Moderate</span></td><td>{{ config.moderate_min }}–{{ config.low_min - 1 }}</td></tr>
+                            <tr><td><span class="badge" style="background:#dc3545;">High</span></td><td>{{ config.high_min }}–{{ config.moderate_min - 1 }}</td></tr>
+                            <tr><td><span class="badge" style="background:#6f42c1;">Very High</span></td><td>0–{{ config.high_min - 1 }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

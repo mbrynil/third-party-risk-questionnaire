@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Tiering Rules - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item">Settings</li>
+        <li class="breadcrumb-item active" aria-current="page">Tiering Rules</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-diagram-3 me-2"></i>Tiering Rules</h1>
+    <p>Configure which vendor classification values map to which risk tier. Rules are evaluated in priority order (top to bottom).</p>
+</div>
+
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show">
+    Tiering rules updated successfully.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">Current Rules (Priority Order)</div>
+            <div class="card-body p-0">
+                {% if rules %}
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">#</th>
+                            <th>Field</th>
+                            <th>Value</th>
+                            <th>Tier</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rule in rules %}
+                        <tr>
+                            <td class="text-muted">{{ rule.priority + 1 }}</td>
+                            <td><code>{{ rule.field }}</code></td>
+                            <td>{{ rule.value }}</td>
+                            <td>
+                                {% set tier_colors = {"Tier 1": "#dc3545", "Tier 2": "#fd7e14", "Tier 3": "#198754"} %}
+                                <span class="badge" style="background:{{ tier_colors.get(rule.tier, '#6c757d') }};">{{ rule.tier }}</span>
+                            </td>
+                            <td class="text-end">
+                                <form method="post" action="/settings/tiering/{{ rule.id }}/delete" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this rule?')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <p>No custom tiering rules configured. Using hardcoded defaults.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">Add Rule</div>
+            <div class="card-body">
+                <form method="post" action="/settings/tiering/add">
+                    <div class="mb-3">
+                        <label class="form-label">Field</label>
+                        <select name="field" class="form-select" id="tieringField" required>
+                            <option value="">Select...</option>
+                            {% for field_name, values in fields.items() %}
+                            <option value="{{ field_name }}">{{ field_name.replace('_', ' ').title() }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Value</label>
+                        <select name="value" class="form-select" id="tieringValue" required>
+                            <option value="">Select field first...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Maps to Tier</label>
+                        <select name="tier" class="form-select" required>
+                            {% for tier in tiers %}
+                            <option value="{{ tier }}">{{ tier }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Add Rule</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">How It Works</div>
+            <div class="card-body small text-muted">
+                <p>When a vendor's classification fields change, rules are checked top-to-bottom. The first matching rule determines the tier.</p>
+                <p class="mb-0">If no rule matches, the system defaults to <strong>Tier 3</strong> (Standard Risk).</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var fieldValues = {{ fields | tojson | safe }};
+document.getElementById('tieringField').addEventListener('change', function() {
+    var sel = document.getElementById('tieringValue');
+    sel.innerHTML = '<option value="">Select...</option>';
+    var vals = fieldValues[this.value] || [];
+    vals.forEach(function(v) {
+        sel.innerHTML += '<option value="' + v + '">' + v + '</option>';
+    });
+});
+</script>
+{% endblock %}

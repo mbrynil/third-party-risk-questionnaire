@@ -2,6 +2,15 @@
 
 {% block title %}Vendors - RiskQ{% endblock %}
 
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Vendors</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block extra_head %}
 <style>
     .tier-badge-sm {
@@ -21,7 +30,10 @@
         <h1>Vendors</h1>
         <p>Manage your third-party vendors and their assessments</p>
     </div>
-    <div class="mt-3 mt-sm-0">
+    <div class="mt-3 mt-sm-0 d-flex gap-2">
+        <a href="/vendors/import" class="btn btn-outline-primary">
+            <i class="bi bi-upload me-1"></i>Import CSV
+        </a>
         <a href="/vendors/new" class="btn btn-primary">
             <i class="bi bi-plus-lg me-2"></i>Add Vendor
         </a>

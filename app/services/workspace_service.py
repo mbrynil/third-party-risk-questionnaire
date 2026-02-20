@@ -6,13 +6,13 @@ from sqlalchemy import or_
 
 from models import (
     User, Vendor, Assessment, AssessmentDecision, RemediationItem,
-    VendorActivity, VENDOR_STATUS_ACTIVE,
+    VendorActivity, VendorDocument, VENDOR_STATUS_ACTIVE,
     ASSESSMENT_STATUS_DRAFT, ASSESSMENT_STATUS_SENT,
     ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_REVIEWED,
     DECISION_STATUS_FINAL,
     REMEDIATION_STATUS_CLOSED, REMEDIATION_STATUS_VERIFIED,
-    ACTIVITY_ICONS, ACTIVITY_COLORS,
+    ACTIVITY_ICONS, ACTIVITY_COLORS, DOCUMENT_TYPE_LABELS,
 )
 from app.services.tiering import get_effective_tier, TIER_COLORS
 from app.services.portfolio import RISK_LABELS, DECISION_LABELS
@@ -220,6 +220,44 @@ def get_workspace_data(db: Session, user: User) -> dict:
                 "link": f"/assessments/{a.id}/manage",
                 "due_info": None,
             })
+
+    # P1.5: Expired documents on my vendors
+    # P6.5: Documents expiring within 30 days
+    if my_vendor_ids:
+        expiring_threshold = today + timedelta(days=30)
+        docs = db.query(VendorDocument).filter(
+            VendorDocument.vendor_id.in_(my_vendor_ids),
+            VendorDocument.expiry_date != None,
+        ).all()
+        for doc in docs:
+            exp_date = doc.expiry_date.date() if hasattr(doc.expiry_date, 'date') else doc.expiry_date
+            type_label = DOCUMENT_TYPE_LABELS.get(doc.document_type, doc.document_type)
+            vendor = next((v for v in my_vendors if v.id == doc.vendor_id), None)
+            vendor_name = vendor.name if vendor else "Vendor"
+            if exp_date < today:
+                days_over = (today - exp_date).days
+                action_items.append({
+                    "priority": 1.5,
+                    "type": "expired_document",
+                    "icon": "bi-file-earmark-x",
+                    "color": "#dc3545",
+                    "title": f"{type_label} expired — {vendor_name}",
+                    "subtitle": f"Expired {days_over} day{'s' if days_over != 1 else ''} ago ({doc.title})",
+                    "link": f"/vendors/{doc.vendor_id}",
+                    "due_info": exp_date.strftime("%Y-%m-%d") if hasattr(exp_date, 'strftime') else str(exp_date),
+                })
+            elif exp_date <= expiring_threshold:
+                days_until = (exp_date - today).days
+                action_items.append({
+                    "priority": 6.5,
+                    "type": "expiring_document",
+                    "icon": "bi-file-earmark-excel",
+                    "color": "#fd7e14",
+                    "title": f"{type_label} expiring soon — {vendor_name}",
+                    "subtitle": f"Expires in {days_until} day{'s' if days_until != 1 else ''} ({doc.title})",
+                    "link": f"/vendors/{doc.vendor_id}",
+                    "due_info": exp_date.strftime("%Y-%m-%d") if hasattr(exp_date, 'strftime') else str(exp_date),
+                })
 
     action_items.sort(key=lambda x: x["priority"])
 

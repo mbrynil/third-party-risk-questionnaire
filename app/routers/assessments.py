@@ -111,6 +111,28 @@ async def assign_assessment_analyst(
     return RedirectResponse(url=referer, status_code=303)
 
 
+@router.post("/assessments/bulk-assign")
+async def bulk_assign_analyst(
+    request: Request,
+    assessment_ids: str = Form(""),
+    analyst_id: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
+):
+    """Bulk assign analyst to multiple assessments."""
+    ids = [int(x) for x in assessment_ids.split(",") if x.strip().isdigit()]
+    new_id = int(analyst_id) if analyst_id.strip().isdigit() else None
+    if ids:
+        db.query(Assessment).filter(Assessment.id.in_(ids)).update(
+            {"assigned_analyst_id": new_id}, synchronize_session=False
+        )
+        db.commit()
+    return RedirectResponse(
+        url=f"/assessments/tracker?message=Updated {len(ids)} assessments&message_type=success",
+        status_code=303,
+    )
+
+
 @router.get("/assessments/tracker.csv")
 async def assessment_tracker_csv(db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     csv_content = generate_assessment_tracker_csv(db)

@@ -176,6 +176,13 @@
                         </a>
                     </li>
                     {% endif %}
+                    <li class="nav-item me-2" style="position:relative;" id="searchBarWrap">
+                        <div class="input-group input-group-sm" style="width:220px;">
+                            <input type="text" class="form-control form-control-sm" id="globalSearchInput" placeholder="Search..." autocomplete="off" style="background:rgba(255,255,255,0.15);border-color:rgba(255,255,255,0.2);color:#fff;font-size:0.8rem;">
+                            <span class="input-group-text" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:#fff;"><i class="bi bi-search"></i></span>
+                        </div>
+                        <div id="searchResults" class="dropdown-menu show" style="display:none;position:absolute;top:100%;left:0;width:360px;max-height:400px;overflow-y:auto;z-index:9999;"></div>
+                    </li>
                     <li class="nav-item dropdown" id="notifBell">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" id="notifBellLink">
                             <i class="bi bi-bell me-1"></i>
@@ -204,6 +211,13 @@
                             <li><a class="dropdown-item" href="/admin/users">
                                 <i class="bi bi-people me-2"></i>User Management
                             </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/settings/scoring">
+                                <i class="bi bi-sliders me-2"></i>Scoring Thresholds
+                            </a></li>
+                            <li><a class="dropdown-item" href="/settings/tiering">
+                                <i class="bi bi-diagram-3 me-2"></i>Tiering Rules
+                            </a></li>
                         </ul>
                     </li>
                     {% endif %}
@@ -231,6 +245,7 @@
 
     <main class="main-content">
         <div class="container">
+            {% block breadcrumbs %}{% endblock %}
             {% if message %}
             <div class="alert alert-{{ message_type|default('info') }} alert-dismissible fade show" role="alert">
                 {{ message }}
@@ -302,6 +317,53 @@
                 loadNotifications();
                 loaded = true;
             });
+        });
+    })();
+    </script>
+    <script>
+    (function(){
+        var searchInput = document.getElementById('globalSearchInput');
+        var searchResults = document.getElementById('searchResults');
+        var debounceTimer = null;
+
+        if (!searchInput) return;
+
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            var q = this.value.trim();
+            if (q.length < 2) { searchResults.style.display = 'none'; return; }
+            debounceTimer = setTimeout(function() {
+                fetch('/api/search?q=' + encodeURIComponent(q))
+                    .then(function(r){ return r.json(); })
+                    .then(function(data){
+                        if (!data.results.length) {
+                            searchResults.innerHTML = '<div class="px-3 py-2 text-muted small">No results found</div>';
+                            searchResults.style.display = 'block';
+                            return;
+                        }
+                        var html = '';
+                        data.results.forEach(function(r) {
+                            html += '<a href="' + r.url + '" class="dropdown-item d-flex align-items-start gap-2 py-2 px-3 border-bottom" style="white-space:normal;">' +
+                                '<i class="bi ' + r.icon + ' mt-1 flex-shrink-0" style="color:#6c757d;"></i>' +
+                                '<div><div class="small fw-semibold">' + r.title + '</div>' +
+                                '<div class="text-muted" style="font-size:0.7rem;">' + r.type.charAt(0).toUpperCase() + r.type.slice(1) + (r.subtitle ? ' — ' + r.subtitle : '') + '</div></div></a>';
+                        });
+                        searchResults.innerHTML = html;
+                        searchResults.style.display = 'block';
+                    });
+            }, 300);
+        });
+
+        searchInput.addEventListener('focus', function() {
+            if (this.value.trim().length >= 2 && searchResults.innerHTML) {
+                searchResults.style.display = 'block';
+            }
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.style.display = 'none';
+            }
         });
     })();
     </script>

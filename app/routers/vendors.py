@@ -10,7 +10,8 @@ from app import templates
 from models import (
     get_db, Assessment, AssessmentTemplate, Vendor, AssessmentDecision,
     VendorContact, VendorDocument,
-    VENDOR_STATUS_ACTIVE, VALID_VENDOR_STATUSES,
+    VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED, VENDOR_STATUS_OFFBOARDING,
+    VALID_VENDOR_STATUSES,
     VALID_INDUSTRIES, VALID_SERVICE_TYPES, VALID_DATA_CLASSIFICATIONS,
     VALID_BUSINESS_CRITICALITIES, VALID_ACCESS_LEVELS, VALID_INHERENT_RISK_TIERS,
     VALID_CONTACT_ROLES, VALID_DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS,
@@ -32,6 +33,8 @@ from models import (
     User,
 )
 from app.services.auth_service import require_login, require_role
+from app.services.notification_service import create_notification
+from models import NOTIF_ANALYST_ASSIGNED
 
 _analyst_dep = require_role("admin", "analyst")
 
@@ -137,6 +140,98 @@ async def create_vendor(
     return RedirectResponse(url=f"/vendors/{vendor.id}?created=1", status_code=303)
 
 
+# ==================== CSV IMPORT (must be before {vendor_id}) ====================
+
+@router.get("/vendors/import", response_class=HTMLResponse)
+async def vendor_import_page(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_role("admin", "analyst"))):
+    return templates.TemplateResponse("vendor_import.html", {
+        "request": request,
+        "preview_rows": None,
+    })
+
+
+@router.post("/vendors/import/preview")
+async def vendor_import_preview(
+    request: Request,
+    csv_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
+):
+    """Parse CSV and show preview for confirmation."""
+    import csv
+    import io
+
+    content = await csv_file.read()
+    text = content.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+
+    preview_rows = []
+    errors = []
+    for i, row in enumerate(reader, start=2):
+        name = (row.get("name") or row.get("Name") or row.get("vendor_name") or "").strip()
+        if not name:
+            errors.append(f"Row {i}: missing vendor name")
+            continue
+        preview_rows.append({
+            "name": name,
+            "industry": (row.get("industry") or row.get("Industry") or "").strip(),
+            "service_type": (row.get("service_type") or row.get("Service Type") or "").strip(),
+            "website": (row.get("website") or row.get("Website") or "").strip(),
+            "contact_name": (row.get("contact_name") or row.get("Contact Name") or row.get("primary_contact_name") or "").strip(),
+            "contact_email": (row.get("contact_email") or row.get("Contact Email") or row.get("primary_contact_email") or "").strip(),
+            "data_classification": (row.get("data_classification") or row.get("Data Classification") or "").strip(),
+            "business_criticality": (row.get("business_criticality") or row.get("Business Criticality") or "").strip(),
+        })
+
+    return templates.TemplateResponse("vendor_import.html", {
+        "request": request,
+        "preview_rows": preview_rows,
+        "errors": errors,
+        "csv_data": text,
+    })
+
+
+@router.post("/vendors/import/confirm")
+async def vendor_import_confirm(
+    request: Request,
+    csv_data: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
+):
+    """Actually create vendors from CSV."""
+    import csv
+    import io
+
+    reader = csv.DictReader(io.StringIO(csv_data))
+    created = 0
+    for row in reader:
+        name = (row.get("name") or row.get("Name") or row.get("vendor_name") or "").strip()
+        if not name:
+            continue
+
+        vendor = Vendor(
+            name=name,
+            industry=(row.get("industry") or row.get("Industry") or "").strip() or None,
+            service_type=(row.get("service_type") or row.get("Service Type") or "").strip() or None,
+            website=(row.get("website") or row.get("Website") or "").strip() or None,
+            primary_contact_name=(row.get("contact_name") or row.get("Contact Name") or row.get("primary_contact_name") or "").strip() or None,
+            primary_contact_email=(row.get("contact_email") or row.get("Contact Email") or row.get("primary_contact_email") or "").strip() or None,
+            data_classification=(row.get("data_classification") or row.get("Data Classification") or "").strip() or None,
+            business_criticality=(row.get("business_criticality") or row.get("Business Criticality") or "").strip() or None,
+            status=VENDOR_STATUS_ACTIVE,
+        )
+        vendor.inherent_risk_tier = compute_inherent_risk_tier(
+            vendor.data_classification, vendor.business_criticality, vendor.access_level
+        )
+        db.add(vendor)
+        log_activity(db, None, "VENDOR_CREATED", f"Vendor '{name}' created via CSV import", user_id=current_user.id)
+        created += 1
+
+    db.commit()
+    msg = quote(f"Imported {created} vendor(s) from CSV")
+    return RedirectResponse(url=f"/vendors?message={msg}&message_type=success", status_code=303)
+
+
 @router.get("/vendors/{vendor_id}", response_class=HTMLResponse)
 async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
@@ -203,6 +298,15 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         User.role.in_(["admin", "analyst"]),
     ).order_by(User.display_name).all()
 
+    # Parse offboarding checklist
+    import json as _json
+    offboarding_checklist = []
+    if vendor.offboarding_checklist:
+        try:
+            offboarding_checklist = _json.loads(vendor.offboarding_checklist)
+        except (ValueError, TypeError):
+            pass
+
     return templates.TemplateResponse("vendor_profile.html", {
         "request": request,
         "vendor": vendor,
@@ -228,6 +332,7 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         "activity_icons": ACTIVITY_ICONS,
         "activity_colors": ACTIVITY_COLORS,
         "analysts": analysts,
+        "offboarding_checklist": offboarding_checklist,
     })
 
 
@@ -509,6 +614,13 @@ async def assign_analyst(
         log_activity(db, vendor_id, "ANALYST_ASSIGNED",
                      f"Analyst changed from {old_name} to {new_name}",
                      user_id=current_user.id)
+        if new_analyst:
+            create_notification(
+                db, NOTIF_ANALYST_ASSIGNED,
+                f"You were assigned to vendor {vendor.name}",
+                link=f"/vendors/{vendor_id}",
+                vendor_id=vendor_id,
+            )
     db.commit()
 
     return RedirectResponse(
@@ -677,3 +789,75 @@ async def bulk_assign_tier(
     db.commit()
     msg = quote(f"Assigned {tier} to {count} vendor(s)")
     return RedirectResponse(url=f"/?message={msg}&message_type=success", status_code=303)
+
+
+
+# ==================== VENDOR OFFBOARDING ====================
+
+DEFAULT_OFFBOARDING_CHECKLIST = [
+    {"key": "data_retrieval", "label": "Retrieve all data from vendor", "done": False},
+    {"key": "access_revoked", "label": "Revoke vendor access to systems", "done": False},
+    {"key": "credentials_rotated", "label": "Rotate shared credentials", "done": False},
+    {"key": "contracts_terminated", "label": "Terminate contracts and NDAs", "done": False},
+    {"key": "final_assessment", "label": "Complete final security assessment", "done": False},
+    {"key": "stakeholders_notified", "label": "Notify internal stakeholders", "done": False},
+]
+
+
+@router.post("/vendors/{vendor_id}/offboard")
+async def start_offboarding(
+    vendor_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
+):
+    """Transition vendor to OFFBOARDING status."""
+    import json
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    vendor.status = VENDOR_STATUS_OFFBOARDING
+    vendor.offboarding_checklist = json.dumps(DEFAULT_OFFBOARDING_CHECKLIST)
+    log_activity(db, vendor_id, "VENDOR_CREATED", f"Offboarding initiated for {vendor.name}", user_id=current_user.id)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/vendors/{vendor_id}?message=Offboarding started&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/vendors/{vendor_id}/offboard/update")
+async def update_offboarding_checklist(
+    request: Request,
+    vendor_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "analyst")),
+):
+    """Update offboarding checklist items."""
+    import json
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor or vendor.status != VENDOR_STATUS_OFFBOARDING:
+        raise HTTPException(status_code=400)
+
+    form = await request.form()
+    checklist = json.loads(vendor.offboarding_checklist or "[]")
+    for item in checklist:
+        item["done"] = form.get(f"check_{item['key']}") == "on"
+
+    vendor.offboarding_checklist = json.dumps(checklist)
+
+    # If all items done, archive the vendor
+    all_done = all(item["done"] for item in checklist)
+    if all_done:
+        vendor.status = VENDOR_STATUS_ARCHIVED
+        log_activity(db, vendor_id, "VENDOR_CREATED", f"Offboarding completed, vendor archived: {vendor.name}", user_id=current_user.id)
+
+    db.commit()
+
+    msg = "Vendor archived — offboarding complete" if all_done else "Checklist updated"
+    msg_type = "success"
+    return RedirectResponse(
+        url=f"/vendors/{vendor_id}?message={quote(msg)}&message_type={msg_type}",
+        status_code=303,
+    )

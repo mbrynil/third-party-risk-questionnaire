@@ -65,6 +65,8 @@ async def portfolio(request: Request, db: Session = Depends(get_db), current_use
         "assessment_pipeline_json": json.dumps(data["assessment_pipeline"]),
         "category_analysis_json": json.dumps(data["category_analysis"]),
         "heatmap": data["heatmap"],
+        "trend_data": data.get("trend_data", {"labels": [], "scores": []}),
+        "trend_data_json": json.dumps(data.get("trend_data", {"labels": [], "scores": []})),
         "assessment_templates": templates_list,
         "reminder_stats": reminder_stats,
         "analysts": analysts,

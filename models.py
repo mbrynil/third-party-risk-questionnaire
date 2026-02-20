@@ -39,7 +39,7 @@ class QuestionBankItem(Base):
 
 VENDOR_STATUS_ACTIVE = "ACTIVE"
 VENDOR_STATUS_ARCHIVED = "ARCHIVED"
-VALID_VENDOR_STATUSES = [VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED]
+# VALID_VENDOR_STATUSES defined below after VENDOR_STATUS_OFFBOARDING
 
 VALID_INDUSTRIES = ["Technology", "Healthcare", "Finance", "Manufacturing", "Retail", "Energy", "Telecommunications", "Government", "Education", "Legal", "Consulting", "Other"]
 VALID_SERVICE_TYPES = ["SaaS", "Infrastructure", "BPO", "Consulting", "Hardware", "Other"]
@@ -98,6 +98,9 @@ class Vendor(Base):
     # Analyst assignment
     assigned_analyst_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_analyst = relationship("User", foreign_keys=[assigned_analyst_id])
+
+    # Offboarding
+    offboarding_checklist = Column(Text, nullable=True)  # JSON checklist
 
     assessments = relationship("Assessment", back_populates="vendor")
     contacts = relationship("VendorContact", back_populates="vendor", cascade="all, delete-orphan")
@@ -1267,11 +1270,21 @@ class VendorActivity(Base):
 NOTIF_ASSESSMENT_SUBMITTED = "ASSESSMENT_SUBMITTED"
 NOTIF_ESCALATION = "ESCALATION"
 NOTIF_ONBOARDING_COMPLETE = "ONBOARDING_COMPLETE"
+NOTIF_ANALYST_ASSIGNED = "ANALYST_ASSIGNED"
+NOTIF_DECISION_FINALIZED = "DECISION_FINALIZED"
+NOTIF_REMEDIATION_OVERDUE = "REMEDIATION_OVERDUE"
+NOTIF_DOCUMENT_EXPIRING = "DOCUMENT_EXPIRING"
+NOTIF_COMMENT_ADDED = "COMMENT_ADDED"
 
 NOTIF_ICONS = {
     NOTIF_ASSESSMENT_SUBMITTED: "bi-inbox-fill",
     NOTIF_ESCALATION: "bi-exclamation-triangle-fill",
     NOTIF_ONBOARDING_COMPLETE: "bi-magic",
+    NOTIF_ANALYST_ASSIGNED: "bi-person-check",
+    NOTIF_DECISION_FINALIZED: "bi-shield-check",
+    NOTIF_REMEDIATION_OVERDUE: "bi-clock-history",
+    NOTIF_DOCUMENT_EXPIRING: "bi-file-earmark-excel",
+    NOTIF_COMMENT_ADDED: "bi-chat-left-text",
 }
 
 
@@ -1286,6 +1299,131 @@ class Notification(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
     assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+
+
+# ==================== INTERNAL COMMENTS ====================
+
+COMMENT_ENTITY_VENDOR = "vendor"
+COMMENT_ENTITY_ASSESSMENT = "assessment"
+COMMENT_ENTITY_DECISION = "decision"
+COMMENT_ENTITY_REMEDIATION = "remediation"
+VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION]
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(50), nullable=False, index=True)
+    entity_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User")
+
+
+# ==================== SCORING CONFIGURATION ====================
+
+class ScoringConfig(Base):
+    """DB-backed scoring thresholds. Single-row table."""
+    __tablename__ = "scoring_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+    very_low_min = Column(Integer, default=90)
+    low_min = Column(Integer, default=70)
+    moderate_min = Column(Integer, default=50)
+    high_min = Column(Integer, default=30)
+    # Below high_min → VERY_HIGH
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+def ensure_scoring_config(db_session):
+    """Ensure a default ScoringConfig row exists."""
+    config = db_session.query(ScoringConfig).first()
+    if not config:
+        config = ScoringConfig()
+        db_session.add(config)
+        db_session.commit()
+    return config
+
+
+# ==================== TIERING RULES ====================
+
+class TieringRule(Base):
+    """Configurable tiering rules. Each row is a condition→tier mapping."""
+    __tablename__ = "tiering_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    field = Column(String(50), nullable=False)  # data_classification, business_criticality, access_level
+    value = Column(String(50), nullable=False)   # e.g. "Restricted", "Critical"
+    tier = Column(String(20), nullable=False)     # "Tier 1", "Tier 2", "Tier 3"
+    priority = Column(Integer, default=0)         # lower = checked first
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+def seed_default_tiering_rules():
+    """Seed the default tiering rules if none exist."""
+    db = SessionLocal()
+    try:
+        if db.query(TieringRule).count() > 0:
+            return
+        defaults = [
+            ("data_classification", "Restricted", "Tier 1", 0),
+            ("business_criticality", "Critical", "Tier 1", 1),
+            ("data_classification", "Confidential", "Tier 2", 2),
+            ("business_criticality", "High", "Tier 2", 3),
+            ("access_level", "Extensive", "Tier 2", 4),
+        ]
+        for field, value, tier, priority in defaults:
+            db.add(TieringRule(field=field, value=value, tier=tier, priority=priority))
+        db.commit()
+    finally:
+        db.close()
+
+
+# ==================== RISK SNAPSHOT (HISTORICAL TRENDS) ====================
+
+class RiskSnapshot(Base):
+    """Point-in-time risk snapshot for trend analysis."""
+    __tablename__ = "risk_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=True)
+    decision_id = Column(Integer, ForeignKey("assessment_decisions.id"), nullable=True)
+    overall_score = Column(Integer, nullable=True)
+    risk_rating = Column(String(20), nullable=True)
+    decision_outcome = Column(String(30), nullable=True)
+    snapshot_date = Column(DateTime, default=datetime.utcnow)
+
+    vendor = relationship("Vendor")
+
+
+# ==================== VENDOR OFFBOARDING ====================
+
+VENDOR_STATUS_OFFBOARDING = "OFFBOARDING"
+VALID_VENDOR_STATUSES = [VENDOR_STATUS_ACTIVE, VENDOR_STATUS_ARCHIVED, VENDOR_STATUS_OFFBOARDING]
+
+
+def backfill_new_feature_columns():
+    """Add columns for offboarding, comments, scoring config, etc."""
+    import sqlite3
+    conn = sqlite3.connect("./questionnaires.db")
+    cursor = conn.cursor()
+
+    # Vendor: offboarding_checklist
+    cursor.execute("PRAGMA table_info(vendors)")
+    vendor_cols = {row[1] for row in cursor.fetchall()}
+    if "offboarding_checklist" not in vendor_cols:
+        try:
+            cursor.execute("ALTER TABLE vendors ADD COLUMN offboarding_checklist TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+    conn.commit()
+    conn.close()
 
 
 def backfill_auth_columns():

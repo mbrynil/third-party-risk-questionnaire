@@ -18,18 +18,30 @@ TIER_LABELS = {
 }
 
 
-def compute_inherent_risk_tier(data_classification: str | None, business_criticality: str | None, access_level: str | None) -> str:
+def compute_inherent_risk_tier(data_classification: str | None, business_criticality: str | None, access_level: str | None, rules=None) -> str:
     """Compute inherent risk tier from classification fields.
 
-    Rules:
-    - Restricted data OR Critical business -> Tier 1
-    - Confidential data OR High business OR Extensive access -> Tier 2
-    - Otherwise -> Tier 3
+    If rules (list of TieringRule) are passed, use them; otherwise use hardcoded defaults.
+    Rules are checked in priority order (lower priority number first).
     """
     dc = (data_classification or "").strip()
     bc = (business_criticality or "").strip()
     al = (access_level or "").strip()
 
+    field_values = {
+        "data_classification": dc,
+        "business_criticality": bc,
+        "access_level": al,
+    }
+
+    if rules:
+        sorted_rules = sorted(rules, key=lambda r: r.priority)
+        for rule in sorted_rules:
+            actual = field_values.get(rule.field, "")
+            if actual and actual == rule.value:
+                return rule.tier
+
+    # Fallback defaults if no rules or no match
     if dc == "Restricted" or bc == "Critical":
         return "Tier 1"
     if dc == "Confidential" or bc == "High" or al == "Extensive":

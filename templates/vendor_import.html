@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Import Vendors - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Import CSV</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-upload me-2"></i>Import Vendors from CSV</h1>
+    <p>Upload a CSV file to bulk-create vendors. Required column: <code>name</code>. Optional: <code>industry</code>, <code>service_type</code>, <code>website</code>, <code>contact_name</code>, <code>contact_email</code>, <code>data_classification</code>, <code>business_criticality</code>.</p>
+</div>
+
+{% if errors %}
+<div class="alert alert-warning">
+    <strong>{{ errors|length }} warning(s):</strong>
+    <ul class="mb-0 mt-1">
+        {% for e in errors %}
+        <li>{{ e }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if preview_rows is none %}
+<!-- Upload Step -->
+<div class="card" style="max-width:600px;">
+    <div class="card-body">
+        <form method="post" action="/vendors/import/preview" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label class="form-label">CSV File</label>
+                <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-eye me-1"></i>Preview
+            </button>
+            <a href="/vendors" class="btn btn-outline-secondary ms-2">Cancel</a>
+        </form>
+    </div>
+</div>
+{% elif preview_rows|length == 0 %}
+<div class="alert alert-warning">No valid rows found in the CSV. Please check the file format.</div>
+<a href="/vendors/import" class="btn btn-outline-secondary">Try Again</a>
+{% else %}
+<!-- Preview Step -->
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Preview: {{ preview_rows|length }} vendor(s) to import</span>
+        <form method="post" action="/vendors/import/confirm">
+            <input type="hidden" name="csv_data" value="{{ csv_data|e }}">
+            <button type="submit" class="btn btn-sm btn-success">
+                <i class="bi bi-check-circle me-1"></i>Confirm Import
+            </button>
+        </form>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Industry</th>
+                    <th>Service Type</th>
+                    <th>Contact</th>
+                    <th>Classification</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in preview_rows %}
+                <tr>
+                    <td class="fw-semibold">{{ row.name }}</td>
+                    <td>{{ row.industry or '—' }}</td>
+                    <td>{{ row.service_type or '—' }}</td>
+                    <td>
+                        {% if row.contact_name %}{{ row.contact_name }}{% endif %}
+                        {% if row.contact_email %}<br><small class="text-muted">{{ row.contact_email }}</small>{% endif %}
+                        {% if not row.contact_name and not row.contact_email %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if row.data_classification %}{{ row.data_classification }}{% endif %}
+                        {% if row.business_criticality %}<br><small>{{ row.business_criticality }}</small>{% endif %}
+                        {% if not row.data_classification and not row.business_criticality %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<a href="/vendors/import" class="btn btn-outline-secondary">Start Over</a>
+{% endif %}
+{% endblock %}

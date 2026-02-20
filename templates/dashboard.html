@@ -2,6 +2,15 @@
 
 {% block title %}Dashboard - RiskQ{% endblock %}
 
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Portfolio</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block extra_head %}
 <style>
     .kpi-card {
@@ -349,6 +358,20 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ==================== HISTORICAL TREND ==================== #}
+{% if trend_data and trend_data.labels|length > 1 %}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="chart-card">
+            <h6><i class="bi bi-graph-up me-1"></i>Portfolio Risk Trend (Avg Score by Month)</h6>
+            <div style="position:relative;height:250px;">
+                <canvas id="trendChart"></canvas>
             </div>
         </div>
     </div>
@@ -1008,5 +1031,38 @@ document.addEventListener('DOMContentLoaded', function() {
         new bootstrap.Modal(document.getElementById('bulkTierModal')).show();
     };
 });
+
+// ==================== TREND CHART ====================
+var trendCanvas = document.getElementById('trendChart');
+if (trendCanvas) {
+    var trendData = {{ trend_data_json|safe }};
+    if (trendData.labels.length > 1) {
+        new Chart(trendCanvas, {
+            type: 'line',
+            data: {
+                labels: trendData.labels,
+                datasets: [{
+                    label: 'Avg Risk Score',
+                    data: trendData.scores,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#2563eb',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { min: 0, max: 100, title: { display: true, text: 'Score' } },
+                    x: { title: { display: true, text: 'Month' } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+}
 </script>
 {% endblock %}

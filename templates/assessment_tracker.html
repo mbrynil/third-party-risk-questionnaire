@@ -2,6 +2,15 @@
 
 {% block title %}Assessment Tracker - RiskQ{% endblock %}
 
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Assessment Tracker</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block extra_head %}
 <style>
     .tracker-filters select {
@@ -17,6 +26,19 @@
     .days-ok { background: #d1fae5; color: #065f46; }
     .days-warn { background: #fef3c7; color: #92400e; }
     .days-overdue { background: #fee2e2; color: #991b1b; }
+    #bulkBar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+        color: #fff;
+        padding: 0.75rem 1.5rem;
+        display: none;
+        z-index: 1050;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+    }
+    #bulkBar.show { display: flex; align-items: center; gap: 1rem; }
 </style>
 {% endblock %}
 
@@ -129,6 +151,7 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
+                    <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
                     <th>Vendor</th>
                     <th>Assessment</th>
                     <th>Analyst</th>
@@ -147,6 +170,7 @@
                     data-days="{{ row.days_waiting if row.days_waiting is not none else '' }}"
                     data-search="{{ row.vendor_name|lower }} {{ row.assessment.title|lower }}"
                     data-analyst="{{ row.assessment.assigned_analyst_id or (row.effective_analyst.id if row.effective_analyst else '') }}">
+                    <td><input type="checkbox" class="row-select" value="{{ row.assessment.id }}" onchange="updateBulkBar()"></td>
                     <td>
                         {% if row.vendor_id %}
                         <a href="/vendors/{{ row.vendor_id }}" class="text-decoration-none fw-semibold">
@@ -279,10 +303,51 @@
         </table>
     </div>
 </div>
+<!-- Floating Bulk Action Bar -->
+<div id="bulkBar">
+    <strong><span id="bulkCount">0</span> selected</strong>
+    <form method="post" action="/assessments/bulk-assign" id="bulkForm" class="d-flex gap-2 align-items-center ms-auto">
+        <input type="hidden" name="assessment_ids" id="bulkIds" value="">
+        <label class="text-white-50 small mb-0">Assign Analyst:</label>
+        <select name="analyst_id" class="form-select form-select-sm" style="width:180px;">
+            <option value="">Unassign</option>
+            {% for a in analysts %}
+            <option value="{{ a.id }}">{{ a.display_name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-light">Apply</button>
+    </form>
+    <button type="button" class="btn btn-sm btn-outline-light" onclick="clearSelection()">Cancel</button>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+function toggleSelectAll(el) {
+    document.querySelectorAll('.row-select').forEach(function(cb) { cb.checked = el.checked; });
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    var checked = document.querySelectorAll('.row-select:checked');
+    var bar = document.getElementById('bulkBar');
+    var countEl = document.getElementById('bulkCount');
+    var idsEl = document.getElementById('bulkIds');
+    if (checked.length > 0) {
+        bar.classList.add('show');
+        countEl.textContent = checked.length;
+        idsEl.value = Array.from(checked).map(function(cb) { return cb.value; }).join(',');
+    } else {
+        bar.classList.remove('show');
+    }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.row-select').forEach(function(cb) { cb.checked = false; });
+    document.getElementById('selectAll').checked = false;
+    updateBulkBar();
+}
+
 function applyTrackerFilters() {
     var statusVal = document.getElementById('filterStatus').value;
     var waitingVal = document.getElementById('filterWaiting').value;

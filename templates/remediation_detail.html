@@ -2,6 +2,19 @@
 
 {% block title %}Remediation: {{ item.title[:50] }} - RiskQ{% endblock %}
 
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+        {% if item.vendor %}
+        <li class="breadcrumb-item"><a href="/vendors/{{ item.vendor.id }}">{{ item.vendor.name }}</a></li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">Remediation</li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block extra_head %}
 <style>
     .severity-badge {
@@ -176,4 +189,8 @@
         </div>
     </div>
 </div>
+
+{% set comment_entity_type = "remediation" %}
+{% set comment_entity_id = item.id %}
+{% include "partials/comments.html" %}
 {% endblock %}
