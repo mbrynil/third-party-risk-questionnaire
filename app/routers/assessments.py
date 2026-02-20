@@ -22,7 +22,12 @@ from app.services.email_service import send_assessment_invitation
 from app.services.activity_service import log_activity
 from app.services.export_service import generate_assessment_tracker_csv
 from app.services.auth_service import require_login, require_role
-from models import ACTIVITY_ASSESSMENT_SENT, User
+from app.services.sla_service import compute_sla_status, is_sla_enabled, _get_sla_config_map
+from app.services.tiering import get_effective_tier
+from models import (
+    ACTIVITY_ASSESSMENT_SENT, User,
+    SLA_STATUS_COLORS, SLA_STATUS_LABELS, SLA_STATUS_NA,
+)
 
 router = APIRouter()
 
@@ -58,6 +63,10 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db), cu
         User.role.in_(["admin", "analyst"]),
     ).order_by(User.display_name).all()
 
+    # SLA config
+    sla_enabled = is_sla_enabled(db)
+    sla_map = _get_sla_config_map(db) if sla_enabled else {}
+
     # Build enriched rows
     rows = []
     for a in assessments:
@@ -72,6 +81,14 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db), cu
         if not effective_analyst and a.vendor and a.vendor.assigned_analyst:
             effective_analyst = a.vendor.assigned_analyst
 
+        # SLA status
+        sla_status = SLA_STATUS_NA
+        if sla_enabled and a.sent_at:
+            tier = get_effective_tier(a.vendor) if a.vendor else None
+            cfg = sla_map.get(tier) if tier else None
+            sla_result = compute_sla_status(a, cfg, now, decision)
+            sla_status = sla_result["overall"]
+
         rows.append({
             "assessment": a,
             "vendor_name": a.vendor.name if a.vendor else a.company_name,
@@ -81,6 +98,7 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db), cu
             "decision": decision,
             "effective_analyst": effective_analyst,
             "is_inherited": effective_analyst and not a.assigned_analyst_id,
+            "sla_status": sla_status,
         })
 
     return templates.TemplateResponse("assessment_tracker.html", {
@@ -88,6 +106,9 @@ async def assessment_tracker(request: Request, db: Session = Depends(get_db), cu
         "rows": rows,
         "analysts": analysts,
         "now": now,
+        "sla_enabled": sla_enabled,
+        "sla_colors": SLA_STATUS_COLORS,
+        "sla_labels": SLA_STATUS_LABELS,
     })
 
 

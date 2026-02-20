@@ -20,12 +20,13 @@ from models import (
     backfill_new_feature_columns, backfill_approval_columns,
     seed_default_templates, seed_default_admin,
     seed_default_tiering_rules, ensure_scoring_config,
+    backfill_sla_columns, ensure_sla_configs,
     SessionLocal,
     Assessment, Response, User, ensure_reminder_config,
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
 )
-from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations, settings, notifications, onboarding, admin, comments, search, exceptions, intake
+from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations, settings, notifications, onboarding, admin, comments, search, exceptions, intake, audit
 from app.routers import auth as auth_router
 from app.services.auth_service import get_current_user
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -36,6 +37,7 @@ backfill_template_columns()
 backfill_auth_columns()
 backfill_new_feature_columns()
 backfill_approval_columns()
+backfill_sla_columns()
 seed_question_bank()
 seed_risk_statements()
 seed_default_templates()
@@ -50,6 +52,7 @@ _db = SessionLocal()
 try:
     ensure_reminder_config(_db)
     ensure_scoring_config(_db)
+    ensure_sla_configs(_db)
 finally:
     _db.close()
 
@@ -116,6 +119,7 @@ app.include_router(comments.router)
 app.include_router(search.router)
 app.include_router(exceptions.router)
 app.include_router(intake.router)
+app.include_router(audit.router)
 
 if __name__ == "__main__":
     import uvicorn

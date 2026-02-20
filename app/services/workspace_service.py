@@ -16,6 +16,7 @@ from models import (
 )
 from app.services.tiering import get_effective_tier, TIER_COLORS
 from app.services.portfolio import RISK_LABELS, DECISION_LABELS
+from app.services.sla_service import get_sla_summary
 
 
 def get_workspace_data(db: Session, user: User) -> dict:
@@ -102,12 +103,19 @@ def get_workspace_data(db: Session, user: User) -> dict:
                  and my_decisions[a.vendor_id].status == DECISION_STATUS_FINAL)
     )
 
+    # SLA summary
+    sla = get_sla_summary(db)
+
     kpis = {
         "my_vendors": len(my_vendors),
         "ready_to_assess": ready_to_assess,
         "pending_reviews": pending_reviews,
         "open_remediations": open_remediations,
         "overdue_items": overdue_items,
+        "sla_breaches": sla.get("breach_count", 0) if sla.get("enabled") else None,
+        "sla_at_risk": sla.get("at_risk_count", 0) if sla.get("enabled") else None,
+        "avg_response_days": sla.get("avg_response_days") if sla.get("enabled") else None,
+        "avg_review_days": sla.get("avg_review_days") if sla.get("enabled") else None,
     }
 
     # ===================== ACTION ITEMS =====================
@@ -258,6 +266,31 @@ def get_workspace_data(db: Session, user: User) -> dict:
                     "link": f"/vendors/{doc.vendor_id}",
                     "due_info": exp_date.strftime("%Y-%m-%d") if hasattr(exp_date, 'strftime') else str(exp_date),
                 })
+
+    # P1.2: SLA breaches, P2.5: SLA at-risk
+    if sla.get("enabled") and (sla.get("breach_count", 0) > 0 or sla.get("at_risk_count", 0) > 0):
+        if sla["breach_count"] > 0:
+            action_items.append({
+                "priority": 1.2,
+                "type": "sla_breach",
+                "icon": "bi-exclamation-octagon-fill",
+                "color": "#dc3545",
+                "title": f"{sla['breach_count']} SLA breach{'es' if sla['breach_count'] != 1 else ''}",
+                "subtitle": "Assessments have exceeded their deadline",
+                "link": "/assessments/tracker",
+                "due_info": None,
+            })
+        if sla["at_risk_count"] > 0:
+            action_items.append({
+                "priority": 2.5,
+                "type": "sla_at_risk",
+                "icon": "bi-clock-history",
+                "color": "#fd7e14",
+                "title": f"{sla['at_risk_count']} assessment{'s' if sla['at_risk_count'] != 1 else ''} at SLA risk",
+                "subtitle": "Approaching deadline — take action soon",
+                "link": "/assessments/tracker",
+                "due_info": None,
+            })
 
     action_items.sort(key=lambda x: x["priority"])
 
@@ -424,6 +457,8 @@ def get_workspace_data(db: Session, user: User) -> dict:
             "total_active_vendors": total_active,
             "total_pending_assessments": total_pending,
             "total_overdue_remediations": total_overdue_rems,
+            "sla_breaches": sla.get("breach_count", 0) if sla.get("enabled") else None,
+            "sla_at_risk": sla.get("at_risk_count", 0) if sla.get("enabled") else None,
         }
 
     return {

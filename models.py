@@ -565,6 +565,7 @@ class ReminderConfig(Base):
     escalation_after = Column(Integer, default=2)
     escalation_email = Column(String(255), nullable=True)
     final_notice_days_before_expiry = Column(Integer, default=3)
+    sla_enabled = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -1741,6 +1742,139 @@ def seed_default_templates():
         db.commit()
     finally:
         db.close()
+
+
+# ==================== AUDIT LOG ====================
+
+AUDIT_ACTION_CREATE = "CREATE"
+AUDIT_ACTION_UPDATE = "UPDATE"
+AUDIT_ACTION_DELETE = "DELETE"
+AUDIT_ACTION_STATUS_CHANGE = "STATUS_CHANGE"
+VALID_AUDIT_ACTIONS = [AUDIT_ACTION_CREATE, AUDIT_ACTION_UPDATE, AUDIT_ACTION_DELETE, AUDIT_ACTION_STATUS_CHANGE]
+
+AUDIT_ENTITY_VENDOR = "vendor"
+AUDIT_ENTITY_ASSESSMENT = "assessment"
+AUDIT_ENTITY_DECISION = "decision"
+AUDIT_ENTITY_REMEDIATION = "remediation"
+AUDIT_ENTITY_EXCEPTION = "exception"
+AUDIT_ENTITY_USER = "user"
+AUDIT_ENTITY_SCORING_CONFIG = "scoring_config"
+AUDIT_ENTITY_TIERING_RULE = "tiering_rule"
+AUDIT_ENTITY_REMINDER_CONFIG = "reminder_config"
+AUDIT_ENTITY_SLA_CONFIG = "sla_config"
+
+
+class AuditLog(Base):
+    """Append-only audit trail for compliance."""
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_email = Column(String(255), nullable=True)
+    action = Column(String(50), nullable=False, index=True)
+    entity_type = Column(String(50), nullable=False, index=True)
+    entity_id = Column(Integer, nullable=True, index=True)
+    entity_label = Column(String(500), nullable=True)
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    ip_address = Column(String(45), nullable=True)
+
+    actor = relationship("User", foreign_keys=[actor_user_id])
+
+
+# ==================== SLA CONFIGURATION ====================
+
+SLA_STATUS_ON_TRACK = "ON_TRACK"
+SLA_STATUS_AT_RISK = "AT_RISK"
+SLA_STATUS_BREACHED = "BREACHED"
+SLA_STATUS_COMPLETED = "COMPLETED"
+SLA_STATUS_NA = "N/A"
+
+SLA_STATUS_COLORS = {
+    SLA_STATUS_ON_TRACK: "#198754",
+    SLA_STATUS_AT_RISK: "#fd7e14",
+    SLA_STATUS_BREACHED: "#dc3545",
+    SLA_STATUS_COMPLETED: "#6c757d",
+    SLA_STATUS_NA: "#adb5bd",
+}
+
+SLA_STATUS_LABELS = {
+    SLA_STATUS_ON_TRACK: "On Track",
+    SLA_STATUS_AT_RISK: "At Risk",
+    SLA_STATUS_BREACHED: "Breached",
+    SLA_STATUS_COMPLETED: "Completed",
+    SLA_STATUS_NA: "N/A",
+}
+
+ACTIVITY_SLA_WARNING = "SLA_WARNING"
+ACTIVITY_SLA_BREACH = "SLA_BREACH"
+NOTIF_SLA_WARNING = "SLA_WARNING"
+NOTIF_SLA_BREACH = "SLA_BREACH"
+
+# Add SLA activity icons/colors
+ACTIVITY_ICONS[ACTIVITY_SLA_WARNING] = "bi-clock-history"
+ACTIVITY_ICONS[ACTIVITY_SLA_BREACH] = "bi-exclamation-octagon-fill"
+ACTIVITY_COLORS[ACTIVITY_SLA_WARNING] = "#fd7e14"
+ACTIVITY_COLORS[ACTIVITY_SLA_BREACH] = "#dc3545"
+NOTIF_ICONS[NOTIF_SLA_WARNING] = "bi-clock-history"
+NOTIF_ICONS[NOTIF_SLA_BREACH] = "bi-exclamation-octagon-fill"
+
+
+class SLAConfig(Base):
+    """Per-tier SLA targets. One row per tier."""
+    __tablename__ = "sla_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tier = Column(String(20), unique=True, nullable=False)
+    response_deadline_days = Column(Integer, nullable=False, default=14)
+    review_deadline_days = Column(Integer, nullable=False, default=7)
+    warning_threshold_pct = Column(Integer, nullable=False, default=80)
+    enabled = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+def ensure_sla_configs(db_session):
+    """Seed default SLA configs if none exist."""
+    existing = db_session.query(SLAConfig).count()
+    if existing > 0:
+        return db_session.query(SLAConfig).order_by(SLAConfig.tier).all()
+
+    defaults = [
+        ("Tier 1", 14, 7, 80),
+        ("Tier 2", 21, 14, 80),
+        ("Tier 3", 30, 21, 80),
+    ]
+    configs = []
+    for tier, resp_days, rev_days, warn_pct in defaults:
+        cfg = SLAConfig(
+            tier=tier,
+            response_deadline_days=resp_days,
+            review_deadline_days=rev_days,
+            warning_threshold_pct=warn_pct,
+            enabled=True,
+        )
+        db_session.add(cfg)
+        configs.append(cfg)
+    db_session.commit()
+    return configs
+
+
+def backfill_sla_columns():
+    """Add sla_enabled column to reminder_config for existing DBs."""
+    import sqlite3
+    conn = sqlite3.connect("./questionnaires.db")
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(reminder_config)")
+    existing = {row[1] for row in cursor.fetchall()}
+    if "sla_enabled" not in existing:
+        try:
+            cursor.execute("ALTER TABLE reminder_config ADD COLUMN sla_enabled BOOLEAN DEFAULT 1")
+        except sqlite3.OperationalError:
+            pass
+    conn.commit()
+    conn.close()
 
 
 def get_db():

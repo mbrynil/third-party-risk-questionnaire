@@ -203,6 +203,10 @@
     <span><span class="org-stat">{{ org_overview.total_active_vendors }}</span> active vendors</span>
     <span><span class="org-stat">{{ org_overview.total_pending_assessments }}</span> pending assessments</span>
     <span><span class="org-stat text-danger">{{ org_overview.total_overdue_remediations }}</span> overdue remediations</span>
+    {% if org_overview.sla_breaches is not none %}
+    <span><span class="org-stat text-danger">{{ org_overview.sla_breaches }}</span> SLA breaches</span>
+    <span><span class="org-stat" style="color:#fd7e14;">{{ org_overview.sla_at_risk }}</span> SLA at risk</span>
+    {% endif %}
     <a href="/portfolio" class="ms-auto text-decoration-none small"><i class="bi bi-arrow-right me-1"></i>Full Portfolio</a>
 </div>
 {% endif %}
@@ -274,6 +278,40 @@
         </a>
     </div>
 </div>
+
+{# ==================== SLA KPIs (if enabled) ==================== #}
+{% if kpis.sla_breaches is not none %}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <a href="/assessments/tracker" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #dc3545;">
+                <div class="kpi-value" style="color: #dc3545;">{{ kpis.sla_breaches }}</div>
+                <div class="kpi-label">SLA Breaches</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a href="/assessments/tracker" class="kpi-link">
+            <div class="kpi-card" style="border-left: 4px solid #fd7e14;">
+                <div class="kpi-value" style="color: #fd7e14;">{{ kpis.sla_at_risk }}</div>
+                <div class="kpi-label">SLA At Risk</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card" style="border-left: 4px solid #6c757d;">
+            <div class="kpi-value" style="color: #6c757d;">{{ kpis.avg_response_days or '—' }}</div>
+            <div class="kpi-label">Avg Response (days)</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="kpi-card" style="border-left: 4px solid #6c757d;">
+            <div class="kpi-value" style="color: #6c757d;">{{ kpis.avg_review_days or '—' }}</div>
+            <div class="kpi-label">Avg Review (days)</div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {# ==================== TWO-COLUMN: ACTION ITEMS + ACTIVITY ==================== #}
 <div class="row g-3 mb-4">

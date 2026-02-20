@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Log - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
+        <li class="breadcrumb-item"><a href="/settings">Settings</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Audit Log</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1><i class="bi bi-journal-text me-2"></i>Audit Log</h1>
+        <p>Immutable record of all state changes — who changed what, when, and why</p>
+    </div>
+    <a href="/admin/audit.csv?entity_type={{ f_entity_type }}&actor_user_id={{ f_actor_user_id }}&action={{ f_action }}&date_from={{ f_date_from }}&date_to={{ f_date_to }}"
+       class="btn btn-outline-success">
+        <i class="bi bi-filetype-csv me-1"></i>Export CSV
+    </a>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <form method="get" action="/admin/audit" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label class="form-label small mb-1">Entity Type</label>
+                <select name="entity_type" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for et in entity_types %}
+                    <option value="{{ et }}" {% if f_entity_type == et %}selected{% endif %}>{{ et|replace('_', ' ')|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-1">User</label>
+                <select name="actor_user_id" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if f_actor_user_id == u.id|string %}selected{% endif %}>{{ u.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-1">Action</label>
+                <select name="action" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for a in actions %}
+                    <option value="{{ a }}" {% if f_action == a %}selected{% endif %}>{{ a|replace('_', ' ')|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-1">From</label>
+                <input type="date" name="date_from" class="form-control form-control-sm" value="{{ f_date_from }}">
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-1">To</label>
+                <input type="date" name="date_to" class="form-control form-control-sm" value="{{ f_date_to }}">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-funnel me-1"></i>Filter
+                </button>
+            </div>
+            <div class="col-auto">
+                <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">Clear</a>
+            </div>
+            <div class="col-auto ms-auto">
+                <span class="badge bg-secondary">{{ total }}</span>
+                <small class="text-muted">record{{ 's' if total != 1 }}</small>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Audit Table -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Actor</th>
+                    <th>Action</th>
+                    <th>Entity Type</th>
+                    <th>Entity</th>
+                    <th>Description</th>
+                    <th class="text-end">Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if records %}
+                {% for r in records %}
+                <tr>
+                    <td>
+                        <small>{{ r.timestamp.strftime('%Y-%m-%d %H:%M') if r.timestamp else '—' }}</small>
+                    </td>
+                    <td>
+                        {% if r.actor_email %}
+                        <small class="fw-semibold">{{ r.actor.display_name if r.actor else r.actor_email }}</small>
+                        {% else %}
+                        <small class="text-muted">System</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.action == 'CREATE' %}
+                        <span class="badge bg-success">Create</span>
+                        {% elif r.action == 'UPDATE' %}
+                        <span class="badge bg-primary">Update</span>
+                        {% elif r.action == 'DELETE' %}
+                        <span class="badge bg-danger">Delete</span>
+                        {% elif r.action == 'STATUS_CHANGE' %}
+                        <span class="badge bg-warning text-dark">Status Change</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ r.action }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <small>{{ r.entity_type|replace('_', ' ')|title }}</small>
+                    </td>
+                    <td>
+                        <small>{{ r.entity_label or '—' }}</small>
+                    </td>
+                    <td>
+                        <small>{{ r.description or '—' }}</small>
+                    </td>
+                    <td class="text-end">
+                        {% if r.old_value or r.new_value %}
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal" data-bs-target="#detailModal{{ r.id }}">
+                            <i class="bi bi-code-slash"></i>
+                        </button>
+                        <!-- Modal -->
+                        <div class="modal fade" id="detailModal{{ r.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Audit Detail — {{ r.entity_type|replace('_', ' ')|title }} #{{ r.entity_id or '' }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body text-start">
+                                        <p class="small text-muted">{{ r.timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.timestamp else '' }} by {{ r.actor_email or 'System' }}{% if r.ip_address %} ({{ r.ip_address }}){% endif %}</p>
+                                        {% if r.old_value %}
+                                        <h6>Previous Value</h6>
+                                        <pre class="bg-light p-2 rounded small" style="white-space:pre-wrap;max-height:200px;overflow-y:auto;">{{ r.old_value }}</pre>
+                                        {% endif %}
+                                        {% if r.new_value %}
+                                        <h6>New Value</h6>
+                                        <pre class="bg-light p-2 rounded small" style="white-space:pre-wrap;max-height:200px;overflow-y:auto;">{{ r.new_value }}</pre>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-muted">
+                        <i class="bi bi-journal-text d-block" style="font-size:2rem;"></i>
+                        No audit records found
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination justify-content-center">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="/admin/audit?page={{ page - 1 }}&entity_type={{ f_entity_type }}&actor_user_id={{ f_actor_user_id }}&action={{ f_action }}&date_from={{ f_date_from }}&date_to={{ f_date_to }}">
+                <i class="bi bi-chevron-left"></i> Previous
+            </a>
+        </li>
+        <li class="page-item disabled">
+            <span class="page-link">Page {{ page }} of {{ total_pages }}</span>
+        </li>
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+            <a class="page-link" href="/admin/audit?page={{ page + 1 }}&entity_type={{ f_entity_type }}&actor_user_id={{ f_actor_user_id }}&action={{ f_action }}&date_from={{ f_date_from }}&date_to={{ f_date_to }}">
+                Next <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

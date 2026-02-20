@@ -19,6 +19,8 @@ from app.services.exception_service import (
 from app.services.activity_service import log_activity
 from app.services.notification_service import create_notification
 from app.services.auth_service import require_login, require_role
+from app.services.audit_service import log_audit
+from models import AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_EXCEPTION
 
 router = APIRouter()
 
@@ -98,6 +100,7 @@ async def create_vendor_exception(
 @router.post("/exceptions/{exception_id}/approve")
 async def approve_exception_route(
     exception_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
@@ -105,6 +108,13 @@ async def approve_exception_route(
     if exc:
         log_activity(db, exc.vendor_id, ACTIVITY_EXCEPTION_APPROVED,
                      f"Exception approved: {exc.title}", user_id=current_user.id)
+        log_audit(db, AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_EXCEPTION,
+                  entity_id=exc.id, entity_label=exc.title[:100],
+                  old_value={"status": "PENDING"},
+                  new_value={"status": "APPROVED"},
+                  description=f"Exception approved: {exc.title}",
+                  actor_user=current_user,
+                  ip_address=request.client.host if request.client else None)
         create_notification(db, NOTIF_EXCEPTION_APPROVED,
                             f"Exception approved: {exc.title}",
                             link=f"/vendors/{exc.vendor_id}", vendor_id=exc.vendor_id)
@@ -115,10 +125,18 @@ async def approve_exception_route(
 @router.post("/exceptions/{exception_id}/reject")
 async def reject_exception_route(
     exception_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin")),
 ):
     exc = reject_exception(db, exception_id, current_user.id)
     if exc:
+        log_audit(db, AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_EXCEPTION,
+                  entity_id=exc.id, entity_label=exc.title[:100],
+                  old_value={"status": "PENDING"},
+                  new_value={"status": "REJECTED"},
+                  description=f"Exception rejected: {exc.title}",
+                  actor_user=current_user,
+                  ip_address=request.client.host if request.client else None)
         db.commit()
     return RedirectResponse(url="/exceptions?message=Exception rejected&message_type=info", status_code=303)

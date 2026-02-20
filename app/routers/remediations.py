@@ -15,6 +15,8 @@ from models import (
 
 from app.services.export_service import generate_remediation_csv
 from app.services.auth_service import require_login, require_role
+from app.services.audit_service import log_audit
+from models import AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_REMEDIATION
 
 router = APIRouter()
 
@@ -57,6 +59,7 @@ async def remediation_detail(request: Request, remediation_id: int, db: Session 
 
 @router.post("/remediations/{remediation_id}")
 async def update_remediation(
+    request: Request,
     remediation_id: int,
     status: str = Form(...),
     assigned_to: str = Form(""),
@@ -69,6 +72,7 @@ async def update_remediation(
     if not item:
         raise HTTPException(status_code=404, detail="Remediation item not found")
 
+    old_status = item.status
     if status in VALID_REMEDIATION_STATUSES:
         item.status = status
     item.assigned_to = assigned_to.strip() or None
@@ -84,6 +88,15 @@ async def update_remediation(
         item.completed_date = datetime.utcnow()
     else:
         item.completed_date = None
+
+    if old_status != item.status:
+        log_audit(db, AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_REMEDIATION,
+                  entity_id=item.id, entity_label=item.title[:100],
+                  old_value={"status": old_status},
+                  new_value={"status": item.status},
+                  description=f"Remediation status changed: {old_status} → {item.status}",
+                  actor_user=current_user,
+                  ip_address=request.client.host if request.client else None)
 
     db.commit()
 

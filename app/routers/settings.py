@@ -8,12 +8,16 @@ from app import templates
 from models import (
     get_db, ReminderConfig, ReminderLog, User,
     ensure_reminder_config, ScoringConfig, ensure_scoring_config,
-    TieringRule,
+    TieringRule, SLAConfig, ensure_sla_configs,
     VALID_DATA_CLASSIFICATIONS, VALID_BUSINESS_CRITICALITIES,
     VALID_ACCESS_LEVELS, VALID_INHERENT_RISK_TIERS,
+    AUDIT_ACTION_UPDATE, AUDIT_ACTION_CREATE, AUDIT_ACTION_DELETE,
+    AUDIT_ENTITY_SCORING_CONFIG, AUDIT_ENTITY_TIERING_RULE,
+    AUDIT_ENTITY_REMINDER_CONFIG, AUDIT_ENTITY_SLA_CONFIG,
 )
 from app.services.reminder_service import get_reminder_stats
-from app.services.scheduler import run_now
+from app.services.scheduler import run_now, run_sla_now
+from app.services.audit_service import log_audit
 from app.services.auth_service import require_login, require_role
 
 router = APIRouter()
@@ -62,6 +66,8 @@ async def update_reminder_settings(
     current_user: User = Depends(_admin_dep),
 ):
     config = ensure_reminder_config(db)
+    old_vals = {"enabled": config.enabled, "first_reminder_days": config.first_reminder_days,
+                "frequency_days": config.frequency_days, "max_reminders": config.max_reminders}
     config.enabled = (enabled == "on")
     config.first_reminder_days = max(1, first_reminder_days)
     config.frequency_days = max(1, frequency_days)
@@ -70,6 +76,14 @@ async def update_reminder_settings(
     config.escalation_email = escalation_email.strip() or None
     config.final_notice_days_before_expiry = max(0, final_notice_days_before_expiry)
     config.updated_at = datetime.utcnow()
+    log_audit(db, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_REMINDER_CONFIG,
+              entity_id=config.id, entity_label="Reminder Config",
+              old_value=old_vals,
+              new_value={"enabled": config.enabled, "first_reminder_days": config.first_reminder_days,
+                         "frequency_days": config.frequency_days, "max_reminders": config.max_reminders},
+              description="Reminder configuration updated",
+              actor_user=current_user,
+              ip_address=request.client.host if request.client else None)
     db.commit()
 
     return RedirectResponse(url="/settings/reminders?saved=1", status_code=303)
@@ -109,11 +123,21 @@ async def update_scoring_settings(
     current_user: User = Depends(_admin_dep),
 ):
     config = ensure_scoring_config(db)
+    old_vals = {"very_low_min": config.very_low_min, "low_min": config.low_min,
+                "moderate_min": config.moderate_min, "high_min": config.high_min}
     config.very_low_min = max(0, min(100, very_low_min))
     config.low_min = max(0, min(config.very_low_min - 1, low_min))
     config.moderate_min = max(0, min(config.low_min - 1, moderate_min))
     config.high_min = max(0, min(config.moderate_min - 1, high_min))
     config.updated_at = datetime.utcnow()
+    log_audit(db, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_SCORING_CONFIG,
+              entity_id=config.id, entity_label="Scoring Config",
+              old_value=old_vals,
+              new_value={"very_low_min": config.very_low_min, "low_min": config.low_min,
+                         "moderate_min": config.moderate_min, "high_min": config.high_min},
+              description="Scoring thresholds updated",
+              actor_user=current_user,
+              ip_address=request.client.host if request.client else None)
     db.commit()
     return RedirectResponse(url="/settings/scoring?saved=1", status_code=303)
 
@@ -148,7 +172,16 @@ async def add_tiering_rule(
     current_user: User = Depends(_admin_dep),
 ):
     max_priority = db.query(TieringRule).count()
-    db.add(TieringRule(field=field, value=value, tier=tier, priority=max_priority))
+    rule = TieringRule(field=field, value=value, tier=tier, priority=max_priority)
+    db.add(rule)
+    db.flush()
+    log_audit(db, AUDIT_ACTION_CREATE, AUDIT_ENTITY_TIERING_RULE,
+              entity_id=rule.id,
+              entity_label=f"{field}={value} → {tier}",
+              new_value={"field": field, "value": value, "tier": tier},
+              description=f"Tiering rule created: {field}={value} → {tier}",
+              actor_user=current_user,
+              ip_address=request.client.host if request.client else None)
     db.commit()
     return RedirectResponse(url="/settings/tiering?saved=1", status_code=303)
 
@@ -156,11 +189,106 @@ async def add_tiering_rule(
 @router.post("/settings/tiering/{rule_id}/delete")
 async def delete_tiering_rule(
     rule_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(_admin_dep),
 ):
     rule = db.query(TieringRule).filter(TieringRule.id == rule_id).first()
     if rule:
+        log_audit(db, AUDIT_ACTION_DELETE, AUDIT_ENTITY_TIERING_RULE,
+                  entity_id=rule.id,
+                  entity_label=f"{rule.field}={rule.value} → {rule.tier}",
+                  old_value={"field": rule.field, "value": rule.value, "tier": rule.tier},
+                  description=f"Tiering rule deleted: {rule.field}={rule.value} → {rule.tier}",
+                  actor_user=current_user,
+                  ip_address=request.client.host if request.client else None)
         db.delete(rule)
         db.commit()
     return RedirectResponse(url="/settings/tiering?saved=1", status_code=303)
+
+
+# ==================== SLA CONFIG ====================
+
+@router.get("/settings/sla", response_class=HTMLResponse)
+async def sla_settings_page(request: Request, db: Session = Depends(get_db), current_user: User = Depends(_admin_dep)):
+    configs = ensure_sla_configs(db)
+    reminder_cfg = ensure_reminder_config(db)
+    sla_enabled = getattr(reminder_cfg, "sla_enabled", True)
+    return templates.TemplateResponse("sla_settings.html", {
+        "request": request,
+        "configs": configs,
+        "sla_enabled": sla_enabled,
+    })
+
+
+@router.post("/settings/sla")
+async def update_sla_settings(
+    request: Request,
+    sla_enabled: str = Form("off"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_admin_dep),
+):
+    form = await request.form()
+
+    # Global toggle
+    reminder_cfg = ensure_reminder_config(db)
+    old_enabled = getattr(reminder_cfg, "sla_enabled", True)
+    new_enabled = sla_enabled == "on"
+    reminder_cfg.sla_enabled = new_enabled
+
+    # Per-tier configs
+    configs = db.query(SLAConfig).all()
+    for cfg in configs:
+        prefix = f"tier_{cfg.id}_"
+        resp_days = form.get(f"{prefix}response_deadline_days")
+        rev_days = form.get(f"{prefix}review_deadline_days")
+        warn_pct = form.get(f"{prefix}warning_threshold_pct")
+        enabled = form.get(f"{prefix}enabled")
+
+        old_vals = {
+            "response_deadline_days": cfg.response_deadline_days,
+            "review_deadline_days": cfg.review_deadline_days,
+            "warning_threshold_pct": cfg.warning_threshold_pct,
+            "enabled": cfg.enabled,
+        }
+
+        if resp_days is not None:
+            cfg.response_deadline_days = max(1, int(resp_days))
+        if rev_days is not None:
+            cfg.review_deadline_days = max(1, int(rev_days))
+        if warn_pct is not None:
+            cfg.warning_threshold_pct = max(1, min(100, int(warn_pct)))
+        cfg.enabled = enabled == "on"
+        cfg.updated_at = datetime.utcnow()
+
+        new_vals = {
+            "response_deadline_days": cfg.response_deadline_days,
+            "review_deadline_days": cfg.review_deadline_days,
+            "warning_threshold_pct": cfg.warning_threshold_pct,
+            "enabled": cfg.enabled,
+        }
+
+        if old_vals != new_vals:
+            log_audit(db, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_SLA_CONFIG,
+                      entity_id=cfg.id,
+                      entity_label=f"SLA Config: {cfg.tier}",
+                      old_value=old_vals,
+                      new_value=new_vals,
+                      description=f"SLA config updated for {cfg.tier}",
+                      actor_user=current_user,
+                      ip_address=request.client.host if request.client else None)
+
+    db.commit()
+    return RedirectResponse(url="/settings/sla?saved=1", status_code=303)
+
+
+@router.post("/settings/sla/run-now")
+async def trigger_sla_check_now(request: Request, current_user: User = Depends(_admin_dep)):
+    """Manually trigger an SLA breach check."""
+    summary = run_sla_now()
+    breaches = summary.get("new_breaches", 0)
+    warnings = summary.get("new_warnings", 0)
+    return RedirectResponse(
+        url=f"/settings/sla?ran=1&breaches={breaches}&warnings={warnings}",
+        status_code=303,
+    )

@@ -160,6 +160,7 @@
                     <th>Sent Date</th>
                     <th>Waiting</th>
                     <th>Reminders</th>
+                    {% if sla_enabled %}<th>SLA</th>{% endif %}
                     <th>Decision</th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -256,6 +257,17 @@
                         <span class="text-muted">0</span>
                         {% endif %}
                     </td>
+                    {% if sla_enabled %}
+                    <td>
+                        {% if row.sla_status and row.sla_status != 'N/A' %}
+                        <span class="badge" style="background:{{ sla_colors.get(row.sla_status, '#adb5bd') }};color:#fff;font-size:0.7rem;">
+                            {{ sla_labels.get(row.sla_status, row.sla_status) }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    {% endif %}
                     <td>
                         {% if row.decision and row.decision.status == 'FINAL' %}
                             {% if row.decision.decision_outcome == 'APPROVE' %}

@@ -27,10 +27,12 @@ from app.services.activity_service import log_activity
 from app.services.export_service import generate_assessment_report_pdf
 from app.services.auth_service import require_login, require_role
 from app.services.notification_service import create_notification
+from app.services.audit_service import log_audit
 from models import (
     ACTIVITY_DECISION_FINALIZED, NOTIF_DECISION_FINALIZED,
     NOTIF_APPROVAL_REQUESTED, NOTIF_DECISION_APPROVED,
     RiskSnapshot, User, QuestionBankItem, FRAMEWORK_DISPLAY,
+    AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_DECISION,
 )
 
 router = APIRouter()
@@ -390,6 +392,14 @@ async def save_assessment_decision(
         # Tier 1 vendors require admin approval (maker/checker)
         if requires_tier1_approval(vendor) and current_user.role != "admin":
             submit_for_approval(decision)
+            log_audit(db, AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_DECISION,
+                      entity_id=decision.id,
+                      entity_label=f"{assessment.company_name}: {assessment.title}",
+                      old_value={"status": "DRAFT"},
+                      new_value={"status": "PENDING_APPROVAL", "outcome": decision_outcome},
+                      description=f"Decision submitted for approval: {assessment.company_name}",
+                      actor_user=current_user,
+                      ip_address=request.client.host if request.client else None)
             db.commit()
 
             create_notification(
@@ -408,6 +418,14 @@ async def save_assessment_decision(
 
         # Direct finalize for Tier 2/3 or admin users
         _complete_finalization(db, decision, assessment, assessment_id, decision_outcome, current_user)
+        log_audit(db, AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_DECISION,
+                  entity_id=decision.id,
+                  entity_label=f"{assessment.company_name}: {assessment.title}",
+                  new_value={"status": "FINAL", "outcome": decision_outcome,
+                             "risk_rating": decision.overall_risk_rating},
+                  description=f"Decision finalized: {assessment.company_name} — {(decision_outcome or '').replace('_', ' ').title()}",
+                  actor_user=current_user,
+                  ip_address=request.client.host if request.client else None)
 
     db.commit()
 
@@ -451,6 +469,15 @@ async def approve_assessment_decision(
     _complete_finalization(db, decision, assessment, assessment_id,
                            decision.decision_outcome, current_user)
 
+    log_audit(db, AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_DECISION,
+              entity_id=decision.id,
+              entity_label=f"{assessment.company_name}: {assessment.title}",
+              old_value={"status": "PENDING_APPROVAL"},
+              new_value={"status": "FINAL", "outcome": decision.decision_outcome},
+              description=f"Decision approved by {current_user.display_name}: {assessment.company_name}",
+              actor_user=current_user,
+              ip_address=request.client.host if request.client else None)
+
     create_notification(
         db, NOTIF_DECISION_APPROVED,
         f"Decision approved for {assessment.company_name} by {current_user.display_name}",
@@ -492,6 +519,14 @@ async def reject_assessment_decision(
         )
 
     reject_decision(db, decision, current_user.id, approval_notes)
+    log_audit(db, AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_DECISION,
+              entity_id=decision.id,
+              entity_label=f"{assessment.company_name}: {assessment.title}",
+              old_value={"status": "PENDING_APPROVAL"},
+              new_value={"status": "DRAFT"},
+              description=f"Decision rejected by {current_user.display_name}: {assessment.company_name}",
+              actor_user=current_user,
+              ip_address=request.client.host if request.client else None)
     db.commit()
 
     return RedirectResponse(

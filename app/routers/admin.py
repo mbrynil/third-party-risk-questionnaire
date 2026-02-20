@@ -5,8 +5,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app import templates
-from models import get_db, User, VALID_ROLES
+from models import get_db, User, VALID_ROLES, AUDIT_ACTION_CREATE, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_USER
 from app.services.auth_service import hash_password, require_role
+from app.services.audit_service import log_audit
 
 router = APIRouter(prefix="/admin")
 
@@ -70,6 +71,13 @@ async def create_user(
         is_active=True,
     )
     db.add(user)
+    db.flush()
+    log_audit(db, AUDIT_ACTION_CREATE, AUDIT_ENTITY_USER,
+              entity_id=user.id, entity_label=f"{user.display_name} ({user.email})",
+              new_value={"email": user.email, "display_name": user.display_name, "role": user.role},
+              description=f"User created: {user.display_name} ({user.email}), role={user.role}",
+              actor_user=current_user,
+              ip_address=request.client.host if request.client else None)
     db.commit()
 
     return RedirectResponse(
@@ -132,6 +140,7 @@ async def update_user(
             "error": "You cannot change your own role from admin.",
         })
 
+    old_vals = {"display_name": user.display_name, "role": user.role, "is_active": user.is_active}
     user.display_name = display_name.strip()
     if role in VALID_ROLES:
         user.role = role
@@ -140,6 +149,13 @@ async def update_user(
     if new_password.strip():
         user.password_hash = hash_password(new_password.strip())
 
+    log_audit(db, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_USER,
+              entity_id=user.id, entity_label=f"{user.display_name} ({user.email})",
+              old_value=old_vals,
+              new_value={"display_name": user.display_name, "role": user.role, "is_active": user.is_active},
+              description=f"User updated: {user.display_name}",
+              actor_user=current_user,
+              ip_address=request.client.host if request.client else None)
     db.commit()
 
     return RedirectResponse(

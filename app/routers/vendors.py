@@ -34,7 +34,12 @@ from models import (
 )
 from app.services.auth_service import require_login, require_role
 from app.services.notification_service import create_notification
-from models import NOTIF_ANALYST_ASSIGNED
+from app.services.audit_service import log_audit
+from models import (
+    NOTIF_ANALYST_ASSIGNED,
+    AUDIT_ACTION_STATUS_CHANGE, AUDIT_ACTION_UPDATE,
+    AUDIT_ENTITY_VENDOR,
+)
 
 _analyst_dep = require_role("admin", "analyst")
 
@@ -399,12 +404,20 @@ async def update_vendor(
             **_classification_context(),
         })
 
+    old_status = vendor.status
     vendor.name = name.strip()
     vendor.primary_contact_name = primary_contact_name.strip() or None
     vendor.primary_contact_email = primary_contact_email.strip() or None
     vendor.notes = notes.strip() or None
     if status in VALID_VENDOR_STATUSES:
         vendor.status = status
+    if old_status != vendor.status:
+        log_audit(db, AUDIT_ACTION_STATUS_CHANGE, AUDIT_ENTITY_VENDOR,
+                  entity_id=vendor.id, entity_label=vendor.name,
+                  old_value={"status": old_status}, new_value={"status": vendor.status},
+                  description=f"Vendor status changed from {old_status} to {vendor.status}",
+                  actor_user=current_user,
+                  ip_address=request.client.host if request.client else None)
 
     vendor.industry = industry.strip() or None
     vendor.website = website.strip() or None
@@ -600,6 +613,13 @@ async def set_tier_override(
         log_activity(db, vendor_id, ACTIVITY_TIER_CHANGED,
                      f"Tier changed from {old_tier or 'None'} to {new_tier or 'None'}",
                      user_id=current_user.id)
+        log_audit(db, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_VENDOR,
+                  entity_id=vendor_id, entity_label=vendor.name,
+                  old_value={"effective_tier": old_tier},
+                  new_value={"effective_tier": new_tier, "tier_override": new_override},
+                  description=f"Tier override changed: {old_tier or 'None'} → {new_tier or 'None'}",
+                  actor_user=current_user,
+                  ip_address=request.client.host if request.client else None)
     db.commit()
 
     return RedirectResponse(url=f"/vendors/{vendor_id}?tier_updated=1", status_code=303)
@@ -629,6 +649,13 @@ async def assign_analyst(
         log_activity(db, vendor_id, "ANALYST_ASSIGNED",
                      f"Analyst changed from {old_name} to {new_name}",
                      user_id=current_user.id)
+        log_audit(db, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_VENDOR,
+                  entity_id=vendor_id, entity_label=vendor.name,
+                  old_value={"assigned_analyst": old_name},
+                  new_value={"assigned_analyst": new_name},
+                  description=f"Analyst assignment changed: {old_name} → {new_name}",
+                  actor_user=current_user,
+                  ip_address=request.client.host if request.client else None)
         if new_analyst:
             create_notification(
                 db, NOTIF_ANALYST_ASSIGNED,
