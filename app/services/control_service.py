@@ -11,6 +11,7 @@ from models import (
     ControlImplementation, ControlTest, ControlEvidence,
     IMPL_STATUS_NOT_IMPLEMENTED, IMPL_STATUS_IMPLEMENTED,
     CONTROL_FREQUENCY_DAYS,
+    TEST_STATUS_SCHEDULED, TEST_STATUS_COMPLETED, TEST_RESULT_NOT_TESTED,
 )
 
 
@@ -320,13 +321,73 @@ def get_all_testing_schedule(db: Session):
 
 
 def get_all_test_history(db: Session, limit: int = 200):
-    """Most recent test executions across all implementations."""
+    """Most recent completed test executions across all implementations."""
     return db.query(ControlTest).options(
         joinedload(ControlTest.tester),
         joinedload(ControlTest.evidence_files),
         joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
         joinedload(ControlTest.implementation).joinedload(ControlImplementation.vendor),
+    ).filter(
+        ControlTest.status == TEST_STATUS_COMPLETED,
     ).order_by(ControlTest.test_date.desc()).limit(limit).all()
+
+
+def create_scheduled_test(db: Session, impl_id: int, test_type: str,
+                          scheduled_date: datetime, tester_id: int | None) -> ControlTest:
+    """Create a scheduled (future) test — does NOT update next_test_date."""
+    test = ControlTest(
+        implementation_id=impl_id,
+        test_type=test_type,
+        status=TEST_STATUS_SCHEDULED,
+        scheduled_date=scheduled_date,
+        tester_user_id=tester_id,
+        result=TEST_RESULT_NOT_TESTED,
+    )
+    db.add(test)
+    db.flush()
+    # Override column default — scheduled tests have no test_date yet
+    test.test_date = None
+    return test
+
+
+def complete_scheduled_test(db: Session, test_id: int, result: str,
+                            procedure: str, findings: str, recommendations: str) -> ControlTest | None:
+    """Complete a previously scheduled test."""
+    test = db.query(ControlTest).filter(ControlTest.id == test_id).first()
+    if not test:
+        return None
+    test.status = TEST_STATUS_COMPLETED
+    test.test_date = datetime.utcnow()
+    test.result = result
+    test.test_procedure = procedure
+    test.findings = findings
+    test.recommendations = recommendations
+    db.flush()
+    impl = db.query(ControlImplementation).filter(
+        ControlImplementation.id == test.implementation_id
+    ).first()
+    update_next_test_date(db, impl)
+    return test
+
+
+def get_scheduled_tests(db: Session):
+    """All scheduled (not yet completed) tests, ordered by scheduled_date."""
+    return db.query(ControlTest).options(
+        joinedload(ControlTest.tester),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.vendor),
+    ).filter(
+        ControlTest.status == TEST_STATUS_SCHEDULED,
+    ).order_by(ControlTest.scheduled_date.asc()).all()
+
+
+def set_implementation_next_test_date(db: Session, impl_id: int, date: datetime | None):
+    """Manually override the next_test_date on an implementation."""
+    impl = db.query(ControlImplementation).filter(ControlImplementation.id == impl_id).first()
+    if impl:
+        impl.next_test_date = date
+        return impl
+    return None
 
 
 # ==================== CONTROL EVIDENCE ====================

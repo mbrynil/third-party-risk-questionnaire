@@ -109,7 +109,10 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h6 class="mb-0">Test History</h6>
-                <a href="/controls/implementations/{{ impl.id }}/tests/new" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Record Test</a>
+                <div class="d-flex gap-2">
+                    <a href="/controls/testing?schedule={{ impl.id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-calendar-plus me-1"></i>Schedule</a>
+                    <a href="/controls/implementations/{{ impl.id }}/tests/new" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Record Test</a>
+                </div>
             </div>
             {% if impl.tests %}
             <div class="table-responsive">
@@ -148,6 +151,15 @@
             Next test due: <strong class="ms-1">{{ impl.next_test_date.strftime('%Y-%m-%d') }}</strong>
         </div>
         {% endif %}
+        <div class="card mb-4">
+            <div class="card-body py-2">
+                <form method="post" action="/controls/implementations/{{ impl.id }}/set-test-date" class="d-flex gap-2 align-items-center">
+                    <label class="form-label mb-0 me-1 text-nowrap"><small>Set Next Test Due:</small></label>
+                    <input type="date" name="next_test_date" class="form-control form-control-sm" style="width:180px;" value="{{ impl.next_test_date.strftime('%Y-%m-%d') if impl.next_test_date else '' }}">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Set</button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 

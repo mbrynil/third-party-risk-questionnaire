@@ -217,7 +217,7 @@
                             {% endif %}
                             <li><a class="dropdown-item" href="/controls/dashboard"><i class="bi bi-shield-check me-2"></i>Control Dashboard</a></li>
                             {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
-                            <li><a class="dropdown-item" href="/controls/testing"><i class="bi bi-clipboard-check me-2"></i>Testing Tracker</a></li>
+                            <li><a class="dropdown-item" href="/controls/testing"><i class="bi bi-clipboard-check me-2"></i>Control Testing</a></li>
                             <li><a class="dropdown-item" href="/controls/gap-analysis"><i class="bi bi-clipboard-data me-2"></i>Gap Analysis</a></li>
                             {% endif %}
                         </ul>

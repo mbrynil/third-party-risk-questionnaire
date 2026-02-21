@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Testing Tracker - RiskQ{% endblock %}
+{% block title %}Control Testing - RiskQ{% endblock %}
 
 {% block breadcrumbs %}
 <li class="breadcrumb-item"><a href="/">Home</a></li>
 <li class="breadcrumb-item"><a href="/controls">Controls</a></li>
-<li class="breadcrumb-item active">Testing Tracker</li>
+<li class="breadcrumb-item active">Control Testing</li>
 {% endblock %}
 
 {% block extra_head %}
@@ -16,6 +16,7 @@
     .status-upcoming { background: #fef3c7; color: #92400e; }
     .status-on-track { background: #d1fae5; color: #065f46; }
     .status-never { background: #f3f4f6; color: #6b7280; }
+    .status-scheduled { background: #e0e7ff; color: #3730a3; }
     .kpi-card { text-align: center; }
     .kpi-card .kpi-value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
     .kpi-card .kpi-label { font-size: 0.8rem; color: #6b7280; }
@@ -25,13 +26,24 @@
 {% endblock %}
 
 {% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <!-- Page Header -->
 <div class="page-header d-flex justify-content-between align-items-start">
     <div>
-        <h1><i class="bi bi-clipboard-check me-2"></i>Control Testing Tracker</h1>
+        <h1><i class="bi bi-clipboard-check me-2"></i>Control Testing</h1>
         <p>Central hub for all control testing activity &mdash; schedule, overdue items, and completed tests</p>
     </div>
     <div class="d-flex gap-2">
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#scheduleTestModal">
+            <i class="bi bi-calendar-plus me-1"></i>Schedule Test
+        </button>
         <a href="/controls/dashboard" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-shield-check me-1"></i>Dashboard
         </a>
@@ -43,7 +55,7 @@
 
 <!-- KPI Cards -->
 <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-3 col-lg">
         <div class="card kpi-card {% if kpi_overdue > 0 %}border-danger{% endif %}">
             <div class="card-body py-3">
                 <div class="kpi-value {% if kpi_overdue > 0 %}text-danger{% else %}text-success{% endif %}">{{ kpi_overdue }}</div>
@@ -51,7 +63,7 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-3 col-lg">
         <div class="card kpi-card">
             <div class="card-body py-3">
                 <div class="kpi-value text-warning">{{ kpi_upcoming }}</div>
@@ -59,7 +71,15 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-3 col-lg">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#4f46e5;">{{ kpi_scheduled }}</div>
+                <div class="kpi-label">Scheduled</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg">
         <div class="card kpi-card">
             <div class="card-body py-3">
                 <div class="kpi-value text-primary">{{ kpi_completed_month }}</div>
@@ -67,7 +87,7 @@
             </div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-3 col-lg">
         <div class="card kpi-card">
             <div class="card-body py-3">
                 <div class="kpi-value {% if kpi_pass_rate >= 80 %}text-success{% elif kpi_pass_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">{{ kpi_pass_rate }}%</div>
@@ -99,6 +119,56 @@
     <!-- ==================== SCHEDULE TAB ==================== -->
     <div class="tab-pane fade show active" id="schedulePane" role="tabpanel">
         <div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+
+            {% if scheduled_tests %}
+            <!-- Scheduled Tests Callout -->
+            <div class="card-body border-bottom" style="background:#f5f3ff;">
+                <h6 class="mb-2"><i class="bi bi-calendar-plus me-1" style="color:#4f46e5;"></i>Scheduled Tests <span class="badge" style="background:#4f46e5;">{{ scheduled_tests|length }}</span></h6>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Scheduled Date</th>
+                                <th>Control</th>
+                                <th>Vendor</th>
+                                <th>Type</th>
+                                <th>Assigned Tester</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for st in scheduled_tests %}
+                            <tr>
+                                <td><span class="status-badge status-scheduled">{{ st.scheduled_date.strftime('%Y-%m-%d') if st.scheduled_date else '—' }}</span></td>
+                                <td>
+                                    {% if st.implementation and st.implementation.control %}
+                                    <a href="/controls/{{ st.implementation.control.id }}" class="text-decoration-none fw-semibold">{{ st.implementation.control.control_ref }}</a>
+                                    <small class="text-muted ms-1">{{ st.implementation.control.title }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if st.implementation and st.implementation.vendor %}
+                                    <a href="/vendors/{{ st.implementation.vendor.id }}" class="text-decoration-none">{{ st.implementation.vendor.name }}</a>
+                                    {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+                                </td>
+                                <td><small>{{ test_type_labels.get(st.test_type, st.test_type) }}</small></td>
+                                <td>
+                                    {% if st.tester %}<small>{{ st.tester.display_name }}</small>
+                                    {% else %}<span class="text-muted">&mdash;</span>{% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <a href="/controls/tests/{{ st.id }}/complete" class="btn btn-sm btn-primary" title="Complete this test">
+                                        <i class="bi bi-check-circle me-1"></i>Complete
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Schedule Filters -->
             <div class="card-body py-2 border-bottom">
                 <div class="row g-2 align-items-center tracker-filters">
@@ -216,6 +286,9 @@
                                 {% else %}
                                 <span class="status-badge status-never">Never Tested</span>
                                 {% endif %}
+                                {% if scheduled_by_impl.get(row.impl.id) %}
+                                <br><span class="status-badge status-scheduled mt-1">Scheduled: {{ scheduled_by_impl[row.impl.id][0].scheduled_date.strftime('%Y-%m-%d') }}</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if row.impl.owner %}
@@ -225,10 +298,22 @@
                                 {% endif %}
                             </td>
                             <td class="text-end">
-                                <a href="/controls/implementations/{{ row.impl.id }}/tests/new"
-                                   class="btn btn-sm btn-outline-primary" title="Record Test">
-                                    <i class="bi bi-plus-circle me-1"></i>Test
-                                </a>
+                                <div class="d-flex gap-1 justify-content-end">
+                                    {% if scheduled_by_impl.get(row.impl.id) %}
+                                    <a href="/controls/tests/{{ scheduled_by_impl[row.impl.id][0].id }}/complete"
+                                       class="btn btn-sm btn-primary" title="Complete scheduled test">
+                                        <i class="bi bi-check-circle"></i>
+                                    </a>
+                                    {% endif %}
+                                    <a href="/controls/implementations/{{ row.impl.id }}/tests/new"
+                                       class="btn btn-sm btn-outline-primary" title="Record Test">
+                                        <i class="bi bi-plus-circle"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" title="Schedule Test"
+                                            onclick="openScheduleModal('{{ row.impl.id }}')">
+                                        <i class="bi bi-calendar-plus"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -385,10 +470,69 @@
         </div>
     </div>
 </div>
+
+<!-- ==================== SCHEDULE TEST MODAL ==================== -->
+<div class="modal fade" id="scheduleTestModal" tabindex="-1" aria-labelledby="scheduleTestModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/controls/testing/schedule">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="scheduleTestModalLabel"><i class="bi bi-calendar-plus me-2"></i>Schedule Test</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Implementation <span class="text-danger">*</span></label>
+                        <select name="implementation_id" id="scheduleImplSelect" class="form-select" required>
+                            <option value="">Select a control implementation...</option>
+                            {% for impl in all_implementations %}
+                            <option value="{{ impl.id }}">{{ impl.control.control_ref }} &mdash; {{ impl.vendor.name if impl.vendor else 'Org-wide' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Scheduled Date <span class="text-danger">*</span></label>
+                        <input type="date" name="scheduled_date" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Assigned Tester</label>
+                        <select name="tester_user_id" class="form-select">
+                            <option value="">-- Unassigned --</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Test Type <span class="text-danger">*</span></label>
+                        <select name="test_type" class="form-select" required>
+                            {% for t in test_types %}
+                            <option value="{{ t }}">{{ test_type_labels[t] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-plus me-1"></i>Schedule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+function openScheduleModal(implId) {
+    var select = document.getElementById('scheduleImplSelect');
+    if (select && implId) {
+        select.value = implId;
+    }
+    var modal = new bootstrap.Modal(document.getElementById('scheduleTestModal'));
+    modal.show();
+}
+
 function applyScheduleFilters() {
     var statusVal = document.getElementById('schFilterStatus').value;
     var domainVal = document.getElementById('schFilterDomain').value;
@@ -436,7 +580,7 @@ function applyHistoryFilters() {
     document.getElementById('histRowCount').textContent = visible;
 }
 
-// URL param handling: ?status=OVERDUE pre-selects filter, ?tab=history switches tab
+// URL param handling: ?status=OVERDUE pre-selects filter, ?tab=history switches tab, ?schedule=<id> opens modal
 (function() {
     var params = new URLSearchParams(window.location.search);
 
@@ -456,6 +600,10 @@ function applyHistoryFilters() {
     if (params.get('result')) {
         document.getElementById('histFilterResult').value = params.get('result');
         applyHistoryFilters();
+    }
+
+    if (params.get('schedule')) {
+        setTimeout(function() { openScheduleModal(params.get('schedule')); }, 300);
     }
 })();
 </script>

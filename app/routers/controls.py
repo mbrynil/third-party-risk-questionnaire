@@ -18,6 +18,8 @@ from models import (
     VALID_EFFECTIVENESS_LEVELS, EFFECTIVENESS_LABELS, EFFECTIVENESS_COLORS,
     VALID_TEST_TYPES, TEST_TYPE_LABELS,
     VALID_TEST_RESULTS, TEST_RESULT_LABELS, TEST_RESULT_COLORS,
+    TEST_STATUS_SCHEDULED,
+    IMPL_STATUS_IMPLEMENTED,
     AUDIT_ACTION_CREATE, AUDIT_ACTION_UPDATE, AUDIT_ACTION_DELETE,
     AUDIT_ENTITY_CONTROL, AUDIT_ENTITY_CONTROL_IMPL,
 )
@@ -282,28 +284,168 @@ async def control_testing_tracker(
     ytd_pass = sum(1 for t in ytd_tests if t.result == TEST_RESULT_PASS)
     pass_rate_ytd = round(ytd_pass / ytd_total * 100) if ytd_total > 0 else 0
 
+    # Scheduled tests
+    scheduled_tests = svc.get_scheduled_tests(db)
+
+    # Build lookup: impl_id → list of scheduled tests
+    scheduled_by_impl = {}
+    for st in scheduled_tests:
+        scheduled_by_impl.setdefault(st.implementation_id, []).append(st)
+
     # Filter reference data
     users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
     schedule_vendors = sorted({
         impl.vendor.name for impl in schedule_impls if impl.vendor
     })
 
+    # Pre-select implementation for schedule modal (from ?schedule=<impl_id>)
+    pre_select_impl = request.query_params.get("schedule", "")
+
     return templates.TemplateResponse("control_testing.html", {
         "request": request,
         "schedule_rows": schedule_rows,
+        "scheduled_tests": scheduled_tests,
+        "scheduled_by_impl": scheduled_by_impl,
         "test_history": test_history,
         "kpi_overdue": testing_summary["overdue"],
         "kpi_upcoming": testing_summary["upcoming"],
+        "kpi_scheduled": len(scheduled_tests),
         "kpi_completed_month": completed_this_month,
         "kpi_pass_rate": pass_rate_ytd,
         "domains": VALID_CONTROL_DOMAINS,
         "users": users,
         "schedule_vendors": schedule_vendors,
+        "all_implementations": schedule_impls,
+        "test_types": VALID_TEST_TYPES,
         "test_type_labels": TEST_TYPE_LABELS,
+        "test_results": VALID_TEST_RESULTS,
         "test_result_labels": TEST_RESULT_LABELS,
         "test_result_colors": TEST_RESULT_COLORS,
         "frequency_labels": CONTROL_FREQUENCY_LABELS,
+        "pre_select_impl": pre_select_impl,
     })
+
+
+@router.post("/controls/testing/schedule", response_class=HTMLResponse)
+async def control_test_schedule(
+    request: Request,
+    implementation_id: int = Form(...),
+    test_type: str = Form(...),
+    scheduled_date: str = Form(...),
+    tester_user_id: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    impl = svc.get_implementation(db, implementation_id)
+    if not impl:
+        raise HTTPException(status_code=404, detail="Implementation not found")
+
+    sched_dt = datetime.strptime(scheduled_date.strip(), "%Y-%m-%d")
+    tester_id = int(tester_user_id) if tester_user_id.strip() else None
+    test = svc.create_scheduled_test(db, implementation_id, test_type, sched_dt, tester_id)
+
+    log_audit(db, AUDIT_ACTION_CREATE, "control_test",
+              entity_id=test.id,
+              entity_label=f"Scheduled test for {impl.control.control_ref}",
+              description=f"Scheduled {test_type} test for {scheduled_date}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/testing?message={quote('Test scheduled')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.get("/controls/tests/{test_id}/complete", response_class=HTMLResponse)
+async def control_test_complete_form(
+    request: Request, test_id: int,
+    db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep),
+):
+    test = svc.get_test(db, test_id)
+    if not test or test.status != TEST_STATUS_SCHEDULED:
+        raise HTTPException(status_code=404, detail="Scheduled test not found")
+
+    return templates.TemplateResponse("control_test_form.html", {
+        "request": request,
+        "impl": test.implementation,
+        "completing_test": test,
+        "test_types": VALID_TEST_TYPES,
+        "test_type_labels": TEST_TYPE_LABELS,
+        "test_results": VALID_TEST_RESULTS,
+        "test_result_labels": TEST_RESULT_LABELS,
+        "framework_display": FRAMEWORK_DISPLAY,
+    })
+
+
+@router.post("/controls/tests/{test_id}/complete", response_class=HTMLResponse)
+async def control_test_complete(
+    request: Request,
+    test_id: int,
+    result: str = Form(...),
+    test_procedure: str = Form(""),
+    findings: str = Form(""),
+    recommendations: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    test = svc.get_test(db, test_id)
+    if not test or test.status != TEST_STATUS_SCHEDULED:
+        raise HTTPException(status_code=404, detail="Scheduled test not found")
+
+    svc.complete_scheduled_test(
+        db, test_id, result, test_procedure.strip(),
+        findings.strip(), recommendations.strip(),
+    )
+
+    # Handle file uploads
+    form = await request.form()
+    files = form.getlist("evidence_files")
+    for f in files:
+        if hasattr(f, 'filename') and f.filename:
+            ev = await svc.store_control_evidence(f, test_id)
+            db.add(ev)
+
+    log_audit(db, AUDIT_ACTION_UPDATE, "control_test",
+              entity_id=test.id,
+              entity_label=f"Completed test for {test.implementation.control.control_ref}",
+              description=f"Completed scheduled test: {result}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/testing?tab=history&message={quote('Test completed')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/implementations/{impl_id}/set-test-date", response_class=HTMLResponse)
+async def control_impl_set_test_date(
+    impl_id: int,
+    request: Request,
+    next_test_date: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    impl = svc.get_implementation(db, impl_id)
+    if not impl:
+        raise HTTPException(status_code=404, detail="Implementation not found")
+
+    if next_test_date.strip():
+        dt = datetime.strptime(next_test_date.strip(), "%Y-%m-%d")
+    else:
+        dt = None
+    svc.set_implementation_next_test_date(db, impl_id, dt)
+
+    log_audit(db, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_CONTROL_IMPL,
+              entity_id=impl_id,
+              entity_label=f"{impl.control.control_ref}",
+              description=f"Set next test date to {next_test_date or 'none'}",
+              actor_user=current_user)
+    db.commit()
+
+    referer = request.headers.get("referer", f"/controls/implementations/{impl_id}")
+    return RedirectResponse(url=referer, status_code=303)
 
 
 @router.post("/controls/{control_id}/toggle", response_class=HTMLResponse)
@@ -329,7 +471,10 @@ async def control_detail(request: Request, control_id: int, db: Session = Depend
     if not ctrl:
         raise HTTPException(status_code=404, detail="Control not found")
 
-    impls = db.query(ControlImplementation).filter(
+    from sqlalchemy.orm import joinedload as jl
+    impls = db.query(ControlImplementation).options(
+        jl(ControlImplementation.vendor),
+    ).filter(
         ControlImplementation.control_id == control_id
     ).all()
 
@@ -348,6 +493,7 @@ async def control_detail(request: Request, control_id: int, db: Session = Depend
         "impl_status_colors": IMPL_STATUS_COLORS,
         "effectiveness_labels": EFFECTIVENESS_LABELS,
         "effectiveness_colors": EFFECTIVENESS_COLORS,
+        "IMPL_STATUS_IMPLEMENTED": IMPL_STATUS_IMPLEMENTED,
     })
 
 

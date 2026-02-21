@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Record Test — {{ impl.control.control_ref }}{% endblock %}
+{% block title %}{% if completing_test %}Complete Test{% else %}Record Test{% endif %} — {{ impl.control.control_ref }}{% endblock %}
 
 {% block breadcrumbs %}
 <li class="breadcrumb-item"><a href="/">Home</a></li>
@@ -9,26 +9,41 @@
 <li class="breadcrumb-item"><a href="/vendors/{{ impl.vendor.id }}/controls">Controls</a></li>
 {% endif %}
 <li class="breadcrumb-item"><a href="/controls/implementations/{{ impl.id }}">{{ impl.control.control_ref }}</a></li>
-<li class="breadcrumb-item active">Record Test</li>
+<li class="breadcrumb-item active">{% if completing_test %}Complete Test{% else %}Record Test{% endif %}</li>
 {% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-8">
-        <h3 class="mb-2"><i class="bi bi-clipboard-check me-2"></i>Record Test</h3>
+        <h3 class="mb-2"><i class="bi bi-clipboard-check me-2"></i>{% if completing_test %}Complete Scheduled Test{% else %}Record Test{% endif %}</h3>
         <p class="text-muted mb-4">{{ impl.control.control_ref }} — {{ impl.control.title }}{% if impl.vendor %} ({{ impl.vendor.name }}){% endif %}</p>
 
-        <form method="post" action="/controls/implementations/{{ impl.id }}/tests" enctype="multipart/form-data">
+        {% if completing_test %}
+        <div class="alert alert-info d-flex align-items-center mb-3">
+            <i class="bi bi-calendar-check me-2"></i>
+            Scheduled for <strong class="mx-1">{{ completing_test.scheduled_date.strftime('%Y-%m-%d') if completing_test.scheduled_date else '—' }}</strong>
+            {% if completing_test.tester %}
+            &mdash; assigned to <strong class="ms-1">{{ completing_test.tester.display_name }}</strong>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <form method="post"
+              action="{% if completing_test %}/controls/tests/{{ completing_test.id }}/complete{% else %}/controls/implementations/{{ impl.id }}/tests{% endif %}"
+              enctype="multipart/form-data">
             <div class="card mb-4">
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Test Type <span class="text-danger">*</span></label>
-                            <select name="test_type" class="form-select" required>
+                            <select name="test_type" class="form-select" {% if completing_test %}disabled{% endif %} required>
                                 {% for t in test_types %}
-                                <option value="{{ t }}">{{ test_type_labels[t] }}</option>
+                                <option value="{{ t }}" {% if completing_test and completing_test.test_type == t %}selected{% endif %}>{{ test_type_labels[t] }}</option>
                                 {% endfor %}
                             </select>
+                            {% if completing_test %}
+                            <input type="hidden" name="test_type" value="{{ completing_test.test_type }}">
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Result <span class="text-danger">*</span></label>
@@ -60,8 +75,12 @@
             </div>
 
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Record Test</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{% if completing_test %}Complete Test{% else %}Record Test{% endif %}</button>
+                {% if completing_test %}
+                <a href="/controls/testing" class="btn btn-outline-secondary">Cancel</a>
+                {% else %}
                 <a href="/controls/implementations/{{ impl.id }}" class="btn btn-outline-secondary">Cancel</a>
+                {% endif %}
             </div>
         </form>
     </div>

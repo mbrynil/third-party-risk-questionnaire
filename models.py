@@ -2050,6 +2050,11 @@ TEST_RESULT_COLORS = {
     TEST_RESULT_NOT_TESTED: "#6c757d",
 }
 
+# Test status (scheduled vs completed)
+TEST_STATUS_SCHEDULED = "SCHEDULED"
+TEST_STATUS_COMPLETED = "COMPLETED"
+VALID_TEST_STATUSES = [TEST_STATUS_SCHEDULED, TEST_STATUS_COMPLETED]
+
 # Activity / notification constants for controls
 ACTIVITY_CONTROL_IMPL_UPDATED = "CONTROL_IMPL_UPDATED"
 ACTIVITY_ICONS[ACTIVITY_CONTROL_IMPL_UPDATED] = "bi-shield-lock"
@@ -2146,6 +2151,8 @@ class ControlTest(Base):
     tester_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     test_date = Column(DateTime, default=datetime.utcnow)
     result = Column(String(20), nullable=False, default=TEST_RESULT_NOT_TESTED)
+    status = Column(String(20), default=TEST_STATUS_COMPLETED, nullable=False)
+    scheduled_date = Column(DateTime, nullable=True)
     findings = Column(Text, nullable=True)
     recommendations = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -2171,8 +2178,20 @@ class ControlEvidence(Base):
 
 
 def backfill_controls_tables():
-    """New tables are auto-created by init_db(). Nothing to backfill yet."""
-    pass
+    """Migrate control_tests: add status + scheduled_date columns."""
+    db = SessionLocal()
+    try:
+        try:
+            db.execute(text("ALTER TABLE control_tests ADD COLUMN status VARCHAR(20) DEFAULT 'COMPLETED' NOT NULL"))
+        except Exception:
+            pass
+        try:
+            db.execute(text("ALTER TABLE control_tests ADD COLUMN scheduled_date DATETIME"))
+        except Exception:
+            pass
+        db.commit()
+    finally:
+        db.close()
 
 
 def seed_default_controls():
