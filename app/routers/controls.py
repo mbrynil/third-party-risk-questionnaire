@@ -322,6 +322,43 @@ async def framework_cross_map(
     })
 
 
+# ==================== CUSTOM FRAMEWORK MANAGEMENT ====================
+
+@router.get("/controls/frameworks/new", response_class=HTMLResponse)
+async def framework_new_form(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    return templates.TemplateResponse("framework_form.html", {
+        "request": request,
+        "framework": None,
+    })
+
+
+@router.post("/controls/frameworks/new", response_class=HTMLResponse)
+async def framework_create(
+    request: Request,
+    display_name: str = Form(...),
+    description: str = Form(None),
+    version: str = Form(None),
+    source_url: str = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    from models import AUDIT_ACTION_CREATE, AUDIT_ENTITY_CUSTOM_FRAMEWORK
+    fw = fw_svc.create_custom_framework(
+        db, name=display_name, description=description,
+        version=version, source_url=source_url, user_id=current_user.id,
+    )
+    log_audit(db, action=AUDIT_ACTION_CREATE, entity_type=AUDIT_ENTITY_CUSTOM_FRAMEWORK,
+              entity_id=fw.id, entity_label=fw.framework_key,
+              new_value={"display_name": display_name}, actor_user=current_user)
+    db.commit()
+    return RedirectResponse(url=f"/controls/frameworks/{fw.framework_key}", status_code=303)
+
+
 @router.get("/controls/frameworks/{framework_key}", response_class=HTMLResponse)
 async def framework_detail(
     request: Request,
@@ -332,7 +369,9 @@ async def framework_detail(
     from app.services import framework_service as fw_svc
     from models import ADOPTION_STATUS_MAPPED, ADOPTION_STATUS_NOT_APPLICABLE, IMPL_STATUS_IMPLEMENTED
 
-    fw_label = FRAMEWORK_DISPLAY.get(framework_key, framework_key)
+    fw_display = fw_svc.get_framework_display_dynamic(db)
+    fw_label = fw_display.get(framework_key, framework_key)
+    is_custom = fw_svc.is_custom_framework(db, framework_key)
     grouped = fw_svc.get_requirements_grouped(db, framework_key)
     coverage = fw_svc.get_requirement_coverage(db, framework_key)
     category_stats = fw_svc.get_category_coverage_stats(db, framework_key)
@@ -360,6 +399,7 @@ async def framework_detail(
         "request": request,
         "framework_key": framework_key,
         "fw_label": fw_label,
+        "is_custom": is_custom,
         "grouped": grouped,
         "coverage_map": coverage_map,
         "category_stats": category_stats,
@@ -369,7 +409,7 @@ async def framework_detail(
         "na_count": na_count,
         "gap_count": gap_count,
         "implemented_count": implemented_count,
-        "framework_display": FRAMEWORK_DISPLAY,
+        "framework_display": fw_display,
     })
 
 
@@ -2261,3 +2301,137 @@ def _parse_enhanced_test_fields(
     if finding_risk_rating.strip():
         result["finding_risk_rating"] = finding_risk_rating.strip()
     return result
+
+
+@router.get("/controls/frameworks/{framework_key}/edit", response_class=HTMLResponse)
+async def framework_edit_form(
+    request: Request,
+    framework_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    fw = fw_svc.get_custom_framework_by_key(db, framework_key)
+    if not fw:
+        raise HTTPException(status_code=404, detail="Custom framework not found")
+    return templates.TemplateResponse("framework_form.html", {
+        "request": request,
+        "framework": fw,
+    })
+
+
+@router.post("/controls/frameworks/{framework_key}/edit", response_class=HTMLResponse)
+async def framework_edit(
+    request: Request,
+    framework_key: str,
+    display_name: str = Form(...),
+    description: str = Form(None),
+    version: str = Form(None),
+    source_url: str = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    from models import AUDIT_ACTION_UPDATE, AUDIT_ENTITY_CUSTOM_FRAMEWORK
+    fw = fw_svc.get_custom_framework_by_key(db, framework_key)
+    if not fw:
+        raise HTTPException(status_code=404, detail="Custom framework not found")
+    fw_svc.update_custom_framework(db, fw.id,
+        display_name=display_name, description=description,
+        version=version, source_url=source_url,
+    )
+    log_audit(db, action=AUDIT_ACTION_UPDATE, entity_type=AUDIT_ENTITY_CUSTOM_FRAMEWORK,
+              entity_id=fw.id, entity_label=fw.framework_key,
+              actor_user=current_user)
+    db.commit()
+    return RedirectResponse(url=f"/controls/frameworks/{framework_key}", status_code=303)
+
+
+@router.post("/controls/frameworks/{framework_key}/delete", response_class=HTMLResponse)
+async def framework_delete(
+    request: Request,
+    framework_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    from models import AUDIT_ACTION_DELETE, AUDIT_ENTITY_CUSTOM_FRAMEWORK
+    fw = fw_svc.get_custom_framework_by_key(db, framework_key)
+    if fw:
+        log_audit(db, action=AUDIT_ACTION_DELETE, entity_type=AUDIT_ENTITY_CUSTOM_FRAMEWORK,
+                  entity_id=fw.id, entity_label=fw.framework_key,
+                  actor_user=current_user)
+        fw_svc.delete_custom_framework(db, framework_key)
+        db.commit()
+    return RedirectResponse(url="/controls/frameworks", status_code=303)
+
+
+@router.get("/controls/frameworks/{framework_key}/requirements/new", response_class=HTMLResponse)
+async def framework_requirement_add_form(
+    request: Request,
+    framework_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    fw_display = fw_svc.get_framework_display_dynamic(db)
+    fw_label = fw_display.get(framework_key, framework_key)
+    return templates.TemplateResponse("framework_requirement_add.html", {
+        "request": request,
+        "framework_key": framework_key,
+        "fw_label": fw_label,
+    })
+
+
+@router.post("/controls/frameworks/{framework_key}/requirements/new", response_class=HTMLResponse)
+async def framework_requirement_add(
+    request: Request,
+    framework_key: str,
+    reference: str = Form(...),
+    title: str = Form(...),
+    description: str = Form(None),
+    category: str = Form(None),
+    subcategory: str = Form(None),
+    guidance: str = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    fw_svc.create_requirement(
+        db, framework_key, reference, title,
+        description=description, category=category,
+        subcategory=subcategory, guidance=guidance,
+    )
+    db.commit()
+    return RedirectResponse(url=f"/controls/frameworks/{framework_key}", status_code=303)
+
+
+@router.post("/controls/frameworks/{framework_key}/requirements/import", response_class=HTMLResponse)
+async def framework_requirements_import(
+    request: Request,
+    framework_key: str,
+    csv_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    content = (await csv_file.read()).decode("utf-8-sig")
+    result = fw_svc.import_requirements_csv(db, framework_key, content)
+    db.commit()
+    return RedirectResponse(url=f"/controls/frameworks/{framework_key}", status_code=303)
+
+
+@router.get("/controls/frameworks/{framework_key}/requirements/export")
+async def framework_requirements_export(
+    request: Request,
+    framework_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    csv_content = fw_svc.export_requirements_csv(db, framework_key)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={framework_key}_requirements.csv"},
+    )

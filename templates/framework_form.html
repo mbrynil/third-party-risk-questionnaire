@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}{{ "Edit Framework" if framework else "New Custom Framework" }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item"><a href="/controls/frameworks">Frameworks</a></li>
+<li class="breadcrumb-item active">{{ "Edit" if framework else "New" }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-journal-plus me-2"></i>{{ "Edit Custom Framework" if framework else "New Custom Framework" }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Framework Name <span class="text-danger">*</span></label>
+                        <input type="text" name="display_name" class="form-control" required value="{{ framework.display_name if framework else '' }}" placeholder="e.g., FedRAMP Moderate">
+                        <div class="form-text">A unique key will be auto-generated from the name.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="Brief description of the framework...">{{ framework.description if framework else '' }}</textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Version</label>
+                            <input type="text" name="version" class="form-control" value="{{ framework.version if framework else '' }}" placeholder="e.g., 3.0">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Source URL</label>
+                            <input type="url" name="source_url" class="form-control" value="{{ framework.source_url if framework else '' }}" placeholder="https://...">
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{{ "Save Changes" if framework else "Create Framework" }}</button>
+                        <a href="/controls/frameworks" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

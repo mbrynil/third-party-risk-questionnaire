@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Risk Heatmap{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risks">Risk Register</a></li>
+<li class="breadcrumb-item active">Heatmap</li>
+{% endblock %}
+
+{% block content %}
+<h3 class="mb-4"><i class="bi bi-grid-3x3 me-2"></i>Risk Heatmap — Likelihood × Impact</h3>
+
+<div class="card">
+    <div class="card-body">
+        <div class="d-flex">
+            {# Y-axis label #}
+            <div class="d-flex flex-column justify-content-center me-2" style="writing-mode:vertical-rl;transform:rotate(180deg);font-weight:bold;color:#555;">
+                Likelihood
+            </div>
+            <div class="flex-grow-1">
+                {# Y-axis tick labels #}
+                {% set likelihood_labels = {5: "Almost Certain", 4: "Likely", 3: "Possible", 2: "Unlikely", 1: "Rare"} %}
+                {% set impact_labels = {1: "Negligible", 2: "Minor", 3: "Moderate", 4: "Major", 5: "Severe"} %}
+                <table class="w-100" style="border-collapse:separate;border-spacing:4px;">
+                    {% for l in [5,4,3,2,1] %}
+                    <tr>
+                        <td class="text-end pe-2 small text-muted" style="width:100px;white-space:nowrap;">
+                            <strong>{{ l }}</strong> {{ likelihood_labels[l] }}
+                        </td>
+                        {% for i in [1,2,3,4,5] %}
+                        {% set score = l * i %}
+                        {% set risks_in_cell = heatmap.get((l, i), []) %}
+                        {% set count = risks_in_cell|length %}
+                        {% if score <= 5 %}{% set bg = "#d1e7dd" %}{% set fg = "#0f5132" %}
+                        {% elif score <= 10 %}{% set bg = "#cff4fc" %}{% set fg = "#055160" %}
+                        {% elif score <= 15 %}{% set bg = "#fff3cd" %}{% set fg = "#664d03" %}
+                        {% elif score <= 20 %}{% set bg = "#ffe5d0" %}{% set fg = "#984c0c" %}
+                        {% else %}{% set bg = "#f8d7da" %}{% set fg = "#842029" %}
+                        {% endif %}
+                        <td style="background:{{ bg }};color:{{ fg }};width:18%;height:80px;text-align:center;vertical-align:middle;border-radius:6px;cursor:default;"
+                            title="{% for r in risks_in_cell %}{{ r.risk_ref }}: {{ r.title }}&#10;{% endfor %}">
+                            {% if count > 0 %}
+                            <div class="fw-bold" style="font-size:1.5rem;">{{ count }}</div>
+                            <div style="font-size:0.65rem;">
+                                {% for r in risks_in_cell[:3] %}{{ r.risk_ref }}{% if not loop.last %}, {% endif %}{% endfor %}
+                                {% if count > 3 %}+{{ count - 3 }} more{% endif %}
+                            </div>
+                            {% else %}
+                            <span style="opacity:0.3;">{{ score }}</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <td></td>
+                        {% for i in [1,2,3,4,5] %}
+                        <td class="text-center small text-muted pt-2">
+                            <strong>{{ i }}</strong><br>{{ impact_labels[i] }}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                </table>
+                <div class="text-center mt-2 fw-bold" style="color:#555;">Impact</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

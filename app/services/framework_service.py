@@ -72,7 +72,12 @@ def get_requirement_count(db: Session, framework: str) -> int:
 def get_framework_stats(db: Session) -> list:
     """Per-framework stats: total reqs, mapped, N/A, coverage %."""
     stats = []
-    for fw_key in SEEDED_FRAMEWORKS:
+    from models import CustomFramework
+    all_fw_keys = list(SEEDED_FRAMEWORKS)
+    customs = db.query(CustomFramework).filter(CustomFramework.is_active == True).all()
+    for c in customs:
+        all_fw_keys.append(c.framework_key)
+    for fw_key in all_fw_keys:
         total = db.query(FrameworkRequirement).filter(
             FrameworkRequirement.framework == fw_key,
             FrameworkRequirement.is_active == True,
@@ -99,7 +104,7 @@ def get_framework_stats(db: Session) -> list:
 
         stats.append({
             "framework": fw_key,
-            "label": FRAMEWORK_DISPLAY.get(fw_key, fw_key),
+            "label": get_framework_display_dynamic(db).get(fw_key, fw_key),
             "total": total,
             "mapped": mapped,
             "na": na,
@@ -402,3 +407,169 @@ def _csv_escape(val: str) -> str:
     if "," in val or '"' in val or "\n" in val:
         return '"' + val.replace('"', '""') + '"'
     return val
+
+
+# ==================== CUSTOM FRAMEWORK CRUD ====================
+
+def get_all_frameworks_dynamic(db: Session) -> list:
+    """Merge AVAILABLE_FRAMEWORKS + custom frameworks from DB."""
+    from models import CustomFramework
+    result = list(AVAILABLE_FRAMEWORKS)  # list of (key, label) tuples
+    customs = db.query(CustomFramework).filter(CustomFramework.is_active == True).order_by(CustomFramework.display_name).all()
+    for c in customs:
+        result.append((c.framework_key, c.display_name))
+    return result
+
+
+def get_framework_display_dynamic(db: Session) -> dict:
+    """Dynamic version of FRAMEWORK_DISPLAY including custom frameworks."""
+    return {k: v for k, v in get_all_frameworks_dynamic(db)}
+
+
+def get_custom_frameworks(db: Session):
+    from models import CustomFramework
+    return db.query(CustomFramework).filter(CustomFramework.is_active == True).order_by(CustomFramework.display_name).all()
+
+
+def get_custom_framework_by_key(db: Session, key: str):
+    from models import CustomFramework
+    return db.query(CustomFramework).filter(CustomFramework.framework_key == key).first()
+
+
+def create_custom_framework(db: Session, name: str, description: str = None, version: str = None, source_url: str = None, user_id: int = None):
+    from models import CustomFramework
+    import re
+    # Auto-generate key from name
+    key = re.sub(r'[^A-Z0-9]+', '_', name.upper().strip())
+    key = key.strip('_')[:50]
+    # Ensure unique
+    existing = db.query(CustomFramework).filter(CustomFramework.framework_key == key).first()
+    if existing:
+        key = key[:45] + "_" + str(db.query(CustomFramework).count() + 1)
+
+    fw = CustomFramework(
+        framework_key=key,
+        display_name=name,
+        description=description,
+        version=version,
+        source_url=source_url,
+        created_by_user_id=user_id,
+    )
+    db.add(fw)
+    db.flush()
+    return fw
+
+
+def update_custom_framework(db: Session, framework_id: int, **kwargs):
+    from models import CustomFramework
+    fw = db.query(CustomFramework).filter(CustomFramework.id == framework_id).first()
+    if not fw:
+        return None
+    for k, v in kwargs.items():
+        if hasattr(fw, k):
+            setattr(fw, k, v)
+    db.flush()
+    return fw
+
+
+def delete_custom_framework(db: Session, framework_key: str):
+    """Delete custom framework and all its requirements and adoptions."""
+    from models import CustomFramework
+    fw = db.query(CustomFramework).filter(CustomFramework.framework_key == framework_key).first()
+    if not fw:
+        return False
+    # Delete requirements
+    db.query(FrameworkRequirement).filter(FrameworkRequirement.framework == framework_key).delete()
+    # Delete adoptions
+    db.query(FrameworkAdoption).filter(FrameworkAdoption.framework == framework_key).delete()
+    db.delete(fw)
+    db.flush()
+    return True
+
+
+def import_requirements_csv(db: Session, framework_key: str, csv_content: str) -> dict:
+    """Parse CSV content and bulk-create FrameworkRequirement rows.
+    Expected columns: reference, title, description, category, subcategory, guidance
+    Returns dict with 'created' and 'errors' counts.
+    """
+    import csv
+    import io
+    reader = csv.DictReader(io.StringIO(csv_content))
+    created = 0
+    errors = 0
+    sort_order = db.query(FrameworkRequirement).filter(
+        FrameworkRequirement.framework == framework_key
+    ).count()
+
+    for row in reader:
+        ref = row.get("reference", "").strip()
+        title = row.get("title", "").strip()
+        if not ref or not title:
+            errors += 1
+            continue
+        # Check for duplicate
+        existing = db.query(FrameworkRequirement).filter(
+            FrameworkRequirement.framework == framework_key,
+            FrameworkRequirement.reference == ref,
+        ).first()
+        if existing:
+            errors += 1
+            continue
+        sort_order += 1
+        db.add(FrameworkRequirement(
+            framework=framework_key,
+            reference=ref,
+            title=title,
+            description=row.get("description", "").strip() or None,
+            category=row.get("category", "").strip() or None,
+            subcategory=row.get("subcategory", "").strip() or None,
+            guidance=row.get("guidance", "").strip() or None,
+            sort_order=sort_order,
+        ))
+        created += 1
+    db.flush()
+    return {"created": created, "errors": errors}
+
+
+def export_requirements_csv(db: Session, framework_key: str) -> str:
+    """Export all requirements for a framework as CSV."""
+    reqs = get_framework_requirements(db, framework_key)
+    lines = ["reference,title,description,category,subcategory,guidance"]
+    for r in reqs:
+        lines.append(",".join([
+            _csv_escape(r.reference),
+            _csv_escape(r.title),
+            _csv_escape(r.description or ""),
+            _csv_escape(r.category or ""),
+            _csv_escape(r.subcategory or ""),
+            _csv_escape(r.guidance or ""),
+        ]))
+    return "\n".join(lines)
+
+
+def create_requirement(db: Session, framework_key: str, reference: str, title: str, **kwargs):
+    """Create a single requirement for a framework."""
+    sort_order = db.query(FrameworkRequirement).filter(
+        FrameworkRequirement.framework == framework_key
+    ).count() + 1
+    req = FrameworkRequirement(
+        framework=framework_key,
+        reference=reference,
+        title=title,
+        description=kwargs.get("description"),
+        category=kwargs.get("category"),
+        subcategory=kwargs.get("subcategory"),
+        guidance=kwargs.get("guidance"),
+        suggested_domain=kwargs.get("suggested_domain"),
+        suggested_control_type=kwargs.get("suggested_control_type"),
+        sort_order=sort_order,
+    )
+    db.add(req)
+    db.flush()
+    return req
+
+
+def is_custom_framework(db: Session, framework_key: str) -> bool:
+    """Check if a framework key belongs to a custom (user-created) framework."""
+    from models import CustomFramework
+    return db.query(CustomFramework).filter(CustomFramework.framework_key == framework_key).first() is not None

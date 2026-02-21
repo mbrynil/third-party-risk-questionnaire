@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Policy Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/policies">Policies</a></li>
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+    .status-bar { height: 28px; border-radius: 6px; display: flex; overflow: hidden; }
+    .status-bar-segment { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.7rem; font-weight: 600; min-width: 32px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Policy Dashboard</h3>
+        <p class="text-muted mb-0">Overview of the organization's policy program</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/policies" class="btn btn-outline-primary"><i class="bi bi-file-earmark-text me-1"></i>Library</a>
+        <a href="/policies/reviews" class="btn btn-outline-secondary"><i class="bi bi-clock me-1"></i>Reviews Due</a>
+    </div>
+</div>
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#2563eb;">{{ kpis.total }}</div>
+                <div class="kpi-label">Total Policies</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#198754;">{{ kpis.approved }}</div>
+                <div class="kpi-label">Approved</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if kpis.reviews_due > 0 %}#dc3545{% else %}#198754{% endif %};">{{ kpis.reviews_due }}</div>
+                <div class="kpi-label">Reviews Due</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if kpis.ack_rate >= 80 %}#198754{% elif kpis.ack_rate >= 50 %}#fd7e14{% else %}#dc3545{% endif %};">{{ kpis.ack_rate }}%</div>
+                <div class="kpi-label">Acknowledgment Rate</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    {# Status Breakdown #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-bar-chart me-1"></i>Status Breakdown</h6></div>
+            <div class="card-body">
+                {% if kpis.total > 0 %}
+                <div class="status-bar mb-3">
+                    {% for status_key, count in status_counts.items() %}
+                    {% if count > 0 %}
+                    <div class="status-bar-segment" style="background:{{ POLICY_STATUS_COLORS.get(status_key, '#6c757d') }};width:{{ (count / kpis.total * 100)|round(1) }}%;" title="{{ POLICY_STATUS_LABELS.get(status_key, status_key) }}: {{ count }}">
+                        {{ count }}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="d-flex flex-wrap gap-3">
+                    {% for status_key, count in status_counts.items() %}
+                    <div class="d-flex align-items-center gap-2">
+                        <span style="width:12px;height:12px;border-radius:3px;background:{{ POLICY_STATUS_COLORS.get(status_key, '#6c757d') }};display:inline-block;"></span>
+                        <small class="text-muted">{{ POLICY_STATUS_LABELS.get(status_key, status_key) }}: <strong>{{ count }}</strong></small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No policies created yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Domain Coverage #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-grid-3x3 me-1"></i>Domain Coverage</h6></div>
+            {% if domain_coverage %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Domain</th>
+                            <th class="text-center">Total</th>
+                            <th class="text-center">Approved</th>
+                            <th>Coverage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dc in domain_coverage %}
+                        <tr>
+                            <td class="fw-semibold"><small>{{ dc.domain }}</small></td>
+                            <td class="text-center">{{ dc.total }}</td>
+                            <td class="text-center">{{ dc.approved }}</td>
+                            <td>
+                                <div class="progress" style="height:16px;min-width:80px;">
+                                    <div class="progress-bar bg-{% if dc.pct >= 70 %}success{% elif dc.pct >= 40 %}warning{% else %}danger{% endif %}" style="width:{{ dc.pct }}%;">{{ dc.pct }}%</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body text-muted">No domain data available. Assign domains to policies.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Reviews Due Section #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-clock-history me-1"></i>Upcoming Reviews</h6>
+        <a href="/policies/reviews" class="btn btn-sm btn-outline-primary">View All</a>
+    </div>
+    {% if reviews_due %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Ref</th>
+                    <th>Title</th>
+                    <th>Owner</th>
+                    <th>Next Review Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in reviews_due[:10] %}
+                <tr>
+                    <td><a href="/policies/{{ p.id }}" class="text-decoration-none fw-semibold">{{ p.policy_ref }}</a></td>
+                    <td><a href="/policies/{{ p.id }}" class="text-decoration-none">{{ p.title }}</a></td>
+                    <td><small class="text-muted">{{ p.owner.display_name if p.owner else '—' }}</small></td>
+                    <td>
+                        {% if p.next_review_date %}
+                        {% if p.next_review_date.date() < current_date %}
+                        <span class="text-danger fw-semibold">{{ p.next_review_date.strftime('%Y-%m-%d') }}</span>
+                        <span class="badge bg-danger ms-1">Overdue</span>
+                        {% else %}
+                        <span class="text-muted">{{ p.next_review_date.strftime('%Y-%m-%d') }}</span>
+                        {% endif %}
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge" style="background:{{ POLICY_STATUS_COLORS.get(p.status, '#6c757d') }};">{{ POLICY_STATUS_LABELS.get(p.status, p.status) }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted">No policies are currently due for review.</div>
+    {% endif %}
+</div>
+
+{# Acknowledgment Overview #}
+{% if ack_overview %}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-person-check me-1"></i>Acknowledgment Overview</h6></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Policy</th>
+                    <th class="text-center">Acknowledged</th>
+                    <th class="text-center">Pending</th>
+                    <th>Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in ack_overview %}
+                <tr>
+                    <td><a href="/policies/{{ a.id }}" class="text-decoration-none">{{ a.policy_ref }} — {{ a.title }}</a></td>
+                    <td class="text-center">{{ a.acknowledged }}</td>
+                    <td class="text-center">{{ a.pending }}</td>
+                    <td>
+                        <div class="progress" style="height:16px;min-width:80px;">
+                            <div class="progress-bar bg-{% if a.rate >= 80 %}success{% elif a.rate >= 50 %}warning{% else %}danger{% endif %}" style="width:{{ a.rate }}%;">{{ a.rate }}%</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

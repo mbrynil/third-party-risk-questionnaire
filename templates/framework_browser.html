@@ -14,7 +14,12 @@
         <h3 class="mb-1"><i class="bi bi-journal-bookmark me-2"></i>Regulatory Framework Library</h3>
         <p class="text-muted mb-0">Canonical requirements from industry frameworks. Adopt a framework to auto-create controls and track compliance.</p>
     </div>
-    <a href="/controls/frameworks/cross-map" class="btn btn-outline-primary"><i class="bi bi-diagram-3 me-1"></i>Cross-Framework Map</a>
+    <div class="d-flex gap-2">
+        {% if request.state.current_user and request.state.current_user.role == 'admin' %}
+        <a href="/controls/frameworks/new" class="btn btn-success"><i class="bi bi-plus-lg me-1"></i>Add Framework</a>
+        {% endif %}
+        <a href="/controls/frameworks/cross-map" class="btn btn-outline-primary"><i class="bi bi-diagram-3 me-1"></i>Cross-Framework Map</a>
+    </div>
 </div>
 
 <div class="row g-4">

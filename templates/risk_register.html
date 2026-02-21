@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Risk Register{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item active">Risk Register</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-shield-exclamation me-2"></i>Risk Register</h3>
+        <p class="text-muted mb-0">{{ risks|length }} risk{{ 's' if risks|length != 1 else '' }} tracked</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/risks/dashboard" class="btn btn-outline-info"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+        <a href="/risks/heatmap" class="btn btn-outline-secondary"><i class="bi bi-grid-3x3 me-1"></i>Heatmap</a>
+        <a href="/risks/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Risk</a>
+    </div>
+</div>
+
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#2563eb;">{{ risks|length }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Total Risks</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            {% set identified_count = risks|selectattr('status', 'equalto', 'IDENTIFIED')|list|length %}
+            <div style="font-size:2rem;font-weight:700;color:#6c757d;">{{ identified_count }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Identified</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            {% set assessed_count = risks|selectattr('status', 'equalto', 'ASSESSED')|list|length %}
+            <div style="font-size:2rem;font-weight:700;color:#0d6efd;">{{ assessed_count }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Assessed</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            {% set treating_count = risks|selectattr('status', 'equalto', 'TREATING')|list|length %}
+            <div style="font-size:2rem;font-weight:700;color:#ffc107;">{{ treating_count }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Treating</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            {% set accepted_count = risks|selectattr('status', 'equalto', 'ACCEPTED')|list|length %}
+            <div style="font-size:2rem;font-weight:700;color:#198754;">{{ accepted_count }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Accepted</small>
+        </div>
+    </div>
+</div>
+
+{# Filter Bar #}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    {% for s in VALID_RISK_STATUSES %}
+                    <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ RISK_STATUS_LABELS[s] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Category</label>
+                <select name="category" class="form-select form-select-sm">
+                    <option value="">All Categories</option>
+                    {% for d in VALID_CONTROL_DOMAINS %}
+                    <option value="{{ d }}" {% if filters.category == d %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Source</label>
+                <select name="source" class="form-select form-select-sm">
+                    <option value="">All Sources</option>
+                    {% for src in VALID_RISK_SOURCES %}
+                    <option value="{{ src }}" {% if filters.source == src %}selected{% endif %}>{{ RISK_SOURCE_LABELS[src] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Owner</label>
+                <select name="owner_id" class="form-select form-select-sm">
+                    <option value="">All Owners</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if filters.owner_id == u.id %}selected{% endif %}>{{ u.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Risk Level</label>
+                <select name="risk_level" class="form-select form-select-sm">
+                    <option value="">All Levels</option>
+                    <option value="Critical" {% if filters.risk_level == 'Critical' %}selected{% endif %}>Critical</option>
+                    <option value="High" {% if filters.risk_level == 'High' %}selected{% endif %}>High</option>
+                    <option value="Medium" {% if filters.risk_level == 'Medium' %}selected{% endif %}>Medium</option>
+                    <option value="Low" {% if filters.risk_level == 'Low' %}selected{% endif %}>Low</option>
+                    <option value="Very Low" {% if filters.risk_level == 'Very Low' %}selected{% endif %}>Very Low</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">Filter</button>
+                <a href="/risks" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Risk Table #}
+{% if risks %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:90px;">Ref</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Source</th>
+                    <th style="width:130px;">Inherent Score</th>
+                    <th style="width:110px;">Residual Score</th>
+                    <th style="width:100px;">Status</th>
+                    <th>Treatment</th>
+                    <th>Owner</th>
+                    <th class="text-end" style="width:80px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in risks %}
+                <tr>
+                    <td><a href="/risks/{{ r.id }}" class="text-decoration-none fw-semibold">{{ r.risk_ref }}</a></td>
+                    <td><a href="/risks/{{ r.id }}" class="text-decoration-none">{{ r.title }}</a></td>
+                    <td><small class="text-muted">{{ r.risk_category or '—' }}</small></td>
+                    <td><small class="text-muted">{{ RISK_SOURCE_LABELS.get(r.risk_source, r.risk_source or '—') }}</small></td>
+                    <td>
+                        {% if r.inherent_risk_score %}
+                        <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(r.inherent_risk_score)] }};">{{ get_risk_level_label(r.inherent_risk_score) }}</span>
+                        <small class="text-muted ms-1">({{ r.inherent_risk_score }})</small>
+                        {% else %}
+                        <small class="text-muted fst-italic">Not assessed</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if r.residual_risk_score %}
+                        <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(r.residual_risk_score)] }};font-size:0.7rem;">{{ r.residual_risk_score }}</span>
+                        {% else %}
+                        <small class="text-muted">—</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge" style="background:{{ RISK_STATUS_COLORS[r.status] }};">{{ RISK_STATUS_LABELS[r.status] }}</span>
+                    </td>
+                    <td><small class="text-muted">{{ r.treatment_type or '—' }}</small></td>
+                    <td><small class="text-muted">{{ r.owner.display_name if r.owner else '—' }}</small></td>
+                    <td class="text-end">
+                        <div class="d-flex gap-1 justify-content-end">
+                            <a href="/risks/{{ r.id }}" class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></a>
+                            <a href="/risks/{{ r.id }}/edit" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-shield-exclamation" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No risks found</h5>
+        <p class="text-muted">Add your first risk to begin tracking organizational risks.</p>
+        <a href="/risks/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Risk</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1341,7 +1341,9 @@ COMMENT_ENTITY_DECISION = "decision"
 COMMENT_ENTITY_REMEDIATION = "remediation"
 COMMENT_ENTITY_CONTROL = "control"
 COMMENT_ENTITY_CONTROL_IMPL = "control_implementation"
-VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION, COMMENT_ENTITY_CONTROL, COMMENT_ENTITY_CONTROL_IMPL]
+COMMENT_ENTITY_POLICY = "policy"
+COMMENT_ENTITY_RISK = "risk"
+VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION, COMMENT_ENTITY_CONTROL, COMMENT_ENTITY_CONTROL_IMPL, COMMENT_ENTITY_POLICY, COMMENT_ENTITY_RISK]
 
 
 class Comment(Base):
@@ -1767,6 +1769,10 @@ AUDIT_ENTITY_REMINDER_CONFIG = "reminder_config"
 AUDIT_ENTITY_SLA_CONFIG = "sla_config"
 AUDIT_ENTITY_CONTROL = "control"
 AUDIT_ENTITY_CONTROL_IMPL = "control_implementation"
+AUDIT_ENTITY_POLICY = "policy"
+AUDIT_ENTITY_RISK = "risk"
+AUDIT_ENTITY_CUSTOM_FRAMEWORK = "custom_framework"
+AUDIT_ENTITY_AUDIT_PROJECT = "audit_project"
 
 
 class AuditLog(Base):
@@ -2843,6 +2849,362 @@ def update_control_enrichments():
         db.close()
 
 
+# ==================== CUSTOM FRAMEWORKS ====================
+
+class CustomFramework(Base):
+    """User-created compliance/regulatory frameworks."""
+    __tablename__ = "custom_frameworks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    framework_key = Column(String(50), unique=True, nullable=False, index=True)
+    display_name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    version = Column(String(50), nullable=True)
+    source_url = Column(String(500), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+
+
+# ==================== POLICY MANAGEMENT ====================
+
+VALID_POLICY_TYPES = ["POLICY", "STANDARD", "PROCEDURE", "GUIDELINE"]
+POLICY_TYPE_LABELS = {"POLICY": "Policy", "STANDARD": "Standard", "PROCEDURE": "Procedure", "GUIDELINE": "Guideline"}
+
+POLICY_STATUS_DRAFT = "DRAFT"
+POLICY_STATUS_UNDER_REVIEW = "UNDER_REVIEW"
+POLICY_STATUS_APPROVED = "APPROVED"
+POLICY_STATUS_RETIRED = "RETIRED"
+VALID_POLICY_STATUSES = [POLICY_STATUS_DRAFT, POLICY_STATUS_UNDER_REVIEW, POLICY_STATUS_APPROVED, POLICY_STATUS_RETIRED]
+POLICY_STATUS_LABELS = {
+    POLICY_STATUS_DRAFT: "Draft",
+    POLICY_STATUS_UNDER_REVIEW: "Under Review",
+    POLICY_STATUS_APPROVED: "Approved",
+    POLICY_STATUS_RETIRED: "Retired",
+}
+POLICY_STATUS_COLORS = {
+    POLICY_STATUS_DRAFT: "#6c757d",
+    POLICY_STATUS_UNDER_REVIEW: "#ffc107",
+    POLICY_STATUS_APPROVED: "#198754",
+    POLICY_STATUS_RETIRED: "#dc3545",
+}
+
+
+class Policy(Base):
+    __tablename__ = "policies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    policy_ref = Column(String(20), unique=True, nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    content = Column(Text, nullable=True)
+    policy_type = Column(String(20), nullable=False, default="POLICY")
+    domain = Column(String(100), nullable=True)
+    category = Column(String(100), nullable=True)
+    status = Column(String(20), nullable=False, default=POLICY_STATUS_DRAFT)
+    version = Column(Integer, default=1)
+    effective_date = Column(DateTime, nullable=True)
+    review_date = Column(DateTime, nullable=True)
+    next_review_date = Column(DateTime, nullable=True)
+    review_frequency_days = Column(Integer, default=365)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approver_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    parent_policy_id = Column(Integer, ForeignKey("policies.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner = relationship("User", foreign_keys=[owner_user_id])
+    approver = relationship("User", foreign_keys=[approver_user_id])
+    parent_policy = relationship("Policy", remote_side="Policy.id")
+    versions = relationship("PolicyVersion", back_populates="policy", cascade="all, delete-orphan")
+    control_mappings = relationship("PolicyControlMapping", back_populates="policy", cascade="all, delete-orphan")
+    framework_mappings = relationship("PolicyFrameworkMapping", back_populates="policy", cascade="all, delete-orphan")
+    acknowledgments = relationship("PolicyAcknowledgment", back_populates="policy", cascade="all, delete-orphan")
+
+
+class PolicyVersion(Base):
+    __tablename__ = "policy_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)
+    version_number = Column(Integer, nullable=False)
+    title = Column(String(500), nullable=False)
+    content = Column(Text, nullable=True)
+    change_summary = Column(Text, nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    policy = relationship("Policy", back_populates="versions")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+
+
+class PolicyControlMapping(Base):
+    __tablename__ = "policy_control_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    policy = relationship("Policy", back_populates="control_mappings")
+    control = relationship("Control")
+
+
+class PolicyFrameworkMapping(Base):
+    __tablename__ = "policy_framework_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)
+    framework = Column(String(50), nullable=False)
+    requirement_reference = Column(String(100), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    policy = relationship("Policy", back_populates="framework_mappings")
+
+
+class PolicyAcknowledgment(Base):
+    __tablename__ = "policy_acknowledgments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    acknowledged_at = Column(DateTime, default=datetime.utcnow)
+    version_acknowledged = Column(Integer, nullable=True)
+
+    policy = relationship("Policy", back_populates="acknowledgments")
+    user = relationship("User")
+
+
+# ==================== RISK REGISTER ====================
+
+VALID_RISK_SOURCES = ["INTERNAL", "EXTERNAL", "THIRD_PARTY", "REGULATORY", "TECHNOLOGY"]
+RISK_SOURCE_LABELS = {"INTERNAL": "Internal", "EXTERNAL": "External", "THIRD_PARTY": "Third Party", "REGULATORY": "Regulatory", "TECHNOLOGY": "Technology"}
+
+RISK_STATUS_IDENTIFIED = "IDENTIFIED"
+RISK_STATUS_ASSESSED = "ASSESSED"
+RISK_STATUS_TREATING = "TREATING"
+RISK_STATUS_ACCEPTED = "ACCEPTED"
+RISK_STATUS_CLOSED = "CLOSED"
+VALID_RISK_STATUSES = [RISK_STATUS_IDENTIFIED, RISK_STATUS_ASSESSED, RISK_STATUS_TREATING, RISK_STATUS_ACCEPTED, RISK_STATUS_CLOSED]
+RISK_STATUS_LABELS = {
+    RISK_STATUS_IDENTIFIED: "Identified",
+    RISK_STATUS_ASSESSED: "Assessed",
+    RISK_STATUS_TREATING: "Treating",
+    RISK_STATUS_ACCEPTED: "Accepted",
+    RISK_STATUS_CLOSED: "Closed",
+}
+RISK_STATUS_COLORS = {
+    RISK_STATUS_IDENTIFIED: "#6c757d",
+    RISK_STATUS_ASSESSED: "#0d6efd",
+    RISK_STATUS_TREATING: "#ffc107",
+    RISK_STATUS_ACCEPTED: "#198754",
+    RISK_STATUS_CLOSED: "#6c757d",
+}
+
+VALID_TREATMENT_TYPES = ["MITIGATE", "ACCEPT", "TRANSFER", "AVOID"]
+TREATMENT_TYPE_LABELS = {"MITIGATE": "Mitigate", "ACCEPT": "Accept", "TRANSFER": "Transfer", "AVOID": "Avoid"}
+VALID_TREATMENT_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]
+TREATMENT_STATUS_LABELS = {"NOT_STARTED": "Not Started", "IN_PROGRESS": "In Progress", "COMPLETED": "Completed"}
+
+
+def get_risk_level_label(score):
+    """Return risk level label for a given score (1-25)."""
+    if score is None:
+        return "Not Rated"
+    if score <= 5:
+        return "Very Low"
+    elif score <= 10:
+        return "Low"
+    elif score <= 15:
+        return "Medium"
+    elif score <= 20:
+        return "High"
+    else:
+        return "Critical"
+
+
+RISK_LEVEL_COLORS = {
+    "Very Low": "#198754",
+    "Low": "#20c997",
+    "Medium": "#ffc107",
+    "High": "#fd7e14",
+    "Critical": "#dc3545",
+    "Not Rated": "#6c757d",
+}
+
+
+class Risk(Base):
+    __tablename__ = "risks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    risk_ref = Column(String(20), unique=True, nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    risk_category = Column(String(100), nullable=True)
+    risk_source = Column(String(30), nullable=True)
+    status = Column(String(20), nullable=False, default=RISK_STATUS_IDENTIFIED)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    inherent_likelihood = Column(Integer, nullable=True)
+    inherent_impact = Column(Integer, nullable=True)
+    inherent_risk_score = Column(Integer, nullable=True)
+    residual_likelihood = Column(Integer, nullable=True)
+    residual_impact = Column(Integer, nullable=True)
+    residual_risk_score = Column(Integer, nullable=True)
+    risk_appetite_threshold = Column(Integer, default=10)
+    treatment_type = Column(String(20), nullable=True)
+    treatment_plan = Column(Text, nullable=True)
+    treatment_status = Column(String(20), nullable=True)
+    treatment_due_date = Column(DateTime, nullable=True)
+    treatment_completed_at = Column(DateTime, nullable=True)
+    review_date = Column(DateTime, nullable=True)
+    next_review_date = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner = relationship("User", foreign_keys=[owner_user_id])
+    control_mappings = relationship("RiskControlMapping", back_populates="risk", cascade="all, delete-orphan")
+    policy_mappings = relationship("RiskPolicyMapping", back_populates="risk", cascade="all, delete-orphan")
+    snapshots = relationship("OrgRiskSnapshot", back_populates="risk", cascade="all, delete-orphan")
+
+
+class RiskControlMapping(Base):
+    __tablename__ = "risk_control_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("risks.id"), nullable=False)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
+    effectiveness_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    risk = relationship("Risk", back_populates="control_mappings")
+    control = relationship("Control")
+
+
+class RiskPolicyMapping(Base):
+    __tablename__ = "risk_policy_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("risks.id"), nullable=False)
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    risk = relationship("Risk", back_populates="policy_mappings")
+    policy = relationship("Policy")
+
+
+class OrgRiskSnapshot(Base):
+    __tablename__ = "org_risk_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(Integer, ForeignKey("risks.id"), nullable=False)
+    snapshot_date = Column(DateTime, default=datetime.utcnow)
+    inherent_score = Column(Integer, nullable=True)
+    residual_score = Column(Integer, nullable=True)
+    status = Column(String(20), nullable=True)
+    treatment_type = Column(String(20), nullable=True)
+
+    risk = relationship("Risk", back_populates="snapshots")
+
+
+# ==================== AUDIT READINESS ====================
+
+AUDIT_PROJECT_STATUSES = ["PLANNING", "FIELDWORK", "REVIEW", "COMPLETED", "CANCELLED"]
+AUDIT_PROJECT_STATUS_LABELS = {
+    "PLANNING": "Planning", "FIELDWORK": "Fieldwork", "REVIEW": "Review",
+    "COMPLETED": "Completed", "CANCELLED": "Cancelled",
+}
+AUDIT_PROJECT_STATUS_COLORS = {
+    "PLANNING": "#0d6efd", "FIELDWORK": "#ffc107", "REVIEW": "#fd7e14",
+    "COMPLETED": "#198754", "CANCELLED": "#6c757d",
+}
+
+AUDIT_REQUEST_STATUSES = ["OPEN", "IN_PROGRESS", "PROVIDED", "ACCEPTED", "REJECTED"]
+AUDIT_REQUEST_STATUS_LABELS = {
+    "OPEN": "Open", "IN_PROGRESS": "In Progress", "PROVIDED": "Provided",
+    "ACCEPTED": "Accepted", "REJECTED": "Rejected",
+}
+AUDIT_REQUEST_STATUS_COLORS = {
+    "OPEN": "#6c757d", "IN_PROGRESS": "#0d6efd", "PROVIDED": "#ffc107",
+    "ACCEPTED": "#198754", "REJECTED": "#dc3545",
+}
+
+AUDIT_REQUEST_PRIORITIES = ["HIGH", "MEDIUM", "LOW"]
+AUDIT_EVIDENCE_TYPES = ["CONTROL_EVIDENCE", "POLICY", "VENDOR_DOCUMENT", "MANUAL_UPLOAD"]
+
+
+class AuditProject(Base):
+    __tablename__ = "audit_projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    framework = Column(String(50), nullable=False)
+    scope_description = Column(Text, nullable=True)
+    auditor_name = Column(String(200), nullable=True)
+    auditor_firm = Column(String(200), nullable=True)
+    audit_period_start = Column(DateTime, nullable=True)
+    audit_period_end = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="PLANNING")
+    lead_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    lead = relationship("User", foreign_keys=[lead_user_id])
+    requests = relationship("AuditRequest", back_populates="audit_project", cascade="all, delete-orphan")
+
+
+class AuditRequest(Base):
+    __tablename__ = "audit_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_project_id = Column(Integer, ForeignKey("audit_projects.id"), nullable=False)
+    requirement_reference = Column(String(100), nullable=True)
+    request_title = Column(String(500), nullable=False)
+    request_description = Column(Text, nullable=True)
+    assigned_to_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    status = Column(String(20), nullable=False, default="OPEN")
+    priority = Column(String(10), nullable=False, default="MEDIUM")
+    due_date = Column(DateTime, nullable=True)
+    response_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    audit_project = relationship("AuditProject", back_populates="requests")
+    assigned_to = relationship("User", foreign_keys=[assigned_to_user_id])
+    evidence_links = relationship("AuditRequestEvidence", back_populates="audit_request", cascade="all, delete-orphan")
+
+
+class AuditRequestEvidence(Base):
+    __tablename__ = "audit_request_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_request_id = Column(Integer, ForeignKey("audit_requests.id"), nullable=False)
+    evidence_type = Column(String(30), nullable=False)
+    control_evidence_id = Column(Integer, ForeignKey("control_evidence.id"), nullable=True)
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=True)
+    vendor_document_id = Column(Integer, ForeignKey("vendor_documents.id"), nullable=True)
+    manual_filename = Column(String(255), nullable=True)
+    manual_stored_path = Column(String(512), nullable=True)
+    notes = Column(Text, nullable=True)
+    linked_at = Column(DateTime, default=datetime.utcnow)
+
+    audit_request = relationship("AuditRequest", back_populates="evidence_links")
+    control_evidence = relationship("ControlEvidence")
+    policy = relationship("Policy")
+    vendor_document = relationship("VendorDocument")
+
+
 # ==================== FRAMEWORK REQUIREMENT LIBRARY ====================
 
 ADOPTION_STATUS_NOT_ADDRESSED = "NOT_ADDRESSED"
@@ -2982,6 +3344,150 @@ def sync_adoptions_from_existing_mappings():
                     control_id=m.control_id,
                     adopted_at=datetime.utcnow(),
                 ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def backfill_custom_frameworks_table():
+    """Create custom_frameworks table if missing."""
+    db = SessionLocal()
+    try:
+        existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        if "custom_frameworks" not in existing:
+            CustomFramework.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def backfill_policy_tables():
+    """Create policy-related tables if missing."""
+    db = SessionLocal()
+    try:
+        existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        for tbl_name, model in [
+            ("policies", Policy),
+            ("policy_versions", PolicyVersion),
+            ("policy_control_mappings", PolicyControlMapping),
+            ("policy_framework_mappings", PolicyFrameworkMapping),
+            ("policy_acknowledgments", PolicyAcknowledgment),
+        ]:
+            if tbl_name not in existing:
+                model.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def backfill_risk_tables():
+    """Create risk register tables if missing."""
+    db = SessionLocal()
+    try:
+        existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        for tbl_name, model in [
+            ("risks", Risk),
+            ("risk_control_mappings", RiskControlMapping),
+            ("risk_policy_mappings", RiskPolicyMapping),
+            ("org_risk_snapshots", OrgRiskSnapshot),
+        ]:
+            if tbl_name not in existing:
+                model.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def backfill_audit_project_tables():
+    """Create audit readiness tables if missing."""
+    db = SessionLocal()
+    try:
+        existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        for tbl_name, model in [
+            ("audit_projects", AuditProject),
+            ("audit_requests", AuditRequest),
+            ("audit_request_evidence", AuditRequestEvidence),
+        ]:
+            if tbl_name not in existing:
+                model.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def seed_default_policies():
+    """Seed 5 starter policies if none exist."""
+    db = SessionLocal()
+    try:
+        if db.query(Policy).count() > 0:
+            return
+        admin = db.query(User).filter(User.role == "admin").first()
+        owner_id = admin.id if admin else None
+
+        policies = [
+            ("POL-GV-001", "Information Security Policy", "Governance", "Information Security", "POLICY",
+             "Establishes the organization's information security program, defines roles and responsibilities, and sets the strategic direction for protecting information assets."),
+            ("POL-AC-001", "Access Control Policy", "Access Control", "Information Security", "POLICY",
+             "Defines requirements for managing user access to systems and data, including authentication, authorization, and access review processes."),
+            ("POL-IR-001", "Incident Response Policy", "Incident Management", "Information Security", "POLICY",
+             "Establishes procedures for detecting, responding to, and recovering from security incidents, including escalation paths and communication protocols."),
+            ("POL-DP-001", "Data Protection & Privacy Policy", "Data Protection", "Privacy", "POLICY",
+             "Defines requirements for protecting personal and sensitive data throughout its lifecycle, including collection, processing, storage, and disposal."),
+            ("POL-HR-001", "Acceptable Use Policy", "Human Resources", "Human Resources", "POLICY",
+             "Establishes acceptable use guidelines for organizational IT resources, including computers, networks, email, and internet access."),
+        ]
+
+        for ref, title, domain, category, ptype, desc in policies:
+            db.add(Policy(
+                policy_ref=ref, title=title, domain=domain, category=category,
+                policy_type=ptype, description=desc, content=f"# {title}\n\n## Purpose\n\n{desc}\n\n## Scope\n\nThis policy applies to all employees, contractors, and third parties.\n\n## Policy Statements\n\n*Content to be developed.*\n\n## Compliance\n\nViolations of this policy may result in disciplinary action.",
+                status=POLICY_STATUS_DRAFT, owner_user_id=owner_id,
+                review_frequency_days=365,
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def seed_default_risks():
+    """Seed 8 common organizational risks if none exist."""
+    db = SessionLocal()
+    try:
+        if db.query(Risk).count() > 0:
+            return
+        admin = db.query(User).filter(User.role == "admin").first()
+        owner_id = admin.id if admin else None
+
+        risks = [
+            ("RISK-001", "Data Breach via External Attack", "Technology", "EXTERNAL",
+             "Risk of unauthorized access to sensitive data through external cyber attacks such as phishing, exploitation of vulnerabilities, or brute force attacks.",
+             4, 5),
+            ("RISK-002", "Ransomware / Malware Infection", "Technology", "EXTERNAL",
+             "Risk of ransomware or malware compromising systems, encrypting data, and disrupting operations.",
+             3, 5),
+            ("RISK-003", "Third-Party Service Provider Failure", "Third-Party Management", "THIRD_PARTY",
+             "Risk of a critical third-party vendor experiencing a security breach, outage, or business failure that impacts operations.",
+             3, 4),
+            ("RISK-004", "Regulatory Non-Compliance", "Governance", "REGULATORY",
+             "Risk of failing to comply with applicable laws, regulations, and industry standards, resulting in fines, sanctions, or legal action.",
+             3, 4),
+            ("RISK-005", "Insider Threat / Unauthorized Access", "Access Control", "INTERNAL",
+             "Risk of malicious or negligent insiders accessing, modifying, or exfiltrating sensitive data or systems.",
+             3, 4),
+            ("RISK-006", "Business Continuity Disruption", "Business Continuity", "EXTERNAL",
+             "Risk of a major disruption (natural disaster, infrastructure failure) impacting the ability to deliver critical services.",
+             2, 5),
+            ("RISK-007", "Inadequate Change Management", "Change Management", "INTERNAL",
+             "Risk of unauthorized or poorly managed changes causing system instability, outages, or security vulnerabilities.",
+             3, 3),
+            ("RISK-008", "Privacy Regulation Violation (GDPR/CCPA)", "Data Protection", "REGULATORY",
+             "Risk of non-compliance with privacy regulations resulting in significant fines and reputational damage.",
+             3, 5),
+        ]
+
+        for ref, title, category, source, desc, likelihood, impact in risks:
+            db.add(Risk(
+                risk_ref=ref, title=title, risk_category=category, risk_source=source,
+                description=desc, status=RISK_STATUS_IDENTIFIED, owner_user_id=owner_id,
+                inherent_likelihood=likelihood, inherent_impact=impact,
+                inherent_risk_score=likelihood * impact,
+            ))
         db.commit()
     finally:
         db.close()

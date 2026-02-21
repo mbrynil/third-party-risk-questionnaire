@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Policy Library{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item active">Policies</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-file-earmark-text me-2"></i>Policy Library</h3>
+        <p class="text-muted mb-0">{{ policies|length }} polic{{ 'y' if policies|length == 1 else 'ies' }} across your organization</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/policies/dashboard" class="btn btn-outline-primary"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+        <a href="/policies/reviews" class="btn btn-outline-secondary"><i class="bi bi-clock me-1"></i>Reviews Due</a>
+        {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <a href="/policies/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Policy</a>
+        {% endif %}
+    </div>
+</div>
+
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# KPI Summary Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#2563eb;">{{ kpis.total }}</div>
+                <div class="kpi-label">Total Policies</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{{ POLICY_STATUS_COLORS.get('DRAFT', '#6c757d') }};">{{ kpis.draft }}</div>
+                <div class="kpi-label">Draft</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{{ POLICY_STATUS_COLORS.get('UNDER_REVIEW', '#fd7e14') }};">{{ kpis.under_review }}</div>
+                <div class="kpi-label">Under Review</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{{ POLICY_STATUS_COLORS.get('APPROVED', '#198754') }};">{{ kpis.approved }}</div>
+                <div class="kpi-label">Approved</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Filter Bar #}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    {% for key, label in POLICY_STATUS_LABELS.items() %}
+                    <option value="{{ key }}" {% if f_status == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Domain</label>
+                <select name="domain" class="form-select form-select-sm">
+                    <option value="">All Domains</option>
+                    {% for d in domains %}
+                    <option value="{{ d }}" {% if f_domain == d %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Type</label>
+                <select name="policy_type" class="form-select form-select-sm">
+                    <option value="">All Types</option>
+                    {% for t in policy_types %}
+                    <option value="{{ t }}" {% if f_type == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Owner</label>
+                <select name="owner" class="form-select form-select-sm">
+                    <option value="">All Owners</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if f_owner == u.id|string %}selected{% endif %}>{{ u.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">Filter</button>
+                <a href="/policies" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Instant Search #}
+<div class="mb-3">
+    <input type="text" id="policySearch" class="form-control" placeholder="Search policies by ref, title, domain, or owner...">
+</div>
+
+{# Policies Table #}
+{% if policies %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:100px;">Ref</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Domain</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Review Date</th>
+                    <th class="text-end" style="width:100px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="policyTableBody">
+                {% for p in policies %}
+                <tr class="policy-row" data-text="{{ p.policy_ref|lower }} {{ p.title|lower }} {{ (p.domain or '')|lower }} {{ (p.owner.display_name|lower if p.owner else '') }} {{ (p.policy_type or '')|lower }}">
+                    <td><a href="/policies/{{ p.id }}" class="text-decoration-none fw-semibold">{{ p.policy_ref }}</a></td>
+                    <td><a href="/policies/{{ p.id }}" class="text-decoration-none">{{ p.title }}</a></td>
+                    <td><small class="text-muted">{{ p.policy_type or '—' }}</small></td>
+                    <td><small class="text-muted">{{ p.domain or '—' }}</small></td>
+                    <td>
+                        <span class="badge" style="background:{{ POLICY_STATUS_COLORS.get(p.status, '#6c757d') }};">{{ POLICY_STATUS_LABELS.get(p.status, p.status) }}</span>
+                    </td>
+                    <td><small class="text-muted">{{ p.owner.display_name if p.owner else '—' }}</small></td>
+                    <td>
+                        {% if p.next_review_date %}
+                        <small class="{% if p.next_review_date.date() < current_date %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                            {{ p.next_review_date.strftime('%Y-%m-%d') }}
+                        </small>
+                        {% else %}
+                        <small class="text-muted">—</small>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="d-flex gap-1 justify-content-end">
+                            <a href="/policies/{{ p.id }}" class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></a>
+                            {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+                            <a href="/policies/{{ p.id }}/edit" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-file-earmark-text" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No policies found</h5>
+        <p class="text-muted">Create your first policy to start building the library.</p>
+        {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <a href="/policies/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Policy</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.getElementById('policySearch').addEventListener('input', function() {
+    var query = this.value.toLowerCase().trim();
+    var rows = document.querySelectorAll('.policy-row');
+    rows.forEach(function(row) {
+        var text = row.getAttribute('data-text');
+        row.style.display = (!query || text.indexOf(query) !== -1) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

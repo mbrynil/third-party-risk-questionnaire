@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Add Requirement — {{ fw_label }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item"><a href="/controls/frameworks">Frameworks</a></li>
+<li class="breadcrumb-item"><a href="/controls/frameworks/{{ framework_key }}">{{ fw_label }}</a></li>
+<li class="breadcrumb-item active">Add Requirement</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Add Requirement to {{ fw_label }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Reference <span class="text-danger">*</span></label>
+                            <input type="text" name="reference" class="form-control" required placeholder="e.g., AC-1">
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                            <input type="text" name="title" class="form-control" required placeholder="Requirement title">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="Detailed description..."></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Category</label>
+                            <input type="text" name="category" class="form-control" placeholder="e.g., Access Control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Subcategory</label>
+                            <input type="text" name="subcategory" class="form-control" placeholder="e.g., Account Management">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Guidance</label>
+                        <textarea name="guidance" class="form-control" rows="2" placeholder="Implementation guidance..."></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Requirement</button>
+                        <a href="/controls/frameworks/{{ framework_key }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {# CSV Import section #}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-csv me-2"></i>Bulk Import from CSV</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Upload a CSV file with columns: <code>reference</code>, <code>title</code>, <code>description</code>, <code>category</code>, <code>subcategory</code>, <code>guidance</code></p>
+                <form method="post" action="/controls/frameworks/{{ framework_key }}/requirements/import" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary"><i class="bi bi-upload me-1"></i>Import CSV</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

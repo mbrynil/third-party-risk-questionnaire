@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.title }} - Audit - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/audits">Audits</a></li>
+<li class="breadcrumb-item active">{{ project.title }}</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .req-status-OPEN { background: #6c757d; }
+    .req-status-IN_PROGRESS { background: #0d6efd; }
+    .req-status-PROVIDED { background: #ffc107; color: #000; }
+    .req-status-ACCEPTED { background: #198754; }
+    .req-status-REJECTED { background: #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set msg = request.query_params.get('message', '') %}
+{% if msg %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# Header #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <i class="bi bi-journal-bookmark me-2"></i>{{ project.title }}
+        </h3>
+        <div class="d-flex gap-2 flex-wrap mt-2">
+            <span class="badge" style="background:{{ AUDIT_PROJECT_STATUS_COLORS.get(project.status, '#6c757d') }};">
+                {{ AUDIT_PROJECT_STATUS_LABELS.get(project.status, project.status) }}
+            </span>
+            {% if fw_label %}
+            <span class="badge bg-light text-dark border">{{ fw_label }}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+    <div class="d-flex gap-2 flex-wrap">
+        <form method="post" action="/audits/{{ project.id }}/generate-pbc" class="d-inline">
+            <button type="submit" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-list-check me-1"></i>Generate PBC List
+            </button>
+        </form>
+        <form method="post" action="/audits/{{ project.id }}/auto-link" class="d-inline">
+            <button type="submit" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-link-45deg me-1"></i>Auto-Link Evidence
+            </button>
+        </form>
+        <a href="/audits/{{ project.id }}/export" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-file-earmark-zip me-1"></i>Export Binder
+        </a>
+        <a href="/audits/{{ project.id }}/edit" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-pencil me-1"></i>Edit
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+{# Metadata Card #}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Project Details</h6></div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="text-muted small text-uppercase mb-1">Framework</div>
+                {{ fw_label or '—' }}
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small text-uppercase mb-1">Auditor Name</div>
+                {{ project.auditor_name or '—' }}
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small text-uppercase mb-1">Auditor Firm</div>
+                {{ project.auditor_firm or '—' }}
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small text-uppercase mb-1">Period Start</div>
+                {{ project.audit_period_start.strftime('%Y-%m-%d') if project.audit_period_start else '—' }}
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small text-uppercase mb-1">Period End</div>
+                {{ project.audit_period_end.strftime('%Y-%m-%d') if project.audit_period_end else '—' }}
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small text-uppercase mb-1">Due Date</div>
+                {{ project.due_date.strftime('%Y-%m-%d') if project.due_date else '—' }}
+            </div>
+            <div class="col-md-4">
+                <div class="text-muted small text-uppercase mb-1">Lead</div>
+                {% if project.lead %}
+                {{ project.lead.display_name }}
+                {% else %}
+                <span class="text-muted">&mdash;</span>
+                {% endif %}
+            </div>
+            <div class="col-md-8">
+                <div class="text-muted small text-uppercase mb-1">Scope</div>
+                <p class="mb-0" style="white-space:pre-wrap;">{{ project.scope_description or '—' }}</p>
+            </div>
+            {% if project.notes %}
+            <div class="col-12">
+                <div class="text-muted small text-uppercase mb-1">Notes</div>
+                <p class="mb-0" style="white-space:pre-wrap;">{{ project.notes }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted small text-uppercase">Total Requests</div>
+                <div class="fs-3 fw-bold text-dark">{{ stats.total }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted small text-uppercase">Open</div>
+                <div class="fs-3 fw-bold" style="color:#6c757d;">{{ stats.open }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted small text-uppercase">Provided</div>
+                <div class="fs-3 fw-bold" style="color:#ffc107;">{{ stats.provided }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted small text-uppercase">Accepted</div>
+                <div class="fs-3 fw-bold" style="color:#198754;">{{ stats.accepted }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="text-muted small text-uppercase">Evidence Coverage</div>
+                <div class="fs-3 fw-bold text-primary">{{ stats.coverage_pct }}%</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# PBC List Table #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">
+            <i class="bi bi-list-check me-1"></i>PBC List
+            <span class="badge bg-secondary ms-1">{{ project.requests|length }}</span>
+        </h6>
+    </div>
+    {% if project.requests %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:100px;">Ref</th>
+                    <th>Title</th>
+                    <th style="width:120px;">Status</th>
+                    <th style="width:90px;">Priority</th>
+                    <th>Assigned To</th>
+                    <th style="width:90px;">Evidence</th>
+                    <th class="text-end" style="width:80px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in project.requests %}
+                <tr>
+                    <td>
+                        <a href="/audits/{{ project.id }}/requests/{{ req.id }}" class="text-decoration-none fw-semibold">
+                            {{ req.requirement_ref or ('PBC-' ~ loop.index) }}
+                        </a>
+                    </td>
+                    <td>
+                        <a href="/audits/{{ project.id }}/requests/{{ req.id }}" class="text-decoration-none">
+                            {{ req.request_title }}
+                        </a>
+                    </td>
+                    <td>
+                        <span class="badge req-status-{{ req.status }}">
+                            {{ AUDIT_REQUEST_STATUS_LABELS.get(req.status, req.status) }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if req.priority == 'HIGH' %}
+                        <span class="badge bg-danger">High</span>
+                        {% elif req.priority == 'MEDIUM' %}
+                        <span class="badge bg-warning text-dark">Medium</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Low</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if req.assigned_to_user %}
+                        <small>{{ req.assigned_to_user.display_name }}</small>
+                        {% else %}
+                        <span class="text-muted">&mdash;</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge-count">{{ req.evidence_links|length }}</span>
+                    </td>
+                    <td class="text-end">
+                        <a href="/audits/{{ project.id }}/requests/{{ req.id }}" class="btn btn-sm btn-outline-secondary" title="View">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-4 text-muted">
+        <i class="bi bi-inbox" style="font-size:2rem;"></i>
+        <p class="mt-2 mb-0">No PBC requests yet. Use "Generate PBC List" to auto-create requests from the framework, or add one manually below.</p>
+    </div>
+    {% endif %}
+</div>
+
+{# Add Manual Request Form #}
+{% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-plus-circle me-1"></i>Add Manual Request</h6></div>
+    <div class="card-body">
+        <form method="post" action="/audits/{{ project.id }}/requests">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Title <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control" required placeholder="e.g. SOC 2 CC6.1 — Access Control Policy">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Description</label>
+                    <input type="text" name="description" class="form-control" placeholder="Brief description of evidence needed">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Priority</label>
+                    <select name="priority" class="form-select">
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM" selected>Medium</option>
+                        <option value="HIGH">High</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Due Date</label>
+                    <input type="date" name="due_date" class="form-control">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-lg me-1"></i>Add Request
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

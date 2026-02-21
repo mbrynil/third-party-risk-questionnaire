@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}{{ audit_req.request_title }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/audits">Audits</a></li>
+<li class="breadcrumb-item"><a href="/audits/{{ project.id }}">{{ project.title }}</a></li>
+<li class="breadcrumb-item active">{{ audit_req.requirement_reference or 'Request' }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">{{ audit_req.request_title }}</h3>
+        <div class="d-flex gap-2 mt-1">
+            <span class="badge" style="background:{{ AUDIT_REQUEST_STATUS_COLORS.get(audit_req.status, '#6c757d') }};">{{ AUDIT_REQUEST_STATUS_LABELS.get(audit_req.status, audit_req.status) }}</span>
+            {% if audit_req.requirement_reference %}
+            <span class="badge bg-light text-dark">{{ audit_req.requirement_reference }}</span>
+            {% endif %}
+            <span class="badge bg-light text-dark">Priority: {{ audit_req.priority }}</span>
+        </div>
+    </div>
+    <a href="/audits/{{ project.id }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Project</a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        {# Description #}
+        {% if audit_req.request_description %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Description</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;">{{ audit_req.request_description }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Response Notes #}
+        {% if audit_req.response_notes %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Response Notes</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;">{{ audit_req.response_notes }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Linked Evidence #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Linked Evidence</strong> <span class="badge bg-secondary">{{ audit_req.evidence_links|length }}</span></div>
+            <div class="card-body">
+                {% if audit_req.evidence_links %}
+                <table class="table table-sm table-hover">
+                    <thead><tr><th>Type</th><th>Reference</th><th>Notes</th><th>Linked</th></tr></thead>
+                    <tbody>
+                        {% for el in audit_req.evidence_links %}
+                        <tr>
+                            <td><span class="badge bg-light text-dark">{{ el.evidence_type }}</span></td>
+                            <td>
+                                {% if el.evidence_type == 'CONTROL_EVIDENCE' and el.control_evidence %}
+                                {{ el.control_evidence.original_filename }}
+                                {% elif el.evidence_type == 'POLICY' and el.policy %}
+                                <a href="/policies/{{ el.policy.id }}">{{ el.policy.policy_ref }} — {{ el.policy.title }}</a>
+                                {% elif el.evidence_type == 'VENDOR_DOCUMENT' and el.vendor_document %}
+                                {{ el.vendor_document.file_name }}
+                                {% elif el.evidence_type == 'MANUAL_UPLOAD' %}
+                                {{ el.manual_filename or 'Uploaded file' }}
+                                {% endif %}
+                            </td>
+                            <td class="small">{{ el.notes or '—' }}</td>
+                            <td class="small">{{ el.linked_at.strftime('%Y-%m-%d') if el.linked_at else '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No evidence linked yet.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Link Existing Evidence #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Link Existing Evidence</strong></div>
+            <div class="card-body">
+                <form method="post" action="/audits/{{ project.id }}/requests/{{ audit_req.id }}/link-evidence">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <select name="evidence_type" class="form-select form-select-sm" required>
+                                <option value="CONTROL_EVIDENCE">Control Evidence</option>
+                                <option value="POLICY">Policy</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="number" name="evidence_id" class="form-control form-control-sm" placeholder="Evidence/Policy ID" required>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-outline-primary btn-sm w-100">Link</button>
+                        </div>
+                    </div>
+                    <input type="text" name="notes" class="form-control form-control-sm" placeholder="Notes (optional)">
+                </form>
+            </div>
+        </div>
+
+        {# Upload Evidence #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Upload Evidence</strong></div>
+            <div class="card-body">
+                <form method="post" action="/audits/{{ project.id }}/requests/{{ audit_req.id }}/upload" enctype="multipart/form-data">
+                    <div class="mb-2">
+                        <input type="file" name="file" class="form-control form-control-sm" required>
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" name="notes" class="form-control form-control-sm" placeholder="Notes (optional)">
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary btn-sm"><i class="bi bi-upload me-1"></i>Upload</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# Sidebar #}
+    <div class="col-lg-4">
+        {# Status Update #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Update Status</strong></div>
+            <div class="card-body">
+                <form method="post" action="/audits/{{ project.id }}/requests/{{ audit_req.id }}/status">
+                    <div class="mb-2">
+                        <select name="status" class="form-select form-select-sm">
+                            {% for s in AUDIT_REQUEST_STATUSES %}
+                            <option value="{{ s }}" {{ 'selected' if audit_req.status == s }}>{{ AUDIT_REQUEST_STATUS_LABELS[s] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <textarea name="response_notes" class="form-control form-control-sm" rows="2" placeholder="Notes...">{{ audit_req.response_notes or '' }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100">Update Status</button>
+                </form>
+            </div>
+        </div>
+
+        {# Assignment #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Assignment</strong></div>
+            <div class="card-body">
+                <p class="small mb-2">Currently: <strong>{{ audit_req.assigned_to.display_name if audit_req.assigned_to else 'Unassigned' }}</strong></p>
+                <form method="post" action="/audits/{{ project.id }}/requests/{{ audit_req.id }}/assign">
+                    <div class="mb-2">
+                        <select name="assigned_to_user_id" class="form-select form-select-sm">
+                            {% for u in users %}
+                            <option value="{{ u.id }}" {{ 'selected' if audit_req.assigned_to_user_id == u.id }}>{{ u.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary btn-sm w-100">Assign</button>
+                </form>
+            </div>
+        </div>
+
+        {# Details #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Details</strong></div>
+            <div class="card-body small">
+                <dl class="mb-0">
+                    <dt>Due Date</dt><dd>{{ audit_req.due_date.strftime('%Y-%m-%d') if audit_req.due_date else '—' }}</dd>
+                    <dt>Created</dt><dd>{{ audit_req.created_at.strftime('%Y-%m-%d') if audit_req.created_at else '—' }}</dd>
+                    <dt>Completed</dt><dd>{{ audit_req.completed_at.strftime('%Y-%m-%d') if audit_req.completed_at else '—' }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

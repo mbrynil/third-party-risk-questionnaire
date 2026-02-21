@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}{{ "Edit Risk" if risk else "New Risk" }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risks">Risk Register</a></li>
+<li class="breadcrumb-item active">{{ "Edit " + risk.risk_ref if risk else "New Risk" }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>{{ "Edit Risk" if risk else "New Risk" }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required value="{{ risk.title if risk else '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea name="description" class="form-control" rows="3">{{ risk.description if risk else '' }}</textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Category</label>
+                            <select name="risk_category" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for d in VALID_CONTROL_DOMAINS %}
+                                <option value="{{ d }}" {{ 'selected' if risk and risk.risk_category == d }}>{{ d }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Risk Source</label>
+                            <select name="risk_source" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for s in VALID_RISK_SOURCES %}
+                                <option value="{{ s }}" {{ 'selected' if risk and risk.risk_source == s }}>{{ RISK_SOURCE_LABELS[s] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Owner</label>
+                            <select name="owner_user_id" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}" {{ 'selected' if risk and risk.owner_user_id == u.id }}>{{ u.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Inherent Likelihood (1-5)</label>
+                            <select name="inherent_likelihood" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for v in [1,2,3,4,5] %}
+                                <option value="{{ v }}" {{ 'selected' if risk and risk.inherent_likelihood == v }}>{{ v }} — {{ ["Rare","Unlikely","Possible","Likely","Almost Certain"][v-1] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Inherent Impact (1-5)</label>
+                            <select name="inherent_impact" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for v in [1,2,3,4,5] %}
+                                <option value="{{ v }}" {{ 'selected' if risk and risk.inherent_impact == v }}>{{ v }} — {{ ["Negligible","Minor","Moderate","Major","Severe"][v-1] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Risk Appetite Threshold</label>
+                            <input type="number" name="risk_appetite_threshold" class="form-control" value="{{ risk.risk_appetite_threshold if risk else 10 }}" min="1" max="25">
+                            <div class="form-text">Max acceptable residual score (1-25)</div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{{ "Save Changes" if risk else "Create Risk" }}</button>
+                        <a href="{{ '/risks/' ~ risk.id if risk else '/risks' }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -25,12 +25,18 @@ from models import (
     backfill_controls_tables, seed_default_controls,
     backfill_framework_tables, seed_framework_requirements,
     sync_adoptions_from_existing_mappings, update_control_enrichments,
+    backfill_custom_frameworks_table, backfill_policy_tables,
+    backfill_risk_tables, backfill_audit_project_tables,
+    seed_default_policies, seed_default_risks,
     SessionLocal,
     Assessment, Response, User, ensure_reminder_config,
     RESPONSE_STATUS_SUBMITTED,
     ASSESSMENT_STATUS_SENT, ASSESSMENT_STATUS_IN_PROGRESS, ASSESSMENT_STATUS_SUBMITTED,
 )
 from app.routers import home, vendor_facing, responses, assessments, templates_mgmt, vendors, decisions, risk_library, question_bank, remediations, settings, notifications, onboarding, admin, comments, search, exceptions, intake, audit, controls
+from app.routers import policies as policies_router
+from app.routers import risks as risks_router
+from app.routers import audit_projects as audit_projects_router
 from app.routers import auth as auth_router
 from app.services.auth_service import get_current_user
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -45,6 +51,10 @@ backfill_sla_columns()
 backfill_onboarding_column()
 backfill_controls_tables()
 backfill_framework_tables()
+backfill_custom_frameworks_table()
+backfill_policy_tables()
+backfill_risk_tables()
+backfill_audit_project_tables()
 seed_question_bank()
 seed_risk_statements()
 seed_default_templates()
@@ -57,6 +67,8 @@ update_control_enrichments()
 backfill_question_categories()
 backfill_question_bank_item_ids()
 backfill_decision_scores()
+seed_default_policies()
+seed_default_risks()
 
 # Ensure default configs exist
 _db = SessionLocal()
@@ -132,6 +144,9 @@ app.include_router(exceptions.router)
 app.include_router(intake.router)
 app.include_router(audit.router)
 app.include_router(controls.router)
+app.include_router(policies_router.router)
+app.include_router(risks_router.router)
+app.include_router(audit_projects_router.router)
 
 if __name__ == "__main__":
     import uvicorn

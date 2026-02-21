@@ -16,6 +16,14 @@
         <p class="text-muted mb-0">{{ total_reqs }} requirements &middot; {{ mapped_count }} mapped &middot; {{ na_count }} N/A &middot; {{ gap_count }} gaps</p>
     </div>
     <div class="d-flex gap-2">
+        {% if is_custom is defined and is_custom and request.state.current_user and request.state.current_user.role == 'admin' %}
+        <a href="/controls/frameworks/{{ framework_key }}/requirements/new" class="btn btn-success btn-sm"><i class="bi bi-plus-lg me-1"></i>Add Requirement</a>
+        <a href="/controls/frameworks/{{ framework_key }}/requirements/export" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>Export CSV</a>
+        <a href="/controls/frameworks/{{ framework_key }}/edit" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
+        <form method="post" action="/controls/frameworks/{{ framework_key }}/delete" class="d-inline" onsubmit="return confirm('Delete this framework and all its requirements?');">
+            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete</button>
+        </form>
+        {% endif %}
         <a href="/controls/gap-analysis?framework={{ framework_key }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-clipboard-data me-1"></i>Gap Analysis</a>
         {% if gap_count > 0 %}
         <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#bulkAdoptModal">

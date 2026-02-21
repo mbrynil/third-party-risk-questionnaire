@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}{{ risk.risk_ref }} — {{ risk.title }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risks">Risk Register</a></li>
+<li class="breadcrumb-item active">{{ risk.risk_ref }}</li>
+{% endblock %}
+
+{% block content %}
+{# Header #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <code class="me-2">{{ risk.risk_ref }}</code>{{ risk.title }}
+        </h3>
+        <div class="d-flex gap-2 mt-1">
+            <span class="badge" style="background:{{ RISK_STATUS_COLORS[risk.status] }};">{{ RISK_STATUS_LABELS[risk.status] }}</span>
+            {% if risk.inherent_risk_score %}
+            <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(risk.inherent_risk_score)] }};">{{ get_risk_level_label(risk.inherent_risk_score) }} ({{ risk.inherent_risk_score }})</span>
+            {% endif %}
+            {% if risk.risk_source %}
+            <span class="badge bg-light text-dark">{{ RISK_SOURCE_LABELS.get(risk.risk_source, risk.risk_source) }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <a href="/risks/{{ risk.id }}/edit" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
+        {% endif %}
+        {% if request.state.current_user and request.state.current_user.role == 'admin' %}
+        <form method="post" action="/risks/{{ risk.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this risk?');">
+            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    {# Main content #}
+    <div class="col-lg-8">
+        {# Description #}
+        {% if risk.description %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Description</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;">{{ risk.description }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Inherent Risk Assessment #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Inherent Risk Assessment</strong></div>
+            <div class="card-body">
+                {% if risk.inherent_likelihood and risk.inherent_impact %}
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="fs-2 fw-bold text-primary">{{ risk.inherent_likelihood }}</div>
+                        <div class="text-muted small">Likelihood</div>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-center justify-content-center"><span class="fs-3 text-muted">×</span></div>
+                    <div class="col-md-4">
+                        <div class="fs-2 fw-bold text-primary">{{ risk.inherent_impact }}</div>
+                        <div class="text-muted small">Impact</div>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-center justify-content-center"><span class="fs-3 text-muted">=</span></div>
+                    <div class="col-md-2">
+                        <div class="fs-2 fw-bold" style="color:{{ RISK_LEVEL_COLORS[get_risk_level_label(risk.inherent_risk_score)] }};">{{ risk.inherent_risk_score }}</div>
+                        <div class="text-muted small">{{ get_risk_level_label(risk.inherent_risk_score) }}</div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">Not yet assessed.</p>
+                {% endif %}
+
+                {# Assess form for IDENTIFIED status #}
+                {% if risk.status == 'IDENTIFIED' and request.state.current_user and request.state.current_user.role != 'viewer' %}
+                <hr>
+                <h6>Assess Inherent Risk</h6>
+                <form method="post" action="/risks/{{ risk.id }}/assess" class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small">Likelihood (1-5)</label>
+                        <select name="inherent_likelihood" class="form-select form-select-sm" required>
+                            {% for v in [1,2,3,4,5] %}
+                            <option value="{{ v }}" {{ 'selected' if risk.inherent_likelihood == v }}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Impact (1-5)</label>
+                        <select name="inherent_impact" class="form-select form-select-sm" required>
+                            {% for v in [1,2,3,4,5] %}
+                            <option value="{{ v }}" {{ 'selected' if risk.inherent_impact == v }}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-check-lg me-1"></i>Assess</button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Residual Risk Assessment #}
+        {% if risk.residual_risk_score %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Residual Risk Assessment</strong></div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="fs-2 fw-bold text-info">{{ risk.residual_likelihood }}</div>
+                        <div class="text-muted small">Likelihood</div>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-center justify-content-center"><span class="fs-3 text-muted">×</span></div>
+                    <div class="col-md-4">
+                        <div class="fs-2 fw-bold text-info">{{ risk.residual_impact }}</div>
+                        <div class="text-muted small">Impact</div>
+                    </div>
+                    <div class="col-md-1 d-flex align-items-center justify-content-center"><span class="fs-3 text-muted">=</span></div>
+                    <div class="col-md-2">
+                        <div class="fs-2 fw-bold" style="color:{{ RISK_LEVEL_COLORS[get_risk_level_label(risk.residual_risk_score)] }};">{{ risk.residual_risk_score }}</div>
+                        <div class="text-muted small">{{ get_risk_level_label(risk.residual_risk_score) }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Treatment Plan #}
+        {% if risk.treatment_type or risk.status in ['ASSESSED', 'TREATING'] %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Treatment Plan</strong></div>
+            <div class="card-body">
+                {% if risk.treatment_type %}
+                <div class="row mb-2">
+                    <div class="col-md-4"><strong>Treatment Type:</strong> {{ TREATMENT_TYPE_LABELS.get(risk.treatment_type, risk.treatment_type) }}</div>
+                    <div class="col-md-4"><strong>Status:</strong> {{ TREATMENT_STATUS_LABELS.get(risk.treatment_status, risk.treatment_status or 'N/A') }}</div>
+                    <div class="col-md-4"><strong>Due:</strong> {{ risk.treatment_due_date.strftime('%Y-%m-%d') if risk.treatment_due_date else '—' }}</div>
+                </div>
+                {% if risk.treatment_plan %}
+                <p style="white-space:pre-wrap;">{{ risk.treatment_plan }}</p>
+                {% endif %}
+                {% endif %}
+
+                {# Set treatment form #}
+                {% if risk.status == 'ASSESSED' and request.state.current_user and request.state.current_user.role != 'viewer' %}
+                <hr>
+                <h6>Set Treatment</h6>
+                <form method="post" action="/risks/{{ risk.id }}/treat">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <select name="treatment_type" class="form-select form-select-sm" required>
+                                <option value="">-- Type --</option>
+                                {% for t in VALID_TREATMENT_TYPES %}
+                                <option value="{{ t }}">{{ TREATMENT_TYPE_LABELS[t] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="date" name="treatment_due_date" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-warning btn-sm w-100">Set Treatment</button>
+                        </div>
+                    </div>
+                    <textarea name="treatment_plan" class="form-control form-control-sm" rows="2" placeholder="Treatment plan details..."></textarea>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Reassess / Accept / Close actions for TREATING status #}
+        {% if risk.status == 'TREATING' and request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Actions</strong></div>
+            <div class="card-body">
+                <h6>Reassess Residual Risk</h6>
+                <form method="post" action="/risks/{{ risk.id }}/reassess" class="row g-2 align-items-end mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Residual Likelihood</label>
+                        <select name="residual_likelihood" class="form-select form-select-sm" required>
+                            {% for v in [1,2,3,4,5] %}
+                            <option value="{{ v }}" {{ 'selected' if risk.residual_likelihood == v }}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Residual Impact</label>
+                        <select name="residual_impact" class="form-select form-select-sm" required>
+                            {% for v in [1,2,3,4,5] %}
+                            <option value="{{ v }}" {{ 'selected' if risk.residual_impact == v }}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-info btn-sm w-100">Reassess</button>
+                    </div>
+                </form>
+                <div class="d-flex gap-2">
+                    <form method="post" action="/risks/{{ risk.id }}/accept">
+                        <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-circle me-1"></i>Accept Risk</button>
+                    </form>
+                    <form method="post" action="/risks/{{ risk.id }}/close">
+                        <button type="submit" class="btn btn-secondary btn-sm"><i class="bi bi-x-circle me-1"></i>Close Risk</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Linked Controls #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Linked Controls</strong> <span class="badge bg-secondary">{{ risk.control_mappings|length }}</span></div>
+            <div class="card-body">
+                {% if risk.control_mappings %}
+                <ul class="list-group list-group-flush mb-3">
+                    {% for m in risk.control_mappings %}
+                    <li class="list-group-item d-flex justify-content-between">
+                        <a href="/controls/{{ m.control.id }}">{{ m.control.control_ref }} — {{ m.control.title }}</a>
+                        <span class="badge bg-light text-dark">{{ m.control.domain }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+                <form method="post" action="/risks/{{ risk.id }}/mappings/controls">
+                    <label class="form-label small fw-semibold">Select Controls</label>
+                    <select name="control_ids" class="form-select form-select-sm" multiple size="5">
+                        {% set mapped_ids = risk.control_mappings|map(attribute='control_id')|list %}
+                        {% for c in all_controls %}
+                        <option value="{{ c.id }}" {{ 'selected' if c.id in mapped_ids }}>{{ c.control_ref }} — {{ c.title }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary mt-2">Save Control Mappings</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Linked Policies #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Linked Policies</strong> <span class="badge bg-secondary">{{ risk.policy_mappings|length }}</span></div>
+            <div class="card-body">
+                {% if risk.policy_mappings %}
+                <ul class="list-group list-group-flush mb-3">
+                    {% for m in risk.policy_mappings %}
+                    <li class="list-group-item">
+                        <a href="/policies/{{ m.policy.id }}">{{ m.policy.policy_ref }} — {{ m.policy.title }}</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+                <form method="post" action="/risks/{{ risk.id }}/mappings/policies">
+                    <label class="form-label small fw-semibold">Select Policies</label>
+                    <select name="policy_ids" class="form-select form-select-sm" multiple size="5">
+                        {% set mapped_ids = risk.policy_mappings|map(attribute='policy_id')|list %}
+                        {% for p in all_policies %}
+                        <option value="{{ p.id }}" {{ 'selected' if p.id in mapped_ids }}>{{ p.policy_ref }} — {{ p.title }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary mt-2">Save Policy Mappings</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Comments #}
+        {% set comment_entity_type = "risk" %}
+        {% set comment_entity_id = risk.id %}
+        {% include "partials/comments.html" with context %}
+    </div>
+
+    {# Sidebar #}
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header"><strong>Details</strong></div>
+            <div class="card-body small">
+                <dl class="mb-0">
+                    <dt>Category</dt><dd>{{ risk.risk_category or '—' }}</dd>
+                    <dt>Source</dt><dd>{{ RISK_SOURCE_LABELS.get(risk.risk_source, risk.risk_source or '—') }}</dd>
+                    <dt>Owner</dt><dd>{{ risk.owner.display_name if risk.owner else '—' }}</dd>
+                    <dt>Risk Appetite Threshold</dt><dd>{{ risk.risk_appetite_threshold }}</dd>
+                    <dt>Created</dt><dd>{{ risk.created_at.strftime('%Y-%m-%d') if risk.created_at else '—' }}</dd>
+                    <dt>Updated</dt><dd>{{ risk.updated_at.strftime('%Y-%m-%d') if risk.updated_at else '—' }}</dd>
+                </dl>
+            </div>
+        </div>
+        {% if risk.inherent_risk_score and risk.risk_appetite_threshold %}
+        <div class="card mb-3">
+            <div class="card-body text-center">
+                {% if (risk.residual_risk_score or risk.inherent_risk_score) > risk.risk_appetite_threshold %}
+                <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:2rem;"></i>
+                <div class="fw-bold text-danger mt-1">Above Risk Appetite</div>
+                {% else %}
+                <i class="bi bi-check-circle-fill text-success" style="font-size:2rem;"></i>
+                <div class="fw-bold text-success mt-1">Within Risk Appetite</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
