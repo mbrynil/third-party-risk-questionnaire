@@ -2923,15 +2923,22 @@ def backfill_framework_tables():
 
 
 def seed_framework_requirements():
-    """Load canonical framework requirements from seed data, skipping if already populated."""
+    """Load canonical framework requirements from seed data, seeding any missing frameworks."""
     db = SessionLocal()
     try:
-        if db.query(FrameworkRequirement).count() > 0:
-            return
-
         from app.services.framework_seeds import get_all_framework_seeds
         seeds = get_all_framework_seeds()
-        for s in seeds:
+
+        # Find which frameworks already have seeds in DB
+        existing_frameworks = set(
+            r[0] for r in db.query(FrameworkRequirement.framework).distinct().all()
+        )
+
+        new_seeds = [s for s in seeds if s["framework"] not in existing_frameworks]
+        if not new_seeds:
+            return
+
+        for s in new_seeds:
             db.add(FrameworkRequirement(
                 framework=s["framework"],
                 reference=s["reference"],
