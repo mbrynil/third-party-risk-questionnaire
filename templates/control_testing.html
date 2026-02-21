@@ -80,9 +80,17 @@
         </div>
     </div>
     <div class="col-6 col-md-3 col-lg">
+        <div class="card kpi-card {% if kpi_in_progress > 0 %}border-primary{% endif %}">
+            <div class="card-body py-3">
+                <div class="kpi-value text-primary">{{ kpi_in_progress }}</div>
+                <div class="kpi-label">In Progress</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3 col-lg">
         <div class="card kpi-card">
             <div class="card-body py-3">
-                <div class="kpi-value text-primary">{{ kpi_completed_month }}</div>
+                <div class="kpi-value" style="color:#198754;">{{ kpi_completed_month }}</div>
                 <div class="kpi-label">Completed This Month</div>
             </div>
         </div>
@@ -104,6 +112,13 @@
                 type="button" role="tab">
             <i class="bi bi-calendar-event me-1"></i>Testing Schedule
             <span class="badge bg-secondary ms-1">{{ schedule_rows|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="inprogress-tab" data-bs-toggle="tab" data-bs-target="#inProgressPane"
+                type="button" role="tab">
+            <i class="bi bi-pencil-square me-1"></i>In Progress
+            {% if in_progress_tests %}<span class="badge bg-primary ms-1">{{ in_progress_tests|length }}</span>{% endif %}
         </button>
     </li>
     <li class="nav-item" role="presentation">
@@ -151,9 +166,11 @@
                                     {% else %}<span class="text-muted">&mdash;</span>{% endif %}
                                 </td>
                                 <td class="text-end">
-                                    <a href="/controls/tests/{{ st.id }}/complete" class="btn btn-sm btn-primary" title="Complete this test">
-                                        <i class="bi bi-check-circle me-1"></i>Complete
-                                    </a>
+                                    <form method="post" action="/controls/tests/{{ st.id }}/start" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-primary" title="Start working this test">
+                                            <i class="bi bi-play-circle me-1"></i>Start Test
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -275,15 +292,18 @@
                             <td class="text-end">
                                 <div class="d-flex gap-1 justify-content-end">
                                     {% if scheduled_by_impl.get(row.impl.id) %}
-                                    <a href="/controls/tests/{{ scheduled_by_impl[row.impl.id][0].id }}/complete"
-                                       class="btn btn-sm btn-primary" title="Complete scheduled test">
-                                        <i class="bi bi-check-circle"></i>
-                                    </a>
+                                    <form method="post" action="/controls/tests/{{ scheduled_by_impl[row.impl.id][0].id }}/start" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-primary" title="Start scheduled test">
+                                            <i class="bi bi-play-circle"></i>
+                                        </button>
+                                    </form>
                                     {% endif %}
-                                    <a href="/controls/implementations/{{ row.impl.id }}/tests/new"
-                                       class="btn btn-sm btn-outline-primary" title="Record Test">
-                                        <i class="bi bi-plus-circle"></i>
-                                    </a>
+                                    <form method="post" action="/controls/implementations/{{ row.impl.id }}/tests" class="d-inline">
+                                        <input type="hidden" name="test_type" value="OPERATING">
+                                        <button type="submit" class="btn btn-sm btn-outline-primary" title="New ad-hoc test">
+                                            <i class="bi bi-plus-circle"></i>
+                                        </button>
+                                    </form>
                                     <button type="button" class="btn btn-sm btn-outline-secondary" title="Schedule Test"
                                             onclick="openScheduleModal('{{ row.impl.control.id }}')">
                                         <i class="bi bi-calendar-plus"></i>
@@ -298,6 +318,80 @@
                 <div class="text-center py-4 text-muted">
                     <i class="bi bi-clipboard-check" style="font-size:2rem;"></i>
                     <p class="mt-2">No implemented controls with testing obligations yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== IN PROGRESS TAB ==================== -->
+    <div class="tab-pane fade" id="inProgressPane" role="tabpanel">
+        <div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Control Ref</th>
+                            <th>Title</th>
+                            <th>Type</th>
+                            <th>Result</th>
+                            <th>Tester</th>
+                            <th>Evidence</th>
+                            <th>Created</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in in_progress_tests %}
+                        <tr>
+                            <td>
+                                {% if t.implementation and t.implementation.control %}
+                                <a href="/controls/{{ t.implementation.control.id }}" class="text-decoration-none fw-semibold">
+                                    {{ t.implementation.control.control_ref }}
+                                </a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.implementation and t.implementation.control %}
+                                {{ t.implementation.control.title }}
+                                {% endif %}
+                            </td>
+                            <td><small>{{ test_type_labels.get(t.test_type, t.test_type) }}</small></td>
+                            <td>
+                                <span class="badge" style="background:{{ test_result_colors.get(t.result, '#6c757d') }};color:#fff;">
+                                    {{ test_result_labels.get(t.result, t.result) }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if t.tester %}
+                                <small>{{ t.tester.display_name }}</small>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.evidence_files %}
+                                <span class="badge bg-light text-dark">
+                                    <i class="bi bi-paperclip"></i> {{ t.evidence_files|length }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '&mdash;' }}</small></td>
+                            <td class="text-end">
+                                <a href="/controls/tests/{{ t.id }}" class="btn btn-sm btn-primary" title="Continue working">
+                                    <i class="bi bi-pencil-square me-1"></i>Continue
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if not in_progress_tests %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-pencil-square" style="font-size:2rem;"></i>
+                    <p class="mt-2">No tests in progress. Start a scheduled test or create a new one.</p>
                 </div>
                 {% endif %}
             </div>
@@ -547,12 +641,13 @@ function applyHistoryFilters() {
 (function() {
     var params = new URLSearchParams(window.location.search);
 
-    if (params.get('tab') === 'history') {
+    var tabParam = params.get('tab');
+    if (tabParam === 'history') {
         var histTab = document.getElementById('history-tab');
-        if (histTab) {
-            var tab = new bootstrap.Tab(histTab);
-            tab.show();
-        }
+        if (histTab) { new bootstrap.Tab(histTab).show(); }
+    } else if (tabParam === 'in-progress') {
+        var ipTab = document.getElementById('inprogress-tab');
+        if (ipTab) { new bootstrap.Tab(ipTab).show(); }
     }
 
     if (params.get('status')) {

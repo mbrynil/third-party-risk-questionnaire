@@ -157,7 +157,10 @@
                     <td class="text-end">
                         <a href="/controls/implementations/{{ impl.id }}" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                         {% if impl.status == IMPL_STATUS_IMPLEMENTED %}
-                        <a href="/controls/implementations/{{ impl.id }}/tests/new" class="btn btn-sm btn-outline-primary" title="Record Test"><i class="bi bi-plus-circle me-1"></i>Test</a>
+                        <form method="post" action="/controls/implementations/{{ impl.id }}/tests" class="d-inline">
+                            <input type="hidden" name="test_type" value="OPERATING">
+                            <button type="submit" class="btn btn-sm btn-outline-primary" title="New Test"><i class="bi bi-plus-circle me-1"></i>Test</button>
+                        </form>
                         <a href="/controls/testing?schedule={{ control.id }}" class="btn btn-sm btn-outline-secondary" title="Schedule Test"><i class="bi bi-calendar-plus"></i></a>
                         {% endif %}
                     </td>

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% set is_editable = test.status == TEST_STATUS_IN_PROGRESS %}
 
-{% block title %}Test Workpaper — {{ test.implementation.control.control_ref }}{% endblock %}
+{% block title %}{% if is_editable %}Test Workspace{% else %}Test Workpaper{% endif %} — {{ test.implementation.control.control_ref }}{% endblock %}
 
 {% block breadcrumbs %}
 <li class="breadcrumb-item"><a href="/">Home</a></li>
@@ -9,7 +10,7 @@
 <li class="breadcrumb-item"><a href="/vendors/{{ test.implementation.vendor.id }}/controls">Controls</a></li>
 {% endif %}
 <li class="breadcrumb-item"><a href="/controls/implementations/{{ test.implementation.id }}">{{ test.implementation.control.control_ref }}</a></li>
-<li class="breadcrumb-item active">Test Workpaper</li>
+<li class="breadcrumb-item active">{% if is_editable %}Test Workspace{% else %}Test Workpaper{% endif %}</li>
 {% endblock %}
 
 {% block content %}
@@ -29,8 +30,11 @@
             {{ test.implementation.control.control_ref }} — {{ test.implementation.control.title }}
         </h3>
         <div class="d-flex gap-2 align-items-center mt-2">
+            <span class="badge" style="background-color:{{ test_status_colors.get(test.status, '#6c757d') }};font-size:0.85rem;">{{ test_status_labels.get(test.status, test.status) }}</span>
             <span class="badge bg-secondary" style="font-size:0.85rem;">{{ test_type_labels.get(test.test_type, test.test_type) }}</span>
+            {% if test.status == TEST_STATUS_COMPLETED %}
             <span class="badge" style="background-color:{{ test_result_colors.get(test.result, '#6c757d') }};font-size:0.85rem;">{{ test_result_labels.get(test.result, test.result) }}</span>
+            {% endif %}
             {% if test.finding_risk_rating %}
             <span class="badge" style="background-color:{{ finding_risk_colors.get(test.finding_risk_rating, '#6c757d') }};font-size:0.85rem;">Finding: {{ finding_risk_labels.get(test.finding_risk_rating, test.finding_risk_rating) }}</span>
             {% endif %}
@@ -40,7 +44,9 @@
         </div>
     </div>
     <div class="d-flex gap-2">
+        {% if test.status == TEST_STATUS_COMPLETED %}
         <a href="/controls/tests/{{ test.id }}/export.pdf" class="btn btn-outline-primary"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</a>
+        {% endif %}
         <a href="/controls/implementations/{{ test.implementation.id }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
     </div>
 </div>
@@ -52,6 +58,266 @@
     <strong>Separation of Duties:</strong>&nbsp;The tester ({{ test.tester.display_name }}) is also the control owner.
 </div>
 {% endif %}
+
+
+{% if is_editable %}
+{# ============================================================ #}
+{# ===== EDITABLE WORKSPACE (IN_PROGRESS) ===== #}
+{# ============================================================ #}
+
+<form method="post" action="/controls/tests/{{ test.id }}/save" enctype="multipart/form-data">
+<div class="row g-4">
+    <div class="col-lg-8">
+
+        {# ===== Section 1: Test Setup ===== #}
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">1</span>Test Setup</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Test Type <span class="text-danger">*</span></label>
+                        <select name="test_type" class="form-select">
+                            {% for t in test_types %}
+                            <option value="{{ t }}" {% if test.test_type == t %}selected{% endif %}>{{ test_type_labels[t] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Result</label>
+                        <select name="result" class="form-select">
+                            {% for r in test_results %}
+                            <option value="{{ r }}" {% if test.result == r %}selected{% endif %}>{{ test_result_labels[r] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ===== Section 2: Scope & Sampling ===== #}
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">2</span>Scope & Sampling</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Test Period Start</label>
+                        <input type="date" name="test_period_start" class="form-control" value="{{ test.test_period_start.strftime('%Y-%m-%d') if test.test_period_start else '' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Test Period End</label>
+                        <input type="date" name="test_period_end" class="form-control" value="{{ test.test_period_end.strftime('%Y-%m-%d') if test.test_period_end else '' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Population Size</label>
+                        <input type="number" name="population_size" class="form-control" min="0" value="{{ test.population_size if test.population_size is not none else '' }}" placeholder="Total items in population">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Sample Size</label>
+                        <input type="number" name="sample_size" class="form-control" min="0" value="{{ test.sample_size if test.sample_size is not none else '' }}" placeholder="Items tested">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ===== Section 3: Test Procedure ===== #}
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">3</span>Test Procedure</h6>
+            </div>
+            <div class="card-body">
+                <textarea name="test_procedure" class="form-control" rows="5" placeholder="Describe the test procedure — steps taken, criteria evaluated, tools used...">{{ test.test_procedure or '' }}</textarea>
+            </div>
+        </div>
+
+        {# ===== Section 4: Results ===== #}
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">4</span>Results</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Exceptions Found</label>
+                        <input type="number" name="exceptions_count" id="exceptions_count" class="form-control" min="0" value="{{ test.exceptions_count if test.exceptions_count is not none else 0 }}" onchange="toggleExceptionDetails()">
+                    </div>
+                    <div class="col-md-6">&nbsp;</div>
+                    <div class="col-12" id="exception_details_group">
+                        <label class="form-label">Exception Details</label>
+                        <textarea name="exception_details" class="form-control" rows="3" placeholder="Describe each exception — item reference, nature of deviation, root cause...">{{ test.exception_details or '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ===== Section 5: Findings & Conclusion ===== #}
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">5</span>Findings & Conclusion</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">Findings</label>
+                        <textarea name="findings" class="form-control" rows="3" placeholder="Document findings from the test...">{{ test.findings or '' }}</textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Recommendations</label>
+                        <textarea name="recommendations" class="form-control" rows="2" placeholder="Recommendations for improvement or remediation...">{{ test.recommendations or '' }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Finding Risk Rating</label>
+                        <select name="finding_risk_rating" class="form-select">
+                            <option value="">— Select —</option>
+                            {% for fr in finding_risk_ratings %}
+                            <option value="{{ fr }}" {% if test.finding_risk_rating == fr %}selected{% endif %}>{{ finding_risk_labels[fr] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Conclusion</label>
+                        <textarea name="conclusion" class="form-control" rows="3" placeholder="Overall test conclusion — summarize whether the control is operating effectively...">{{ test.conclusion or '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# ===== Section 6: Evidence ===== #}
+        <div class="card mb-3">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">6</span>Evidence <span class="badge bg-secondary ms-1">{{ test.evidence_files|length }}</span></h6>
+            </div>
+            {% if test.evidence_files %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>File</th><th>Size</th><th>Uploaded</th><th class="text-end">Actions</th></tr></thead>
+                    <tbody>
+                        {% for ev in test.evidence_files %}
+                        <tr>
+                            <td><i class="bi bi-file-earmark me-1"></i>{{ ev.original_filename }}</td>
+                            <td><small class="text-muted">{% if ev.size_bytes %}{{ (ev.size_bytes / 1024)|round(1) }} KB{% endif %}</small></td>
+                            <td><small class="text-muted">{{ ev.uploaded_at.strftime('%Y-%m-%d') if ev.uploaded_at else '' }}</small></td>
+                            <td class="text-end">
+                                <a href="/controls/evidence/{{ ev.id }}/download" class="btn btn-sm btn-outline-primary"><i class="bi bi-download"></i></a>
+                                <form method="post" action="/controls/evidence/{{ ev.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this file?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+            <div class="card-body {% if test.evidence_files %}pt-2{% endif %}">
+                <label class="form-label small text-muted">Attach additional evidence</label>
+                <input type="file" name="evidence_files" class="form-control form-control-sm" multiple>
+            </div>
+        </div>
+
+        {# ===== Action Buttons ===== #}
+        <div class="d-flex gap-2 mb-4">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Progress</button>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#finalizeModal"><i class="bi bi-check-circle me-1"></i>Finalize Test</button>
+        </div>
+    </div>
+
+    {# ===== Sidebar ===== #}
+    <div class="col-lg-4">
+        {# Control Info #}
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-shield-check me-2"></i>Control</h6></div>
+            <div class="card-body">
+                <p class="fw-semibold mb-1">{{ test.implementation.control.control_ref }}</p>
+                <p class="mb-2">{{ test.implementation.control.title }}</p>
+                {% if test.implementation.vendor %}
+                <p class="text-muted mb-1"><small>Vendor: {{ test.implementation.vendor.name }}</small></p>
+                {% endif %}
+                {% if test.implementation.control.owner %}
+                <p class="text-muted mb-1"><small>Owner: {{ test.implementation.control.owner.display_name }}</small></p>
+                {% endif %}
+                <div class="mt-2">
+                    {% for m in test.implementation.control.framework_mappings %}
+                    <span class="badge bg-light text-dark border" style="font-size:0.7rem;">{{ framework_display.get(m.framework, m.framework) }}: {{ m.reference }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Workspace Info #}
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Workspace</h6></div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="text-muted small text-uppercase">Tester</label>
+                    <p class="fw-semibold mb-0">{{ test.tester.display_name if test.tester else '—' }}</p>
+                </div>
+                <div class="mb-2">
+                    <label class="text-muted small text-uppercase">Created</label>
+                    <p class="fw-semibold mb-0">{{ test.created_at.strftime('%Y-%m-%d %H:%M') if test.created_at else '—' }}</p>
+                </div>
+                {% if test.scheduled_date %}
+                <div>
+                    <label class="text-muted small text-uppercase">Originally Scheduled</label>
+                    <p class="fw-semibold mb-0">{{ test.scheduled_date.strftime('%Y-%m-%d') }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card border-info mb-3">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-pencil-square text-info" style="font-size:1.5rem;"></i>
+                <p class="mb-0 mt-2 small text-muted">This test is <strong>in progress</strong>. Save your work as you go. When you're done, click <strong>Finalize Test</strong> to lock it down.</p>
+            </div>
+        </div>
+    </div>
+</div>
+</form>
+
+{# Finalize Confirmation Modal #}
+<div class="modal fade" id="finalizeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>Finalize Test</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Finalizing this test will:</p>
+                <ul>
+                    <li>Set the test date to now</li>
+                    <li>Lock the workpaper (read-only)</li>
+                    <li>Update the next test due date for this control</li>
+                </ul>
+                <p class="mb-0 text-muted small">Make sure you've saved your latest changes before finalizing.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="/controls/tests/{{ test.id }}/finalize" class="d-inline">
+                    <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Finalize Test</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleExceptionDetails() {
+    var count = parseInt(document.getElementById('exceptions_count').value) || 0;
+    document.getElementById('exception_details_group').style.display = count > 0 ? 'block' : 'none';
+}
+toggleExceptionDetails();
+</script>
+
+
+{% else %}
+{# ============================================================ #}
+{# ===== READ-ONLY WORKPAPER (COMPLETED) ===== #}
+{# ============================================================ #}
 
 {# ===== Metadata Grid ===== #}
 <div class="card mb-4">
@@ -262,4 +528,6 @@
         </div>
     </div>
 </div>
+
+{% endif %}
 {% endblock %}

@@ -18,7 +18,8 @@ from models import (
     VALID_EFFECTIVENESS_LEVELS, EFFECTIVENESS_LABELS, EFFECTIVENESS_COLORS,
     VALID_TEST_TYPES, TEST_TYPE_LABELS,
     VALID_TEST_RESULTS, TEST_RESULT_LABELS, TEST_RESULT_COLORS,
-    TEST_STATUS_SCHEDULED,
+    TEST_STATUS_SCHEDULED, TEST_STATUS_IN_PROGRESS, TEST_STATUS_COMPLETED,
+    TEST_STATUS_LABELS, TEST_STATUS_COLORS,
     IMPL_STATUS_IMPLEMENTED,
     VALID_FINDING_RISK_RATINGS, FINDING_RISK_LABELS, FINDING_RISK_COLORS,
     AUDIT_ACTION_CREATE, AUDIT_ACTION_UPDATE, AUDIT_ACTION_DELETE,
@@ -294,6 +295,9 @@ async def control_testing_tracker(
     # Scheduled tests
     scheduled_tests = svc.get_scheduled_tests(db)
 
+    # In-progress tests
+    in_progress_tests = svc.get_in_progress_tests(db)
+
     # Build lookup: impl_id → list of scheduled tests
     scheduled_by_impl = {}
     for st in scheduled_tests:
@@ -312,11 +316,13 @@ async def control_testing_tracker(
         "request": request,
         "schedule_rows": schedule_rows,
         "scheduled_tests": scheduled_tests,
+        "in_progress_tests": in_progress_tests,
         "scheduled_by_impl": scheduled_by_impl,
         "test_history": test_history,
         "kpi_overdue": testing_summary["overdue"],
         "kpi_upcoming": testing_summary["upcoming"],
         "kpi_scheduled": len(scheduled_tests),
+        "kpi_in_progress": len(in_progress_tests),
         "kpi_completed_month": completed_this_month,
         "kpi_pass_rate": pass_rate_ytd,
         "domains": VALID_CONTROL_DOMAINS,
@@ -328,6 +334,8 @@ async def control_testing_tracker(
         "test_results": VALID_TEST_RESULTS,
         "test_result_labels": TEST_RESULT_LABELS,
         "test_result_colors": TEST_RESULT_COLORS,
+        "finding_risk_labels": FINDING_RISK_LABELS,
+        "finding_risk_colors": FINDING_RISK_COLORS,
         "frequency_labels": CONTROL_FREQUENCY_LABELS,
         "pre_select_impl": pre_select_impl,
     })
@@ -374,35 +382,39 @@ async def control_test_schedule(
     )
 
 
-@router.get("/controls/tests/{test_id}/complete", response_class=HTMLResponse)
-async def control_test_complete_form(
-    request: Request, test_id: int,
-    db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep),
+@router.post("/controls/tests/{test_id}/start", response_class=HTMLResponse)
+async def control_test_start(
+    test_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
 ):
+    """Transition a SCHEDULED test to IN_PROGRESS, then redirect to the workspace."""
     test = svc.get_test(db, test_id)
     if not test or test.status != TEST_STATUS_SCHEDULED:
         raise HTTPException(status_code=404, detail="Scheduled test not found")
 
-    return templates.TemplateResponse("control_test_form.html", {
-        "request": request,
-        "impl": test.implementation,
-        "completing_test": test,
-        "test_types": VALID_TEST_TYPES,
-        "test_type_labels": TEST_TYPE_LABELS,
-        "test_results": VALID_TEST_RESULTS,
-        "test_result_labels": TEST_RESULT_LABELS,
-        "finding_risk_ratings": VALID_FINDING_RISK_RATINGS,
-        "finding_risk_labels": FINDING_RISK_LABELS,
-        "framework_display": FRAMEWORK_DISPLAY,
-    })
+    svc.start_test(db, test_id)
+
+    log_audit(db, AUDIT_ACTION_UPDATE, "control_test",
+              entity_id=test.id,
+              entity_label=f"Started test for {test.implementation.control.control_ref}",
+              description=f"Began working {test.test_type} test",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/tests/{test_id}?message={quote('Test started — save your progress as you work')}&message_type=success",
+        status_code=303,
+    )
 
 
-@router.post("/controls/tests/{test_id}/complete", response_class=HTMLResponse)
-async def control_test_complete(
+@router.post("/controls/tests/{test_id}/save", response_class=HTMLResponse)
+async def control_test_save_progress(
     request: Request,
     test_id: int,
-    result: str = Form(...),
+    test_type: str = Form(""),
     test_procedure: str = Form(""),
+    result: str = Form(""),
     findings: str = Form(""),
     recommendations: str = Form(""),
     test_period_start: str = Form(""),
@@ -416,37 +428,71 @@ async def control_test_complete(
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
+    """Save work-in-progress on an IN_PROGRESS test."""
     test = svc.get_test(db, test_id)
-    if not test or test.status != TEST_STATUS_SCHEDULED:
-        raise HTTPException(status_code=404, detail="Scheduled test not found")
+    if not test or test.status != TEST_STATUS_IN_PROGRESS:
+        raise HTTPException(status_code=404, detail="In-progress test not found")
+
+    fields = {
+        "test_procedure": test_procedure.strip() or None,
+        "result": result.strip() or test.result,
+        "findings": findings.strip() or None,
+        "recommendations": recommendations.strip() or None,
+        "exception_details": exception_details.strip() or None,
+        "conclusion": conclusion.strip() or None,
+        "finding_risk_rating": finding_risk_rating.strip() or None,
+    }
+    if test_type.strip():
+        fields["test_type"] = test_type.strip()
 
     extra = _parse_enhanced_test_fields(
         test_period_start, test_period_end, sample_size, population_size,
-        exceptions_count, exception_details, conclusion, finding_risk_rating,
+        exceptions_count, "", "", "",
     )
+    fields.update(extra)
 
-    svc.complete_scheduled_test(
-        db, test_id, result, test_procedure.strip(),
-        findings.strip(), recommendations.strip(), **extra,
-    )
+    svc.save_test_progress(db, test_id, **fields)
 
     # Handle file uploads
     form = await request.form()
     files = form.getlist("evidence_files")
+    uploaded = 0
     for f in files:
         if hasattr(f, 'filename') and f.filename:
             ev = await svc.store_control_evidence(f, test_id)
             db.add(ev)
+            uploaded += 1
+
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/tests/{test_id}?message={quote('Progress saved')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/tests/{test_id}/finalize", response_class=HTMLResponse)
+async def control_test_finalize(
+    test_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Finalize an IN_PROGRESS test → COMPLETED."""
+    test = svc.get_test(db, test_id)
+    if not test or test.status != TEST_STATUS_IN_PROGRESS:
+        raise HTTPException(status_code=404, detail="In-progress test not found")
+
+    svc.finalize_test(db, test_id)
 
     log_audit(db, AUDIT_ACTION_UPDATE, "control_test",
               entity_id=test.id,
-              entity_label=f"Completed test for {test.implementation.control.control_ref}",
-              description=f"Completed scheduled test: {result}",
+              entity_label=f"Finalized test for {test.implementation.control.control_ref}",
+              description=f"Finalized {test.test_type} test: {test.result}",
               actor_user=current_user)
     db.commit()
 
     return RedirectResponse(
-        url=f"/controls/testing?tab=history&message={quote('Test completed')}&message_type=success",
+        url=f"/controls/tests/{test_id}?message={quote('Test finalized')}&message_type=success",
         status_code=303,
     )
 
@@ -855,76 +901,29 @@ async def control_impl_delete(impl_id: int, db: Session = Depends(get_db), curre
 
 # ==================== CONTROL TESTING ====================
 
-@router.get("/controls/implementations/{impl_id}/tests/new", response_class=HTMLResponse)
-async def control_test_new(request: Request, impl_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
-    impl = svc.get_implementation(db, impl_id)
-    if not impl:
-        raise HTTPException(status_code=404, detail="Implementation not found")
-
-    return templates.TemplateResponse("control_test_form.html", {
-        "request": request,
-        "impl": impl,
-        "test_types": VALID_TEST_TYPES,
-        "test_type_labels": TEST_TYPE_LABELS,
-        "test_results": VALID_TEST_RESULTS,
-        "test_result_labels": TEST_RESULT_LABELS,
-        "finding_risk_ratings": VALID_FINDING_RISK_RATINGS,
-        "finding_risk_labels": FINDING_RISK_LABELS,
-        "framework_display": FRAMEWORK_DISPLAY,
-    })
-
-
 @router.post("/controls/implementations/{impl_id}/tests", response_class=HTMLResponse)
 async def control_test_create(
-    request: Request,
     impl_id: int,
     test_type: str = Form(...),
-    test_procedure: str = Form(""),
-    result: str = Form(...),
-    findings: str = Form(""),
-    recommendations: str = Form(""),
-    test_period_start: str = Form(""),
-    test_period_end: str = Form(""),
-    sample_size: str = Form(""),
-    population_size: str = Form(""),
-    exceptions_count: str = Form(""),
-    exception_details: str = Form(""),
-    conclusion: str = Form(""),
-    finding_risk_rating: str = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
+    """Create a new ad-hoc test in IN_PROGRESS status and redirect to its workspace."""
     impl = svc.get_implementation(db, impl_id)
     if not impl:
         raise HTTPException(status_code=404, detail="Implementation not found")
 
-    extra = _parse_enhanced_test_fields(
-        test_period_start, test_period_end, sample_size, population_size,
-        exceptions_count, exception_details, conclusion, finding_risk_rating,
-    )
-
-    test = svc.create_test(
-        db, impl_id, test_type, test_procedure.strip(),
-        current_user.id, result, findings.strip(), recommendations.strip(), **extra,
-    )
-
-    # Handle file uploads
-    form = await request.form()
-    files = form.getlist("evidence_files")
-    for f in files:
-        if hasattr(f, 'filename') and f.filename:
-            ev = await svc.store_control_evidence(f, test.id)
-            db.add(ev)
+    test = svc.create_test(db, impl_id, test_type, current_user.id)
 
     log_audit(db, AUDIT_ACTION_CREATE, "control_test",
               entity_id=test.id,
               entity_label=f"Test for {impl.control.control_ref}",
-              description=f"Recorded {test_type} test: {result}",
+              description=f"Started new {test_type} test",
               actor_user=current_user)
     db.commit()
 
     return RedirectResponse(
-        url=f"/controls/implementations/{impl_id}?message={quote('Test recorded')}&message_type=success",
+        url=f"/controls/tests/{test.id}?message={quote('Test created — fill in details and save your progress')}&message_type=success",
         status_code=303,
     )
 
@@ -942,12 +941,19 @@ async def control_test_detail(request: Request, test_id: int, db: Session = Depe
         "test": test,
         "current_user": current_user,
         "users": users,
+        "test_types": VALID_TEST_TYPES,
         "test_type_labels": TEST_TYPE_LABELS,
+        "test_results": VALID_TEST_RESULTS,
         "test_result_labels": TEST_RESULT_LABELS,
         "test_result_colors": TEST_RESULT_COLORS,
+        "finding_risk_ratings": VALID_FINDING_RISK_RATINGS,
         "finding_risk_labels": FINDING_RISK_LABELS,
         "finding_risk_colors": FINDING_RISK_COLORS,
+        "test_status_labels": TEST_STATUS_LABELS,
+        "test_status_colors": TEST_STATUS_COLORS,
         "framework_display": FRAMEWORK_DISPLAY,
+        "TEST_STATUS_IN_PROGRESS": TEST_STATUS_IN_PROGRESS,
+        "TEST_STATUS_COMPLETED": TEST_STATUS_COMPLETED,
     })
 
 

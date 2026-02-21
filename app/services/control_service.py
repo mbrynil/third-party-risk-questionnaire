@@ -11,7 +11,8 @@ from models import (
     ControlImplementation, ControlTest, ControlEvidence,
     IMPL_STATUS_NOT_IMPLEMENTED, IMPL_STATUS_IMPLEMENTED,
     CONTROL_FREQUENCY_DAYS,
-    TEST_STATUS_SCHEDULED, TEST_STATUS_COMPLETED, TEST_RESULT_NOT_TESTED,
+    TEST_STATUS_SCHEDULED, TEST_STATUS_IN_PROGRESS, TEST_STATUS_COMPLETED,
+    TEST_RESULT_NOT_TESTED,
 )
 
 
@@ -296,34 +297,20 @@ def get_org_control_stats(db: Session) -> dict:
 
 # ==================== CONTROL TESTING ====================
 
-def create_test(db: Session, impl_id: int, test_type: str, procedure: str,
-                tester_id: int | None, result: str, findings: str, recommendations: str,
-                test_period_start=None, test_period_end=None,
-                sample_size: int | None = None, population_size: int | None = None,
-                exceptions_count: int | None = None, exception_details: str | None = None,
-                conclusion: str | None = None, finding_risk_rating: str | None = None) -> ControlTest:
+def create_test(db: Session, impl_id: int, test_type: str,
+                tester_id: int | None) -> ControlTest:
+    """Create a new ad-hoc test in IN_PROGRESS status — the analyst's workspace."""
     test = ControlTest(
         implementation_id=impl_id,
         test_type=test_type,
-        test_procedure=procedure,
         tester_user_id=tester_id,
-        result=result,
-        findings=findings,
-        recommendations=recommendations,
-        test_date=datetime.utcnow(),
-        test_period_start=test_period_start,
-        test_period_end=test_period_end,
-        sample_size=sample_size,
-        population_size=population_size,
-        exceptions_count=exceptions_count,
-        exception_details=exception_details,
-        conclusion=conclusion,
-        finding_risk_rating=finding_risk_rating,
+        status=TEST_STATUS_IN_PROGRESS,
+        result=TEST_RESULT_NOT_TESTED,
     )
     db.add(test)
     db.flush()
-    update_next_test_date(db, db.query(ControlImplementation).filter(
-        ControlImplementation.id == impl_id).first())
+    # No test_date yet — set when finalized
+    test.test_date = None
     return test
 
 
@@ -429,30 +416,35 @@ def create_scheduled_test(db: Session, impl_id: int, test_type: str,
     return test
 
 
-def complete_scheduled_test(db: Session, test_id: int, result: str,
-                            procedure: str, findings: str, recommendations: str,
-                            test_period_start=None, test_period_end=None,
-                            sample_size: int | None = None, population_size: int | None = None,
-                            exceptions_count: int | None = None, exception_details: str | None = None,
-                            conclusion: str | None = None, finding_risk_rating: str | None = None) -> ControlTest | None:
-    """Complete a previously scheduled test."""
+def start_test(db: Session, test_id: int) -> ControlTest | None:
+    """Transition a SCHEDULED test to IN_PROGRESS — analyst begins working it."""
     test = db.query(ControlTest).filter(ControlTest.id == test_id).first()
-    if not test:
+    if not test or test.status != TEST_STATUS_SCHEDULED:
+        return None
+    test.status = TEST_STATUS_IN_PROGRESS
+    db.flush()
+    return test
+
+
+def save_test_progress(db: Session, test_id: int, **kwargs) -> ControlTest | None:
+    """Save work-in-progress on an IN_PROGRESS test without finalizing."""
+    test = db.query(ControlTest).filter(ControlTest.id == test_id).first()
+    if not test or test.status != TEST_STATUS_IN_PROGRESS:
+        return None
+    for k, v in kwargs.items():
+        if hasattr(test, k):
+            setattr(test, k, v)
+    db.flush()
+    return test
+
+
+def finalize_test(db: Session, test_id: int) -> ControlTest | None:
+    """Transition IN_PROGRESS → COMPLETED. Sets test_date, triggers next_test_date recalc."""
+    test = db.query(ControlTest).filter(ControlTest.id == test_id).first()
+    if not test or test.status != TEST_STATUS_IN_PROGRESS:
         return None
     test.status = TEST_STATUS_COMPLETED
     test.test_date = datetime.utcnow()
-    test.result = result
-    test.test_procedure = procedure
-    test.findings = findings
-    test.recommendations = recommendations
-    test.test_period_start = test_period_start
-    test.test_period_end = test_period_end
-    test.sample_size = sample_size
-    test.population_size = population_size
-    test.exceptions_count = exceptions_count
-    test.exception_details = exception_details
-    test.conclusion = conclusion
-    test.finding_risk_rating = finding_risk_rating
     db.flush()
     impl = db.query(ControlImplementation).filter(
         ControlImplementation.id == test.implementation_id
@@ -462,7 +454,7 @@ def complete_scheduled_test(db: Session, test_id: int, result: str,
 
 
 def get_scheduled_tests(db: Session):
-    """All scheduled (not yet completed) tests for org-level implementations, ordered by scheduled_date."""
+    """All scheduled (not yet started) tests for org-level implementations."""
     return db.query(ControlTest).options(
         joinedload(ControlTest.tester),
         joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
@@ -473,6 +465,21 @@ def get_scheduled_tests(db: Session):
         ControlTest.status == TEST_STATUS_SCHEDULED,
         ControlImplementation.vendor_id == None,
     ).order_by(ControlTest.scheduled_date.asc()).all()
+
+
+def get_in_progress_tests(db: Session):
+    """All in-progress tests for org-level implementations."""
+    return db.query(ControlTest).options(
+        joinedload(ControlTest.tester),
+        joinedload(ControlTest.evidence_files),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.owner),
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlTest.status == TEST_STATUS_IN_PROGRESS,
+        ControlImplementation.vendor_id == None,
+    ).order_by(ControlTest.created_at.desc()).all()
 
 
 def set_implementation_next_test_date(db: Session, impl_id: int, date: datetime | None):

@@ -106,7 +106,10 @@
                 <h6 class="mb-0">Test History</h6>
                 <div class="d-flex gap-2">
                     <a href="/controls/testing?schedule={{ impl.control.id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-calendar-plus me-1"></i>Schedule</a>
-                    <a href="/controls/implementations/{{ impl.id }}/tests/new" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Record Test</a>
+                    <form method="post" action="/controls/implementations/{{ impl.id }}/tests" class="d-inline">
+                        <input type="hidden" name="test_type" value="OPERATING">
+                        <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>New Test</button>
+                    </form>
                 </div>
             </div>
             {% if impl.tests %}
