@@ -3,18 +3,14 @@
 {% block title %}{% if vendor %}{{ vendor.name }} — Exceptions{% else %}Exceptions & Waivers{% endif %} - RiskQ{% endblock %}
 
 {% block breadcrumbs %}
-<nav aria-label="breadcrumb" class="mb-3">
-    <ol class="breadcrumb mb-0">
-        <li class="breadcrumb-item"><a href="/">Home</a></li>
-        {% if vendor %}
-        <li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
-        <li class="breadcrumb-item"><a href="/vendors/{{ vendor.id }}">{{ vendor.name }}</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Exceptions</li>
-        {% else %}
-        <li class="breadcrumb-item active" aria-current="page">Exceptions</li>
-        {% endif %}
-    </ol>
-</nav>
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+{% if vendor %}
+<li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ vendor.id }}">{{ vendor.name }}</a></li>
+<li class="breadcrumb-item active">Exceptions</li>
+{% else %}
+<li class="breadcrumb-item active">Exceptions</li>
+{% endif %}
 {% endblock %}
 
 {% block content %}

@@ -3,13 +3,9 @@
 {% block title %}{{ vendor.name }} - RiskQ{% endblock %}
 
 {% block breadcrumbs %}
-<nav aria-label="breadcrumb" class="mb-3">
-    <ol class="breadcrumb mb-0">
-        <li class="breadcrumb-item"><a href="/">Home</a></li>
-        <li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
-        <li class="breadcrumb-item active" aria-current="page">{{ vendor.name }}</li>
-    </ol>
-</nav>
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+<li class="breadcrumb-item active">{{ vendor.name }}</li>
 {% endblock %}
 
 {% block extra_head %}

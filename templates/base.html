@@ -90,6 +90,29 @@
             border-radius: 9999px;
             font-weight: 600;
         }
+        .breadcrumb {
+            background: none;
+            padding: 0;
+            margin-bottom: 0;
+            font-size: 0.85rem;
+        }
+        .breadcrumb-item + .breadcrumb-item::before {
+            content: "\203A";
+            font-size: 1.1rem;
+            line-height: 1;
+            color: #9ca3af;
+        }
+        .breadcrumb-item a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+        .breadcrumb-item a:hover {
+            color: #1d4ed8;
+            text-decoration: underline;
+        }
+        .breadcrumb-item.active {
+            color: #6b7280;
+        }
         .navbar .dropdown-menu {
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -278,7 +301,14 @@
 
     <main class="main-content">
         <div class="container">
-            {% block breadcrumbs %}{% endblock %}
+            {% set bc = self.breadcrumbs() %}
+            {% if bc and bc.strip() %}
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb">
+                    {% block breadcrumbs %}{% endblock %}
+                </ol>
+            </nav>
+            {% endif %}
             {% if message %}
             <div class="alert alert-{{ message_type|default('info') }} alert-dismissible fade show" role="alert">
                 {{ message }}

@@ -3,14 +3,10 @@
 {% block title %}Decision Summary - {{ vendor.name }}{% endblock %}
 
 {% block breadcrumbs %}
-<nav aria-label="breadcrumb" class="mb-3">
-    <ol class="breadcrumb mb-0">
-        <li class="breadcrumb-item"><a href="/">Home</a></li>
-        <li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
-        <li class="breadcrumb-item"><a href="/vendors/{{ vendor.id }}">{{ vendor.name }}</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Decision Summary</li>
-    </ol>
-</nav>
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ vendor.id }}">{{ vendor.name }}</a></li>
+<li class="breadcrumb-item active">Decision Summary</li>
 {% endblock %}
 
 {% block content %}
