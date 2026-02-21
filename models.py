@@ -2861,7 +2861,7 @@ ADOPTION_STATUS_COLORS = {
 }
 
 # Frameworks with seeded canonical requirements
-SEEDED_FRAMEWORKS = ["SOC_2", "ISO_27001", "NIST_CSF_2"]
+SEEDED_FRAMEWORKS = ["SOC_2", "ISO_27001", "NIST_CSF_2", "CMMC_2"]
 
 
 class FrameworkRequirement(Base):
