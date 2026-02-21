@@ -47,6 +47,19 @@
                             <label class="form-label">Procedure</label>
                             <textarea name="procedure" class="form-control" rows="3" placeholder="Step-by-step how the control operates...">{{ control.procedure if control and control.procedure else '' }}</textarea>
                         </div>
+                        <div class="col-12">
+                            <h6 class="text-muted mt-4 mb-3" style="font-size:0.8rem;">TEST TEMPLATES</h6>
+                            <div class="mb-3">
+                                <label class="form-label">Default Test Procedure</label>
+                                <textarea name="default_test_procedure" class="form-control" rows="3" placeholder="Standard test procedure that will pre-fill new test workpapers for this control...">{{ control.default_test_procedure or '' if control else '' }}</textarea>
+                                <div class="form-text">This text pre-fills the test procedure when creating a new test for this control.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Evidence Collection Instructions</label>
+                                <textarea name="evidence_instructions" class="form-control" rows="3" placeholder="Describe what evidence should be collected to validate this control...">{{ control.evidence_instructions or '' if control else '' }}</textarea>
+                                <div class="form-text">Instructions shown to testers when collecting evidence for this control.</div>
+                            </div>
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label">Domain <span class="text-danger">*</span></label>
                             <select name="domain" class="form-select" required>

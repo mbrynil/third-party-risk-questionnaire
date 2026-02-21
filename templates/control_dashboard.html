@@ -49,6 +49,22 @@
             <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Frameworks</small>
         </div>
     </div>
+    <div class="col">
+        <div class="card text-center h-100">
+            <div class="card-body py-3">
+                <div class="fs-2 fw-bold" style="color:{% if avg_health >= 80 %}#198754{% elif avg_health >= 60 %}#0dcaf0{% elif avg_health >= 40 %}#fd7e14{% else %}#dc3545{% endif %}">{{ avg_health }}</div>
+                <small class="text-muted">Avg Health Score</small>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card text-center h-100">
+            <div class="card-body py-3">
+                <div class="fs-2 fw-bold {% if open_findings_count > 0 %}text-danger{% else %}text-success{% endif %}">{{ open_findings_count }}</div>
+                <small class="text-muted">Open Findings</small>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row g-4">
@@ -113,6 +129,18 @@
     </div>
 </div>
 
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Control Health Distribution</h6></div>
+    <div class="card-body">
+        <div class="row g-3 text-center">
+            <div class="col-3"><div class="p-3 rounded" style="background:#19875420;"><div class="fs-4 fw-bold" style="color:#198754">{{ health_distribution.healthy }}</div><small>Healthy</small></div></div>
+            <div class="col-3"><div class="p-3 rounded" style="background:#0dcaf020;"><div class="fs-4 fw-bold" style="color:#0dcaf0">{{ health_distribution.adequate }}</div><small>Adequate</small></div></div>
+            <div class="col-3"><div class="p-3 rounded" style="background:#fd7e1420;"><div class="fs-4 fw-bold" style="color:#fd7e14">{{ health_distribution.at_risk }}</div><small>At Risk</small></div></div>
+            <div class="col-3"><div class="p-3 rounded" style="background:#dc354520;"><div class="fs-4 fw-bold" style="color:#dc3545">{{ health_distribution.critical }}</div><small>Critical</small></div></div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-4">
     {# Testing Status #}
     <div class="col-lg-4">
@@ -169,4 +197,115 @@
         </div>
     </div>
 </div>
+
+{# Action Items (Feature 8) #}
+{% if action_items %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-1"></i>Action Items <span class="badge bg-danger ms-1">{{ action_items|length }}</span></h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th style="width:30px;"></th><th>Item</th><th>Control</th><th>Owner</th><th>Due</th><th class="text-end">Link</th></tr></thead>
+            <tbody>
+                {% for item in action_items[:15] %}
+                <tr>
+                    <td>
+                        {% if item.priority == 1 %}<span class="badge bg-danger">!</span>
+                        {% elif item.priority == 2 %}<span class="badge bg-warning text-dark">!!</span>
+                        {% else %}<span class="badge bg-info">i</span>{% endif %}
+                    </td>
+                    <td>
+                        <small class="fw-semibold">{{ item.title }}</small><br>
+                        <small class="text-muted">{{ item.description }}</small>
+                    </td>
+                    <td><small>{{ item.control_ref }}</small></td>
+                    <td><small>{{ item.owner or '—' }}</small></td>
+                    <td><small>{{ item.due_date.strftime('%Y-%m-%d') if item.due_date else '—' }}</small></td>
+                    <td class="text-end"><a href="{{ item.url }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-right"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    {# Test Results Timeline Chart (Feature 9) #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-bar-chart me-1"></i>Test Results Timeline</h6></div>
+            <div class="card-body">
+                {% if test_timeline and test_timeline|length > 0 %}
+                <canvas id="testTimelineChart" height="250"></canvas>
+                {% else %}
+                <p class="text-muted mb-0">No test data available yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Portfolio Health Trend (Feature 11) #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-graph-up me-1"></i>Portfolio Health Trend</h6>
+                <form method="post" action="/controls/record-health-snapshots" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Record snapshots now"><i class="bi bi-camera"></i></button>
+                </form>
+            </div>
+            <div class="card-body">
+                {% if portfolio_trend and portfolio_trend|length > 0 %}
+                <canvas id="portfolioTrendChart" height="250"></canvas>
+                {% else %}
+                <p class="text-muted mb-0">No health snapshots recorded yet. Click the camera icon to record your first snapshot.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+{% if test_timeline and test_timeline|length > 0 %}
+const tl = {{ test_timeline|tojson }};
+new Chart(document.getElementById('testTimelineChart'), {
+    type: 'bar',
+    data: {
+        labels: tl.map(d => d.month),
+        datasets: [
+            { label: 'Pass', data: tl.map(d => d.pass_count), backgroundColor: '#198754' },
+            { label: 'Fail', data: tl.map(d => d.fail_count), backgroundColor: '#dc3545' },
+            { label: 'Partial', data: tl.map(d => d.partial_count), backgroundColor: '#fd7e14' },
+        ]
+    },
+    options: {
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        plugins: { legend: { position: 'bottom' } },
+    }
+});
+{% endif %}
+{% if portfolio_trend and portfolio_trend|length > 0 %}
+const pt = {{ portfolio_trend|tojson }};
+new Chart(document.getElementById('portfolioTrendChart'), {
+    type: 'line',
+    data: {
+        labels: pt.map(d => d.date),
+        datasets: [{
+            label: 'Avg Health Score',
+            data: pt.map(d => d.avg_score),
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37,99,235,0.1)',
+            fill: true,
+            tension: 0.3,
+        }]
+    },
+    options: {
+        scales: { y: { min: 0, max: 100 } },
+        plugins: { legend: { display: false } },
+    }
+});
+{% endif %}
+</script>
 {% endblock %}

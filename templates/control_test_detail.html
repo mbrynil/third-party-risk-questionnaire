@@ -46,16 +46,25 @@
     <div class="d-flex gap-2">
         {% if test.status == TEST_STATUS_COMPLETED %}
         <a href="/controls/tests/{{ test.id }}/export.pdf" class="btn btn-outline-primary"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</a>
+        <form method="post" action="/controls/tests/{{ test.id }}/roll-forward" class="d-inline">
+            <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat me-1"></i>Roll Forward</button>
+        </form>
         {% endif %}
         <a href="/controls/implementations/{{ test.implementation.id }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
     </div>
 </div>
 
-{# SoD Warning: tester == control owner #}
-{% if test.tester and test.implementation.control.owner and test.tester.id == test.implementation.control.owner.id %}
+{# SoD Warning Banners #}
+{% if sod_tester_is_owner %}
 <div class="alert alert-warning d-flex align-items-center mb-3">
     <i class="bi bi-exclamation-triangle me-2"></i>
-    <strong>Separation of Duties:</strong>&nbsp;The tester ({{ test.tester.display_name }}) is also the control owner.
+    SoD Warning: The tester is also the control owner. Consider assigning a different tester for independence.
+</div>
+{% endif %}
+{% if sod_reviewer_is_tester %}
+<div class="alert alert-warning d-flex align-items-center mb-3">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    SoD Warning: The reviewer is the same person as the tester. Consider having a different person review.
 </div>
 {% endif %}
 
@@ -64,6 +73,13 @@
 {# ============================================================ #}
 {# ===== EDITABLE WORKSPACE (IN_PROGRESS) ===== #}
 {# ============================================================ #}
+
+{% if test.is_roll_forward %}
+<div class="alert alert-info d-flex align-items-center mb-3">
+    <i class="bi bi-arrow-repeat me-2 fs-5"></i>
+    This is a roll-forward test, based on test <a href="/controls/tests/{{ test.parent_test_id }}">#{{ test.parent_test_id }}</a>. Prior workpaper has been pre-filled — review and update as needed.
+</div>
+{% endif %}
 
 <form method="post" action="/controls/tests/{{ test.id }}/save" enctype="multipart/form-data">
 <div class="row g-4">
@@ -215,6 +231,12 @@
             <div class="card-body {% if test.evidence_files %}pt-2{% endif %}">
                 <label class="form-label small text-muted">Attach additional evidence</label>
                 <input type="file" name="evidence_files" class="form-control form-control-sm" multiple>
+                {% if test.implementation.control.evidence_instructions %}
+                <div class="alert alert-light border mt-2">
+                    <strong><i class="bi bi-info-circle me-1"></i>Evidence Collection Guide:</strong>
+                    <p class="mb-0 mt-1"><small>{{ test.implementation.control.evidence_instructions }}</small></p>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -223,7 +245,7 @@
             <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Save Progress</button>
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#finalizeModal"><i class="bi bi-check-circle me-1"></i>Finalize Test</button>
         </div>
-    </div>
+    </div>{# /col-lg-8 #}
 
     {# ===== Sidebar ===== #}
     <div class="col-lg-4">
@@ -274,9 +296,129 @@
                 <p class="mb-0 mt-2 small text-muted">This test is <strong>in progress</strong>. Save your work as you go. When you're done, click <strong>Finalize Test</strong> to lock it down.</p>
             </div>
         </div>
+    </div>{# /col-lg-4 #}
+</div>{# /row #}
+</form>{# /main save form #}
+
+{# ===== Section 7: Findings (outside main form to avoid nested forms) ===== #}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3" id="findings">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">7</span>Findings <span class="badge bg-secondary ms-1">{{ test_findings|length if test_findings else 0 }}</span></h6>
+            </div>
+            <div class="card-body">
+                {% if test_findings %}
+                <div class="table-responsive mb-3">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Severity</th>
+                                <th>Condition</th>
+                                <th>Status</th>
+                                <th>Owner</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f in test_findings %}
+                            <tr>
+                                <td><span class="badge bg-info">{{ finding_type_labels.get(f.finding_type, f.finding_type) if finding_type_labels else f.finding_type }}</span></td>
+                                <td><span class="badge bg-warning text-dark">{{ f.severity }}</span></td>
+                                <td><small>{{ f.condition[:80] }}{% if f.condition|length > 80 %}...{% endif %}</small></td>
+                                <td><span class="badge" style="background-color:{{ finding_status_colors.get(f.status, '#6c757d') if finding_status_colors else '#6c757d' }};">{{ finding_status_labels.get(f.status, f.status) if finding_status_labels else f.status }}</span></td>
+                                <td><small>{{ f.owner.display_name if f.owner else '—' }}</small></td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Update</button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            {% for s in finding_statuses %}
+                                            {% if s != f.status %}
+                                            <li>
+                                                <form method="post" action="/controls/findings/{{ f.id }}/update" class="d-inline">
+                                                    <input type="hidden" name="status" value="{{ s }}">
+                                                    <button type="submit" class="dropdown-item">{{ finding_status_labels.get(s, s) if finding_status_labels else s }}</button>
+                                                </form>
+                                            </li>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </ul>
+                                        <form method="post" action="/controls/findings/{{ f.id }}/close" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Close this finding?')"><i class="bi bi-x-circle"></i></button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                <h6 class="mb-3"><i class="bi bi-plus-circle me-1"></i>Add Finding</h6>
+                <form method="post" action="/controls/tests/{{ test.id }}/findings">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small">Finding Type</label>
+                            <select name="finding_type" class="form-select form-select-sm" required>
+                                <option value="">-- Select --</option>
+                                {% for ft in finding_types %}
+                                <option value="{{ ft }}">{{ finding_type_labels.get(ft, ft) if finding_type_labels else ft }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Severity</label>
+                            <select name="severity" class="form-select form-select-sm" required>
+                                <option value="">-- Select --</option>
+                                {% for sev in severities %}
+                                <option value="{{ sev }}">{{ sev }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Criteria</label>
+                            <textarea name="criteria" class="form-control form-control-sm" rows="2" placeholder="What the control should do..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Condition</label>
+                            <textarea name="condition" class="form-control form-control-sm" rows="2" placeholder="What was actually observed..." required></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Cause</label>
+                            <textarea name="cause" class="form-control form-control-sm" rows="2" placeholder="Root cause of the finding..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Effect</label>
+                            <textarea name="effect" class="form-control form-control-sm" rows="2" placeholder="Impact or effect of the finding..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Recommendation</label>
+                            <textarea name="recommendation" class="form-control form-control-sm" rows="2" placeholder="Recommended remediation..."></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Owner</label>
+                            <select name="owner_id" class="form-select form-select-sm">
+                                <option value="">-- Select --</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}">{{ u.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">Due Date</label>
+                            <input type="date" name="due_date" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Add Finding</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
-</div>
-</form>
+</div>{# /findings row #}
 
 {# Finalize Confirmation Modal #}
 <div class="modal fade" id="finalizeModal" tabindex="-1">
@@ -318,6 +460,14 @@ toggleExceptionDetails();
 {# ============================================================ #}
 {# ===== READ-ONLY WORKPAPER (COMPLETED) ===== #}
 {# ============================================================ #}
+
+{# Roll-Forward Banner #}
+{% if test.is_roll_forward %}
+<div class="alert alert-info d-flex align-items-center mb-3">
+    <i class="bi bi-arrow-repeat me-2"></i>
+    This is a roll-forward test, based on test <a href="/controls/tests/{{ test.parent_test_id }}">#{{ test.parent_test_id }}</a>.
+</div>
+{% endif %}
 
 {# ===== Metadata Grid ===== #}
 <div class="card mb-4">
@@ -462,8 +612,140 @@ toggleExceptionDetails();
                     <input type="file" name="evidence_files" class="form-control form-control-sm" multiple>
                     <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i>Upload</button>
                 </form>
+                {% if test.implementation.control.evidence_instructions %}
+                <div class="alert alert-light border mt-2">
+                    <strong><i class="bi bi-info-circle me-1"></i>Evidence Collection Guide:</strong>
+                    <p class="mb-0 mt-1"><small>{{ test.implementation.control.evidence_instructions }}</small></p>
+                </div>
+                {% endif %}
             </div>
         </div>
+
+        {# ===== Findings Section ===== #}
+        <div class="card mb-3" id="findings">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-flag me-2"></i>Findings <span class="badge bg-secondary ms-1">{{ test_findings|length if test_findings else 0 }}</span></h6>
+            </div>
+            <div class="card-body">
+                {% if test_findings %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Severity</th>
+                                <th>Condition</th>
+                                <th>Status</th>
+                                <th>Owner</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f in test_findings %}
+                            <tr>
+                                <td><span class="badge bg-info">{{ finding_type_labels.get(f.finding_type, f.finding_type) if finding_type_labels else f.finding_type }}</span></td>
+                                <td><span class="badge bg-warning text-dark">{{ f.severity }}</span></td>
+                                <td><small>{{ f.condition[:80] }}{% if f.condition|length > 80 %}...{% endif %}</small></td>
+                                <td><span class="badge" style="background-color:{{ finding_status_colors.get(f.status, '#6c757d') if finding_status_colors else '#6c757d' }};">{{ finding_status_labels.get(f.status, f.status) if finding_status_labels else f.status }}</span></td>
+                                <td><small>{{ f.owner.display_name if f.owner else '—' }}</small></td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Update</button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            {% for s in finding_statuses %}
+                                            {% if s != f.status %}
+                                            <li>
+                                                <form method="post" action="/controls/findings/{{ f.id }}/update" class="d-inline">
+                                                    <input type="hidden" name="status" value="{{ s }}">
+                                                    <button type="submit" class="dropdown-item">{{ finding_status_labels.get(s, s) if finding_status_labels else s }}</button>
+                                                </form>
+                                            </li>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </ul>
+                                        <form method="post" action="/controls/findings/{{ f.id }}/close" class="d-inline">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Close this finding?')"><i class="bi bi-x-circle"></i></button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No findings recorded.</p>
+                {% endif %}
+
+                <hr class="my-3">
+                <p class="mb-2">
+                    <a class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" href="#addFindingCollapse" role="button" aria-expanded="false" aria-controls="addFindingCollapse">
+                        <i class="bi bi-plus-circle me-1"></i>Add Finding
+                    </a>
+                </p>
+                <div class="collapse" id="addFindingCollapse">
+                    <form method="post" action="/controls/tests/{{ test.id }}/findings">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small">Finding Type</label>
+                                <select name="finding_type" class="form-select form-select-sm" required>
+                                    <option value="">-- Select --</option>
+                                    {% for ft in finding_types %}
+                                    <option value="{{ ft }}">{{ finding_type_labels.get(ft, ft) if finding_type_labels else ft }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">Severity</label>
+                                <select name="severity" class="form-select form-select-sm" required>
+                                    <option value="">-- Select --</option>
+                                    {% for sev in severities %}
+                                    <option value="{{ sev }}">{{ sev }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">Criteria</label>
+                                <textarea name="criteria" class="form-control form-control-sm" rows="2" placeholder="What the control should do..."></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">Condition</label>
+                                <textarea name="condition" class="form-control form-control-sm" rows="2" placeholder="What was actually observed..." required></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">Cause</label>
+                                <textarea name="cause" class="form-control form-control-sm" rows="2" placeholder="Root cause of the finding..."></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">Effect</label>
+                                <textarea name="effect" class="form-control form-control-sm" rows="2" placeholder="Impact or effect of the finding..."></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small">Recommendation</label>
+                                <textarea name="recommendation" class="form-control form-control-sm" rows="2" placeholder="Recommended remediation..."></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">Owner</label>
+                                <select name="owner_id" class="form-select form-select-sm">
+                                    <option value="">-- Select --</option>
+                                    {% for u in users %}
+                                    <option value="{{ u.id }}">{{ u.display_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">Due Date</label>
+                                <input type="date" name="due_date" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus-circle me-1"></i>Add Finding</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     {# ===== Sidebar ===== #}

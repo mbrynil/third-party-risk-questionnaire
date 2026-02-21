@@ -8,11 +8,12 @@ from sqlalchemy import func
 
 from models import (
     Control, ControlFrameworkMapping, ControlQuestionMapping, ControlRiskMapping,
-    ControlImplementation, ControlTest, ControlEvidence,
+    ControlImplementation, ControlTest, ControlEvidence, ControlFinding,
     IMPL_STATUS_NOT_IMPLEMENTED, IMPL_STATUS_IMPLEMENTED,
     CONTROL_FREQUENCY_DAYS,
     TEST_STATUS_SCHEDULED, TEST_STATUS_IN_PROGRESS, TEST_STATUS_COMPLETED,
     TEST_RESULT_NOT_TESTED,
+    FINDING_STATUS_OPEN, FINDING_STATUS_CLOSED,
 )
 
 
@@ -539,3 +540,211 @@ def delete_evidence(db: Session, evidence_id: int) -> bool:
         os.remove(ev.stored_path)
     db.delete(ev)
     return True
+
+
+# ==================== CONTROL FINDINGS ====================
+
+def create_finding(db: Session, test_id: int, finding_type: str, severity: str,
+                   criteria: str = None, condition: str = None, cause: str = None,
+                   effect: str = None, recommendation: str = None,
+                   owner_user_id: int = None, due_date=None) -> ControlFinding:
+    """Create a new finding linked to a control test."""
+    finding = ControlFinding(
+        control_test_id=test_id,
+        finding_type=finding_type,
+        severity=severity,
+        status=FINDING_STATUS_OPEN,
+        criteria=criteria,
+        condition=condition,
+        cause=cause,
+        effect=effect,
+        recommendation=recommendation,
+        owner_user_id=owner_user_id,
+        due_date=due_date,
+    )
+    db.add(finding)
+    db.flush()
+    return finding
+
+
+def update_finding(db: Session, finding_id: int, **kwargs) -> ControlFinding | None:
+    """Update a finding's fields."""
+    finding = db.query(ControlFinding).filter(ControlFinding.id == finding_id).first()
+    if not finding:
+        return None
+    for k, v in kwargs.items():
+        if hasattr(finding, k):
+            setattr(finding, k, v)
+    db.flush()
+    return finding
+
+
+def close_finding(db: Session, finding_id: int) -> ControlFinding | None:
+    """Close a finding — sets status to CLOSED and records closed_date."""
+    finding = db.query(ControlFinding).filter(ControlFinding.id == finding_id).first()
+    if not finding:
+        return None
+    finding.status = FINDING_STATUS_CLOSED
+    finding.closed_date = datetime.utcnow()
+    db.flush()
+    return finding
+
+
+def get_finding(db: Session, finding_id: int) -> ControlFinding | None:
+    """Get a single finding by ID with related objects."""
+    return db.query(ControlFinding).options(
+        joinedload(ControlFinding.test).joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+        joinedload(ControlFinding.owner),
+        joinedload(ControlFinding.remediation_item),
+    ).filter(ControlFinding.id == finding_id).first()
+
+
+def get_test_findings(db: Session, test_id: int) -> list:
+    """Get all findings for a specific test."""
+    return db.query(ControlFinding).options(
+        joinedload(ControlFinding.owner),
+        joinedload(ControlFinding.remediation_item),
+    ).filter(
+        ControlFinding.control_test_id == test_id
+    ).order_by(ControlFinding.created_at.desc()).all()
+
+
+def get_open_findings(db: Session) -> list:
+    """Get all open/in-progress findings for org-level implementations."""
+    from models import FINDING_STATUS_IN_PROGRESS
+    return db.query(ControlFinding).options(
+        joinedload(ControlFinding.test).joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+        joinedload(ControlFinding.owner),
+        joinedload(ControlFinding.remediation_item),
+    ).join(
+        ControlTest, ControlFinding.control_test_id == ControlTest.id
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlImplementation.vendor_id == None,
+        ControlFinding.status.in_([FINDING_STATUS_OPEN, FINDING_STATUS_IN_PROGRESS]),
+    ).order_by(ControlFinding.created_at.desc()).all()
+
+
+# ==================== ROLL-FORWARD TESTING ====================
+
+def roll_forward_test(db: Session, source_test_id: int, tester_id: int) -> ControlTest:
+    """Clone a completed test as a roll-forward — copies procedure, scope, and metadata
+    from the source test. Sets is_roll_forward=True and parent_test_id=source.
+    Returns the new test in IN_PROGRESS status.
+    """
+    source = db.query(ControlTest).filter(ControlTest.id == source_test_id).first()
+    if not source:
+        raise ValueError(f"Source test {source_test_id} not found")
+
+    new_test = ControlTest(
+        implementation_id=source.implementation_id,
+        test_type=source.test_type,
+        test_procedure=source.test_procedure,
+        tester_user_id=tester_id,
+        status=TEST_STATUS_IN_PROGRESS,
+        result=TEST_RESULT_NOT_TESTED,
+        test_period_start=source.test_period_start,
+        test_period_end=source.test_period_end,
+        sample_size=source.sample_size,
+        population_size=source.population_size,
+        is_roll_forward=True,
+        parent_test_id=source.id,
+    )
+    db.add(new_test)
+    db.flush()
+    # No test_date yet — set when finalized
+    new_test.test_date = None
+    return new_test
+
+
+# ==================== EVIDENCE LINKING (Feature 7) ====================
+
+def link_evidence_to_implementation(db: Session, evidence_id: int, impl_id: int) -> ControlEvidence | None:
+    """Link an existing evidence file directly to an implementation (decoupled from test)."""
+    ev = db.query(ControlEvidence).filter(ControlEvidence.id == evidence_id).first()
+    if not ev:
+        return None
+    ev.implementation_id = impl_id
+    db.flush()
+    return ev
+
+
+def get_implementation_evidence(db: Session, impl_id: int) -> list:
+    """Get evidence files directly linked to an implementation (not via test)."""
+    return db.query(ControlEvidence).filter(
+        ControlEvidence.implementation_id == impl_id
+    ).order_by(ControlEvidence.uploaded_at.desc()).all()
+
+
+def update_evidence_framework_tags(db: Session, evidence_id: int, tags_json: str) -> ControlEvidence | None:
+    """Update the framework_tags JSON on an evidence file."""
+    ev = db.query(ControlEvidence).filter(ControlEvidence.id == evidence_id).first()
+    if not ev:
+        return None
+    ev.framework_tags = tags_json
+    db.flush()
+    return ev
+
+
+async def store_implementation_evidence(file, impl_id: int) -> ControlEvidence:
+    """Upload evidence directly to an implementation (not tied to a specific test)."""
+    upload_dir = os.path.join(EVIDENCE_UPLOAD_DIR, f"impl_{impl_id}")
+    os.makedirs(upload_dir, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1] if file.filename else ""
+    stored_name = f"{uuid.uuid4().hex}{ext}"
+    stored_path = os.path.join(upload_dir, stored_name)
+    content = await file.read()
+    with open(stored_path, "wb") as f:
+        f.write(content)
+    return ControlEvidence(
+        implementation_id=impl_id,
+        original_filename=file.filename or "unknown",
+        stored_filename=stored_name,
+        stored_path=stored_path,
+        content_type=file.content_type,
+        size_bytes=len(content),
+    )
+
+
+# ==================== TEST RESULTS TIMELINE (Feature 9) ====================
+
+def get_test_results_timeline(db: Session, months: int = 12) -> list:
+    """Monthly aggregation of test results for org-level implementations.
+    Returns list of dicts: [{month: 'YYYY-MM', pass_count, fail_count, partial_count, total}]
+    """
+    from sqlalchemy import func as sa_func, extract, case
+    from models import TEST_RESULT_PASS, TEST_RESULT_FAIL, TEST_RESULT_PARTIAL
+
+    now = datetime.utcnow()
+    start = datetime(now.year, now.month, 1) - timedelta(days=30 * (months - 1))
+
+    rows = db.query(
+        sa_func.strftime('%Y-%m', ControlTest.test_date).label('month'),
+        sa_func.sum(case((ControlTest.result == TEST_RESULT_PASS, 1), else_=0)).label('pass_count'),
+        sa_func.sum(case((ControlTest.result == TEST_RESULT_FAIL, 1), else_=0)).label('fail_count'),
+        sa_func.sum(case((ControlTest.result == TEST_RESULT_PARTIAL, 1), else_=0)).label('partial_count'),
+        sa_func.count(ControlTest.id).label('total'),
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlTest.status == TEST_STATUS_COMPLETED,
+        ControlTest.test_date != None,
+        ControlTest.test_date >= start,
+        ControlImplementation.vendor_id == None,
+    ).group_by(
+        sa_func.strftime('%Y-%m', ControlTest.test_date)
+    ).order_by(
+        sa_func.strftime('%Y-%m', ControlTest.test_date)
+    ).all()
+
+    return [
+        {
+            "month": r.month,
+            "pass_count": r.pass_count or 0,
+            "fail_count": r.fail_count or 0,
+            "partial_count": r.partial_count or 0,
+            "total": r.total or 0,
+        }
+        for r in rows
+    ]

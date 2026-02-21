@@ -8,7 +8,8 @@ from datetime import datetime
 
 from app import templates
 from models import (
-    get_db, User, Vendor, Control, ControlImplementation, QuestionBankItem, RiskStatement,
+    get_db, User, Vendor, Control, ControlImplementation, ControlFinding,
+    QuestionBankItem, RiskStatement,
     AVAILABLE_FRAMEWORKS, FRAMEWORK_DISPLAY, VALID_CONTROL_DOMAINS,
     VALID_CONTROL_TYPES, CONTROL_TYPE_LABELS,
     VALID_CONTROL_IMPL_TYPES, CONTROL_IMPL_TYPE_LABELS,
@@ -22,6 +23,12 @@ from models import (
     TEST_STATUS_LABELS, TEST_STATUS_COLORS,
     IMPL_STATUS_IMPLEMENTED,
     VALID_FINDING_RISK_RATINGS, FINDING_RISK_LABELS, FINDING_RISK_COLORS,
+    VALID_FINDING_TYPES, FINDING_TYPE_LABELS,
+    VALID_FINDING_STATUSES, FINDING_STATUS_LABELS, FINDING_STATUS_COLORS,
+    FINDING_STATUS_OPEN,
+    VALID_SEVERITIES,
+    VALID_ATTESTATION_STATUSES, ATTESTATION_STATUS_LABELS, ATTESTATION_STATUS_COLORS,
+    ATTESTATION_STATUS_PENDING,
     AUDIT_ACTION_CREATE, AUDIT_ACTION_UPDATE, AUDIT_ACTION_DELETE,
     AUDIT_ENTITY_CONTROL, AUDIT_ENTITY_CONTROL_IMPL,
 )
@@ -30,6 +37,10 @@ from app.services.audit_service import log_audit
 from app.services import control_service as svc
 from app.services import control_dashboard_service as dash_svc
 from app.services.export_service import generate_control_test_pdf
+from app.services.health_score_service import compute_health_score, compute_readiness, compute_health_scores_bulk
+from app.services.health_score_service import record_health_snapshot, record_all_health_snapshots, get_health_trend, get_portfolio_health_trend
+from app.services import attestation_service as att_svc
+from app.services import control_notification_service as notif_svc
 
 router = APIRouter()
 _analyst_dep = require_role("admin", "analyst")
@@ -113,6 +124,8 @@ async def control_create(
     procedure: str = Form(""),
     operation_frequency: str = Form(""),
     owner_user_id: str = Form(""),
+    default_test_procedure: str = Form(""),
+    evidence_instructions: str = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
@@ -131,6 +144,8 @@ async def control_create(
         procedure=procedure.strip() or None,
         operation_frequency=operation_frequency.strip() or None,
         owner_user_id=int(owner_user_id) if owner_user_id.strip() else None,
+        default_test_procedure=default_test_procedure.strip() or None,
+        evidence_instructions=evidence_instructions.strip() or None,
     )
 
     form = await request.form()
@@ -180,9 +195,44 @@ async def control_quick_add(
 @router.get("/controls/dashboard", response_class=HTMLResponse)
 async def control_dashboard(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     data = dash_svc.get_control_dashboard_data(db)
+
+    # Health scores for all org-level implementations
+    from models import ControlImplementation as CI
+    org_impls = db.query(CI).filter(CI.vendor_id == None).all()
+    health_scores = compute_health_scores_bulk(db, org_impls) if org_impls else {}
+    avg_health = round(sum(h["score"] for h in health_scores.values()) / len(health_scores)) if health_scores else 0
+    health_distribution = {"healthy": 0, "adequate": 0, "at_risk": 0, "critical": 0}
+    for h in health_scores.values():
+        if h["score"] >= 80:
+            health_distribution["healthy"] += 1
+        elif h["score"] >= 60:
+            health_distribution["adequate"] += 1
+        elif h["score"] >= 40:
+            health_distribution["at_risk"] += 1
+        else:
+            health_distribution["critical"] += 1
+
+    # Open findings count
+    open_findings = svc.get_open_findings(db)
+
+    # Action items (Feature 8)
+    action_items = notif_svc.get_control_action_items(db)
+
+    # Test results timeline (Feature 9)
+    test_timeline = svc.get_test_results_timeline(db)
+
+    # Portfolio health trend (Feature 11)
+    portfolio_trend = get_portfolio_health_trend(db)
+
     return templates.TemplateResponse("control_dashboard.html", {
         "request": request,
         "data": data,
+        "avg_health": avg_health,
+        "health_distribution": health_distribution,
+        "open_findings_count": len(open_findings),
+        "action_items": action_items,
+        "test_timeline": test_timeline,
+        "portfolio_trend": portfolio_trend,
         "framework_display": FRAMEWORK_DISPLAY,
         "test_result_labels": TEST_RESULT_LABELS,
         "test_result_colors": TEST_RESULT_COLORS,
@@ -484,6 +534,10 @@ async def control_test_finalize(
 
     svc.finalize_test(db, test_id)
 
+    # Record health snapshot on test finalization (Feature 11)
+    if test.implementation:
+        record_health_snapshot(db, test.implementation)
+
     log_audit(db, AUDIT_ACTION_UPDATE, "control_test",
               entity_id=test.id,
               entity_label=f"Finalized test for {test.implementation.control.control_ref}",
@@ -564,6 +618,9 @@ async def control_detail(request: Request, control_id: int, db: Session = Depend
 
     last_tested_date = svc.get_last_tested_date(db, control_id)
 
+    # Health scores for org implementations
+    health_scores = compute_health_scores_bulk(db, impls) if impls else {}
+
     return templates.TemplateResponse("control_detail.html", {
         "request": request,
         "control": ctrl,
@@ -571,6 +628,7 @@ async def control_detail(request: Request, control_id: int, db: Session = Depend
         "last_tested_date": last_tested_date,
         "has_org_impl": has_org_impl,
         "users": users,
+        "health_scores": health_scores,
         "framework_display": FRAMEWORK_DISPLAY,
         "control_type_labels": CONTROL_TYPE_LABELS,
         "impl_type_labels": CONTROL_IMPL_TYPE_LABELS,
@@ -611,6 +669,8 @@ async def control_update(
     procedure: str = Form(""),
     operation_frequency: str = Form(""),
     owner_user_id: str = Form(""),
+    default_test_procedure: str = Form(""),
+    evidence_instructions: str = Form(""),
     is_active: str = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
@@ -624,6 +684,8 @@ async def control_update(
         procedure=procedure.strip() or None,
         operation_frequency=operation_frequency.strip() or None,
         owner_user_id=int(owner_user_id) if owner_user_id.strip() else None,
+        default_test_procedure=default_test_procedure.strip() or None,
+        evidence_instructions=evidence_instructions.strip() or None,
         is_active=is_active == "on",
     )
     if not ctrl:
@@ -805,10 +867,32 @@ async def control_impl_detail(
 
     users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
 
+    # Health score
+    health = compute_health_score(db, impl)
+    readiness = compute_readiness(db, impl)
+
+    # Attestation (Feature 6)
+    attestations = att_svc.get_implementation_attestations(db, impl_id)
+    latest_attestation = attestations[0] if attestations else None
+
+    # Implementation-level evidence (Feature 7)
+    impl_evidence = svc.get_implementation_evidence(db, impl_id)
+
+    # Health trend (Feature 11)
+    health_trend = get_health_trend(db, impl_id)
+
     return templates.TemplateResponse("control_impl_detail.html", {
         "request": request,
         "impl": impl,
         "users": users,
+        "health": health,
+        "readiness": readiness,
+        "attestations": attestations,
+        "latest_attestation": latest_attestation,
+        "attestation_status_labels": ATTESTATION_STATUS_LABELS,
+        "attestation_status_colors": ATTESTATION_STATUS_COLORS,
+        "impl_evidence": impl_evidence,
+        "health_trend": health_trend,
         "impl_statuses": VALID_IMPL_STATUSES,
         "impl_status_labels": IMPL_STATUS_LABELS,
         "impl_status_colors": IMPL_STATUS_COLORS,
@@ -915,6 +999,13 @@ async def control_test_create(
 
     test = svc.create_test(db, impl_id, test_type, current_user.id)
 
+    # Pre-fill from control templates (Feature 4)
+    prefill = {}
+    if impl.control.default_test_procedure:
+        prefill["test_procedure"] = impl.control.default_test_procedure
+    if prefill:
+        svc.save_test_progress(db, test.id, **prefill)
+
     log_audit(db, AUDIT_ACTION_CREATE, "control_test",
               entity_id=test.id,
               entity_label=f"Test for {impl.control.control_ref}",
@@ -936,11 +1027,27 @@ async def control_test_detail(request: Request, test_id: int, db: Session = Depe
 
     users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
 
+    # Findings for this test
+    test_findings = svc.get_test_findings(db, test_id)
+
+    # SoD checks
+    sod_tester_is_owner = (
+        test.tester_user_id and test.implementation.control.owner_user_id
+        and test.tester_user_id == test.implementation.control.owner_user_id
+    )
+    sod_reviewer_is_tester = (
+        test.reviewer_user_id and test.tester_user_id
+        and test.reviewer_user_id == test.tester_user_id
+    )
+
     return templates.TemplateResponse("control_test_detail.html", {
         "request": request,
         "test": test,
         "current_user": current_user,
         "users": users,
+        "test_findings": test_findings,
+        "sod_tester_is_owner": sod_tester_is_owner,
+        "sod_reviewer_is_tester": sod_reviewer_is_tester,
         "test_types": VALID_TEST_TYPES,
         "test_type_labels": TEST_TYPE_LABELS,
         "test_results": VALID_TEST_RESULTS,
@@ -949,6 +1056,12 @@ async def control_test_detail(request: Request, test_id: int, db: Session = Depe
         "finding_risk_ratings": VALID_FINDING_RISK_RATINGS,
         "finding_risk_labels": FINDING_RISK_LABELS,
         "finding_risk_colors": FINDING_RISK_COLORS,
+        "finding_types": VALID_FINDING_TYPES,
+        "finding_type_labels": FINDING_TYPE_LABELS,
+        "finding_statuses": VALID_FINDING_STATUSES,
+        "finding_status_labels": FINDING_STATUS_LABELS,
+        "finding_status_colors": FINDING_STATUS_COLORS,
+        "severities": VALID_SEVERITIES,
         "test_status_labels": TEST_STATUS_LABELS,
         "test_status_colors": TEST_STATUS_COLORS,
         "framework_display": FRAMEWORK_DISPLAY,
@@ -1071,6 +1184,312 @@ async def control_evidence_delete(evidence_id: int, db: Session = Depends(get_db
         url=f"/controls/tests/{test_id}?message={quote('Evidence deleted')}&message_type=success",
         status_code=303,
     )
+
+
+# ==================== FINDINGS ====================
+
+@router.post("/controls/tests/{test_id}/findings", response_class=HTMLResponse)
+async def control_test_add_finding(
+    request: Request,
+    test_id: int,
+    finding_type: str = Form("OPERATING_DEFICIENCY"),
+    severity: str = Form("MEDIUM"),
+    criteria: str = Form(""),
+    condition: str = Form(""),
+    cause: str = Form(""),
+    effect: str = Form(""),
+    recommendation: str = Form(""),
+    owner_user_id: str = Form(""),
+    due_date: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    test = svc.get_test(db, test_id)
+    if not test:
+        raise HTTPException(status_code=404, detail="Test not found")
+
+    dd = datetime.strptime(due_date.strip(), "%Y-%m-%d") if due_date.strip() else None
+    oid = int(owner_user_id) if owner_user_id.strip() else None
+
+    finding = svc.create_finding(
+        db, test_id, finding_type, severity,
+        criteria=criteria.strip() or None,
+        condition=condition.strip() or None,
+        cause=cause.strip() or None,
+        effect=effect.strip() or None,
+        recommendation=recommendation.strip() or None,
+        owner_user_id=oid, due_date=dd,
+    )
+
+    log_audit(db, AUDIT_ACTION_CREATE, "control_finding",
+              entity_id=finding.id,
+              entity_label=f"Finding for {test.implementation.control.control_ref}",
+              description=f"Created {finding_type} finding: {severity}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/tests/{test_id}?message={quote('Finding added')}&message_type=success#findings",
+        status_code=303,
+    )
+
+
+@router.post("/controls/findings/{finding_id}/update", response_class=HTMLResponse)
+async def control_finding_update(
+    finding_id: int,
+    status: str = Form(""),
+    severity: str = Form(""),
+    owner_user_id: str = Form(""),
+    due_date: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    finding = svc.get_finding(db, finding_id)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    kwargs = {}
+    if status.strip():
+        kwargs["status"] = status.strip()
+    if severity.strip():
+        kwargs["severity"] = severity.strip()
+    if owner_user_id.strip():
+        kwargs["owner_user_id"] = int(owner_user_id)
+    elif owner_user_id == "":
+        kwargs["owner_user_id"] = None
+    if due_date.strip():
+        kwargs["due_date"] = datetime.strptime(due_date.strip(), "%Y-%m-%d")
+
+    svc.update_finding(db, finding_id, **kwargs)
+
+    log_audit(db, AUDIT_ACTION_UPDATE, "control_finding",
+              entity_id=finding_id,
+              description=f"Updated finding: {kwargs}",
+              actor_user=current_user)
+    db.commit()
+
+    test_id = finding.control_test_id
+    return RedirectResponse(
+        url=f"/controls/tests/{test_id}?message={quote('Finding updated')}&message_type=success#findings",
+        status_code=303,
+    )
+
+
+@router.post("/controls/findings/{finding_id}/close", response_class=HTMLResponse)
+async def control_finding_close(
+    finding_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    finding = svc.get_finding(db, finding_id)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    svc.close_finding(db, finding_id)
+
+    log_audit(db, AUDIT_ACTION_UPDATE, "control_finding",
+              entity_id=finding_id,
+              description=f"Closed finding",
+              actor_user=current_user)
+    db.commit()
+
+    test_id = finding.control_test_id
+    return RedirectResponse(
+        url=f"/controls/tests/{test_id}?message={quote('Finding closed')}&message_type=success#findings",
+        status_code=303,
+    )
+
+
+# ==================== ROLL-FORWARD ====================
+
+@router.post("/controls/tests/{test_id}/roll-forward", response_class=HTMLResponse)
+async def control_test_roll_forward(
+    test_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Clone a completed test as a roll-forward for the next testing period."""
+    source = svc.get_test(db, test_id)
+    if not source or source.status != TEST_STATUS_COMPLETED:
+        raise HTTPException(status_code=404, detail="Completed test not found")
+
+    new_test = svc.roll_forward_test(db, test_id, current_user.id)
+
+    log_audit(db, AUDIT_ACTION_CREATE, "control_test",
+              entity_id=new_test.id,
+              entity_label=f"Roll-forward test for {source.implementation.control.control_ref}",
+              description=f"Rolled forward from test #{test_id}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/tests/{new_test.id}?message={quote('Roll-forward test created from previous workpaper')}&message_type=success",
+        status_code=303,
+    )
+
+
+# ==================== ATTESTATIONS (Feature 6) ====================
+
+@router.post("/controls/implementations/{impl_id}/attestations", response_class=HTMLResponse)
+async def control_attestation_request(
+    impl_id: int,
+    attestor_user_id: str = Form(""),
+    due_date: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Request an attestation from a control owner."""
+    impl = svc.get_implementation(db, impl_id)
+    if not impl:
+        raise HTTPException(status_code=404, detail="Implementation not found")
+
+    att_user_id = int(attestor_user_id) if attestor_user_id.strip() else (impl.owner_user_id or current_user.id)
+    dd = datetime.strptime(due_date.strip(), "%Y-%m-%d") if due_date.strip() else None
+
+    att = att_svc.request_attestation(db, impl_id, att_user_id, dd)
+
+    log_audit(db, AUDIT_ACTION_CREATE, "control_attestation",
+              entity_id=att.id,
+              entity_label=f"Attestation for {impl.control.control_ref}",
+              description=f"Requested attestation from user {att_user_id}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/implementations/{impl_id}?message={quote('Attestation requested')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/attestations/{attestation_id}/submit", response_class=HTMLResponse)
+async def control_attestation_submit(
+    attestation_id: int,
+    is_effective: str = Form(""),
+    notes: str = Form(""),
+    evidence_notes: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    """Submit an attestation response."""
+    att = att_svc.get_attestation(db, attestation_id)
+    if not att:
+        raise HTTPException(status_code=404, detail="Attestation not found")
+
+    effective = is_effective.lower() in ("true", "yes", "1", "on")
+    att_svc.submit_attestation(db, attestation_id, effective, notes.strip(), evidence_notes.strip())
+
+    log_audit(db, AUDIT_ACTION_UPDATE, "control_attestation",
+              entity_id=attestation_id,
+              entity_label=f"Attestation for {att.implementation.control.control_ref}",
+              description=f"Attestation submitted: {'Effective' if effective else 'Not Effective'}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/implementations/{att.implementation_id}?message={quote('Attestation submitted')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/attestations/{attestation_id}/reject", response_class=HTMLResponse)
+async def control_attestation_reject(
+    attestation_id: int,
+    notes: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    """Reject/decline an attestation."""
+    att = att_svc.get_attestation(db, attestation_id)
+    if not att:
+        raise HTTPException(status_code=404, detail="Attestation not found")
+
+    att_svc.reject_attestation(db, attestation_id, notes.strip())
+
+    log_audit(db, AUDIT_ACTION_UPDATE, "control_attestation",
+              entity_id=attestation_id,
+              entity_label=f"Attestation for {att.implementation.control.control_ref}",
+              description=f"Attestation rejected",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/implementations/{att.implementation_id}?message={quote('Attestation declined')}&message_type=warning",
+        status_code=303,
+    )
+
+
+# ==================== IMPLEMENTATION EVIDENCE (Feature 7) ====================
+
+@router.post("/controls/implementations/{impl_id}/evidence", response_class=HTMLResponse)
+async def control_impl_upload_evidence(
+    request: Request,
+    impl_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Upload evidence directly to an implementation (not tied to a test)."""
+    impl = svc.get_implementation(db, impl_id)
+    if not impl:
+        raise HTTPException(status_code=404, detail="Implementation not found")
+
+    form = await request.form()
+    files = form.getlist("evidence_files")
+    count = 0
+    for f in files:
+        if hasattr(f, 'filename') and f.filename:
+            ev = await svc.store_implementation_evidence(f, impl_id)
+            ev.implementation_id = impl_id
+            db.add(ev)
+            count += 1
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/implementations/{impl_id}?message={quote(f'Uploaded {count} evidence file(s)')}&message_type=success",
+        status_code=303,
+    )
+
+
+# ==================== HEALTH SNAPSHOTS (Feature 11) ====================
+
+@router.post("/controls/record-health-snapshots", response_class=HTMLResponse)
+async def control_record_health_snapshots(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Record health snapshots for all org-level implementations (manual trigger)."""
+    count = record_all_health_snapshots(db)
+    db.commit()
+    return RedirectResponse(
+        url=f"/controls/dashboard?message={quote(f'Recorded {count} health snapshots')}&message_type=success",
+        status_code=303,
+    )
+
+
+# ==================== API ENDPOINTS (Features 9, 11) ====================
+
+@router.get("/api/controls/test-timeline")
+async def api_test_timeline(
+    months: int = 12,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    """JSON API: monthly test results for Chart.js."""
+    data = svc.get_test_results_timeline(db, months)
+    return data
+
+
+@router.get("/api/controls/health-trend")
+async def api_health_trend(
+    impl_id: int = 0,
+    months: int = 12,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    """JSON API: health score trend for Chart.js."""
+    if impl_id:
+        return get_health_trend(db, impl_id, months)
+    else:
+        return get_portfolio_health_trend(db, months)
 
 
 # ==================== GAP ANALYSIS (per-vendor) ====================

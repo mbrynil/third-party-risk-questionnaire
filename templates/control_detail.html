@@ -145,7 +145,7 @@
     {% if implementations %}
     <div class="table-responsive">
         <table class="table table-hover mb-0">
-            <thead><tr><th>Status</th><th>Effectiveness</th><th>Owner</th><th>Implemented Date</th><th>Next Test Due</th><th class="text-end">Actions</th></tr></thead>
+            <thead><tr><th>Status</th><th>Effectiveness</th><th>Owner</th><th>Implemented Date</th><th>Next Test Due</th><th>Health</th><th class="text-end">Actions</th></tr></thead>
             <tbody>
                 {% for impl in implementations %}
                 <tr>
@@ -154,6 +154,14 @@
                     <td>{% if impl.owner %}<small>{{ impl.owner.display_name }}</small>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
                     <td>{{ impl.implemented_date.strftime('%Y-%m-%d') if impl.implemented_date else '—' }}</td>
                     <td>{{ impl.next_test_date.strftime('%Y-%m-%d') if impl.next_test_date else '—' }}</td>
+                    <td>
+                        {% set h = health_scores.get(impl.id, {}) %}
+                        {% if h %}
+                        <span class="badge" style="background-color:{{ h.health_color }}">{{ h.score }} — {{ h.health_label }}</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
                     <td class="text-end">
                         <a href="/controls/implementations/{{ impl.id }}" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                         {% if impl.status == IMPL_STATUS_IMPLEMENTED %}

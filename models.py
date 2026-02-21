@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Boolean, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -2084,6 +2084,20 @@ FINDING_RISK_COLORS = {
     FINDING_RISK_CRITICAL: "#dc3545",
 }
 
+# Control finding type/status constants (for ControlFinding model)
+FINDING_TYPE_DESIGN = "DESIGN_DEFICIENCY"
+FINDING_TYPE_OPERATING = "OPERATING_DEFICIENCY"
+VALID_FINDING_TYPES = [FINDING_TYPE_DESIGN, FINDING_TYPE_OPERATING]
+FINDING_TYPE_LABELS = {FINDING_TYPE_DESIGN: "Design Deficiency", FINDING_TYPE_OPERATING: "Operating Deficiency"}
+
+FINDING_STATUS_OPEN = "OPEN"
+FINDING_STATUS_IN_PROGRESS = "IN_PROGRESS"
+FINDING_STATUS_REMEDIATED = "REMEDIATED"
+FINDING_STATUS_CLOSED = "CLOSED"
+VALID_FINDING_STATUSES = [FINDING_STATUS_OPEN, FINDING_STATUS_IN_PROGRESS, FINDING_STATUS_REMEDIATED, FINDING_STATUS_CLOSED]
+FINDING_STATUS_LABELS = {FINDING_STATUS_OPEN: "Open", FINDING_STATUS_IN_PROGRESS: "In Progress", FINDING_STATUS_REMEDIATED: "Remediated", FINDING_STATUS_CLOSED: "Closed"}
+FINDING_STATUS_COLORS = {FINDING_STATUS_OPEN: "#dc3545", FINDING_STATUS_IN_PROGRESS: "#fd7e14", FINDING_STATUS_REMEDIATED: "#0dcaf0", FINDING_STATUS_CLOSED: "#198754"}
+
 # Activity / notification constants for controls
 ACTIVITY_CONTROL_IMPL_UPDATED = "CONTROL_IMPL_UPDATED"
 ACTIVITY_ICONS[ACTIVITY_CONTROL_IMPL_UPDATED] = "bi-shield-lock"
@@ -2110,6 +2124,8 @@ class Control(Base):
     objective = Column(Text, nullable=True)
     procedure = Column(Text, nullable=True)
     operation_frequency = Column(String(20), nullable=True)
+    default_test_procedure = Column(Text, nullable=True)
+    evidence_instructions = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -2200,9 +2216,12 @@ class ControlTest(Base):
     reviewer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     review_date = Column(DateTime, nullable=True)
     review_notes = Column(Text, nullable=True)
+    is_roll_forward = Column(Boolean, default=False)
+    parent_test_id = Column(Integer, ForeignKey("control_tests.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     implementation = relationship("ControlImplementation", back_populates="tests")
+    parent_test = relationship("ControlTest", remote_side="ControlTest.id", uselist=False)
     tester = relationship("User", foreign_keys=[tester_user_id])
     reviewer = relationship("User", foreign_keys=[reviewer_user_id])
     evidence_files = relationship("ControlEvidence", back_populates="test", cascade="all, delete-orphan")
@@ -2212,15 +2231,103 @@ class ControlEvidence(Base):
     __tablename__ = "control_evidence"
 
     id = Column(Integer, primary_key=True, index=True)
-    test_id = Column(Integer, ForeignKey("control_tests.id"), nullable=False)
+    test_id = Column(Integer, ForeignKey("control_tests.id"), nullable=True)
     original_filename = Column(String(255), nullable=False)
     stored_filename = Column(String(255), nullable=False)
     stored_path = Column(String(512), nullable=False)
     content_type = Column(String(100), nullable=True)
     size_bytes = Column(Integer, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+    implementation_id = Column(Integer, ForeignKey("control_implementations.id"), nullable=True)
+    framework_tags = Column(Text, nullable=True)  # JSON list of framework keys this evidence satisfies
 
     test = relationship("ControlTest", back_populates="evidence_files")
+    implementation = relationship("ControlImplementation", foreign_keys=[implementation_id])
+
+
+class ControlFinding(Base):
+    __tablename__ = "control_findings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    control_test_id = Column(Integer, ForeignKey("control_tests.id"), nullable=False)
+    finding_type = Column(String(30), default=FINDING_TYPE_OPERATING, nullable=False)
+    severity = Column(String(20), default="MEDIUM", nullable=False)
+    status = Column(String(20), default=FINDING_STATUS_OPEN, nullable=False)
+    criteria = Column(Text, nullable=True)       # What should be (the standard)
+    condition = Column(Text, nullable=True)       # What is (the finding)
+    cause = Column(Text, nullable=True)           # Why the gap exists
+    effect = Column(Text, nullable=True)          # Impact/risk of the finding
+    recommendation = Column(Text, nullable=True)
+    remediation_item_id = Column(Integer, ForeignKey("remediation_items.id"), nullable=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    closed_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    test = relationship("ControlTest", backref="control_findings")
+    remediation_item = relationship("RemediationItem")
+    owner = relationship("User", foreign_keys=[owner_user_id])
+
+
+# ==================== CONTROL ATTESTATION ====================
+
+ATTESTATION_STATUS_PENDING = "PENDING"
+ATTESTATION_STATUS_ATTESTED = "ATTESTED"
+ATTESTATION_STATUS_REJECTED = "REJECTED"
+ATTESTATION_STATUS_EXPIRED = "EXPIRED"
+VALID_ATTESTATION_STATUSES = [ATTESTATION_STATUS_PENDING, ATTESTATION_STATUS_ATTESTED, ATTESTATION_STATUS_REJECTED, ATTESTATION_STATUS_EXPIRED]
+ATTESTATION_STATUS_LABELS = {
+    ATTESTATION_STATUS_PENDING: "Pending",
+    ATTESTATION_STATUS_ATTESTED: "Attested",
+    ATTESTATION_STATUS_REJECTED: "Rejected",
+    ATTESTATION_STATUS_EXPIRED: "Expired",
+}
+ATTESTATION_STATUS_COLORS = {
+    ATTESTATION_STATUS_PENDING: "#fd7e14",
+    ATTESTATION_STATUS_ATTESTED: "#198754",
+    ATTESTATION_STATUS_REJECTED: "#dc3545",
+    ATTESTATION_STATUS_EXPIRED: "#6c757d",
+}
+
+
+class ControlAttestation(Base):
+    __tablename__ = "control_attestations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    implementation_id = Column(Integer, ForeignKey("control_implementations.id"), nullable=False)
+    attestor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), default=ATTESTATION_STATUS_PENDING, nullable=False)
+    is_effective = Column(Boolean, nullable=True)  # True=effective, False=not effective, None=not yet attested
+    notes = Column(Text, nullable=True)
+    evidence_notes = Column(Text, nullable=True)  # Description of evidence supporting attestation
+    requested_date = Column(DateTime, default=datetime.utcnow)
+    due_date = Column(DateTime, nullable=True)
+    attested_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    implementation = relationship("ControlImplementation", backref="attestations")
+    attestor = relationship("User", foreign_keys=[attestor_user_id])
+
+
+# ==================== CONTROL HEALTH SNAPSHOT ====================
+
+class ControlHealthSnapshot(Base):
+    """Point-in-time health score snapshot for trend analysis."""
+    __tablename__ = "control_health_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    implementation_id = Column(Integer, ForeignKey("control_implementations.id"), nullable=False)
+    health_score = Column(Integer, nullable=False)
+    health_label = Column(String(20), nullable=True)
+    testing_score = Column(Integer, nullable=True)
+    implementation_score = Column(Integer, nullable=True)
+    evidence_freshness_score = Column(Integer, nullable=True)
+    evidence_completeness_score = Column(Integer, nullable=True)
+    findings_score = Column(Integer, nullable=True)
+    snapshot_date = Column(DateTime, default=datetime.utcnow)
+
+    implementation = relationship("ControlImplementation", backref="health_snapshots")
 
 
 def backfill_controls_tables():
@@ -2244,6 +2351,15 @@ def backfill_controls_tables():
         ("control_tests", "reviewer_user_id", "ALTER TABLE control_tests ADD COLUMN reviewer_user_id INTEGER"),
         ("control_tests", "review_date", "ALTER TABLE control_tests ADD COLUMN review_date DATETIME"),
         ("control_tests", "review_notes", "ALTER TABLE control_tests ADD COLUMN review_notes TEXT"),
+        # Roll-forward testing columns
+        ("control_tests", "is_roll_forward", "ALTER TABLE control_tests ADD COLUMN is_roll_forward BOOLEAN DEFAULT 0"),
+        ("control_tests", "parent_test_id", "ALTER TABLE control_tests ADD COLUMN parent_test_id INTEGER"),
+        # Control-level test/evidence instruction columns
+        ("controls", "default_test_procedure", "ALTER TABLE controls ADD COLUMN default_test_procedure TEXT"),
+        ("controls", "evidence_instructions", "ALTER TABLE controls ADD COLUMN evidence_instructions TEXT"),
+        # Evidence as first-class entity columns
+        ("control_evidence", "implementation_id", "ALTER TABLE control_evidence ADD COLUMN implementation_id INTEGER"),
+        ("control_evidence", "framework_tags", "ALTER TABLE control_evidence ADD COLUMN framework_tags TEXT"),
     ]
     for table, col, sql in migrations:
         db = SessionLocal()
@@ -2256,6 +2372,41 @@ def backfill_controls_tables():
             db.rollback()
         finally:
             db.close()
+
+    # Rebuild control_evidence to make test_id nullable (Feature 7: evidence decoupled from tests)
+    db = SessionLocal()
+    try:
+        cols = {r[1]: r[3] for r in db.execute(text("PRAGMA table_info(control_evidence)")).fetchall()}
+        if cols.get("test_id") == 1:  # notnull == 1 means NOT NULL, need to fix
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS control_evidence_new (
+                    id INTEGER PRIMARY KEY,
+                    test_id INTEGER,
+                    original_filename VARCHAR(255) NOT NULL,
+                    stored_filename VARCHAR(255) NOT NULL,
+                    stored_path VARCHAR(512) NOT NULL,
+                    content_type VARCHAR(100),
+                    size_bytes INTEGER,
+                    uploaded_at DATETIME,
+                    implementation_id INTEGER,
+                    framework_tags TEXT,
+                    FOREIGN KEY(test_id) REFERENCES control_tests(id),
+                    FOREIGN KEY(implementation_id) REFERENCES control_implementations(id)
+                )
+            """))
+            db.execute(text("""
+                INSERT INTO control_evidence_new
+                SELECT id, test_id, original_filename, stored_filename, stored_path,
+                       content_type, size_bytes, uploaded_at, implementation_id, framework_tags
+                FROM control_evidence
+            """))
+            db.execute(text("DROP TABLE control_evidence"))
+            db.execute(text("ALTER TABLE control_evidence_new RENAME TO control_evidence"))
+            db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
 
 def seed_default_controls():
