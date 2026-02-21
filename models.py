@@ -2077,6 +2077,10 @@ class Control(Base):
     test_frequency = Column(String(20), nullable=False, default=CONTROL_FREQ_ANNUAL)
     criticality = Column(String(20), nullable=False, default="MEDIUM")
     owner_role = Column(String(100), nullable=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    objective = Column(Text, nullable=True)
+    procedure = Column(Text, nullable=True)
+    operation_frequency = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -2085,6 +2089,7 @@ class Control(Base):
     question_mappings = relationship("ControlQuestionMapping", back_populates="control", cascade="all, delete-orphan")
     risk_mappings = relationship("ControlRiskMapping", back_populates="control", cascade="all, delete-orphan")
     implementations = relationship("ControlImplementation", back_populates="control", cascade="all, delete-orphan")
+    owner = relationship("User", foreign_keys=[owner_user_id])
 
 
 class ControlFrameworkMapping(Base):
@@ -2178,20 +2183,26 @@ class ControlEvidence(Base):
 
 
 def backfill_controls_tables():
-    """Migrate control_tests: add status + scheduled_date columns."""
-    db = SessionLocal()
-    try:
+    """Migrate controls + control_tests tables: add new columns."""
+    migrations = [
+        ("control_tests", "status", "ALTER TABLE control_tests ADD COLUMN status VARCHAR(20) DEFAULT 'COMPLETED' NOT NULL"),
+        ("control_tests", "scheduled_date", "ALTER TABLE control_tests ADD COLUMN scheduled_date DATETIME"),
+        ("controls", "owner_user_id", "ALTER TABLE controls ADD COLUMN owner_user_id INTEGER"),
+        ("controls", "objective", "ALTER TABLE controls ADD COLUMN objective TEXT"),
+        ("controls", "procedure", "ALTER TABLE controls ADD COLUMN procedure TEXT"),
+        ("controls", "operation_frequency", "ALTER TABLE controls ADD COLUMN operation_frequency VARCHAR(20)"),
+    ]
+    for table, col, sql in migrations:
+        db = SessionLocal()
         try:
-            db.execute(text("ALTER TABLE control_tests ADD COLUMN status VARCHAR(20) DEFAULT 'COMPLETED' NOT NULL"))
+            existing = {r[1] for r in db.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+            if col not in existing:
+                db.execute(text(sql))
+                db.commit()
         except Exception:
-            pass
-        try:
-            db.execute(text("ALTER TABLE control_tests ADD COLUMN scheduled_date DATETIME"))
-        except Exception:
-            pass
-        db.commit()
-    finally:
-        db.close()
+            db.rollback()
+        finally:
+            db.close()
 
 
 def seed_default_controls():

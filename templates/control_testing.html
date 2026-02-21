@@ -130,7 +130,6 @@
                             <tr>
                                 <th>Scheduled Date</th>
                                 <th>Control</th>
-                                <th>Vendor</th>
                                 <th>Type</th>
                                 <th>Assigned Tester</th>
                                 <th class="text-end">Actions</th>
@@ -145,11 +144,6 @@
                                     <a href="/controls/{{ st.implementation.control.id }}" class="text-decoration-none fw-semibold">{{ st.implementation.control.control_ref }}</a>
                                     <small class="text-muted ms-1">{{ st.implementation.control.title }}</small>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    {% if st.implementation and st.implementation.vendor %}
-                                    <a href="/vendors/{{ st.implementation.vendor.id }}" class="text-decoration-none">{{ st.implementation.vendor.name }}</a>
-                                    {% else %}<span class="text-muted">&mdash;</span>{% endif %}
                                 </td>
                                 <td><small>{{ test_type_labels.get(st.test_type, st.test_type) }}</small></td>
                                 <td>
@@ -194,14 +188,6 @@
                         </select>
                     </div>
                     <div class="col-auto">
-                        <select class="form-select form-select-sm" id="schFilterVendor" onchange="applyScheduleFilters()">
-                            <option value="">All Vendors</option>
-                            {% for v in schedule_vendors %}
-                            <option value="{{ v }}">{{ v }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-auto">
                         <select class="form-select form-select-sm" id="schFilterOwner" onchange="applyScheduleFilters()">
                             <option value="">All Owners</option>
                             {% for u in users %}
@@ -228,7 +214,6 @@
                         <tr>
                             <th>Ref</th>
                             <th>Title</th>
-                            <th>Vendor</th>
                             <th>Domain</th>
                             <th>Frequency</th>
                             <th>Last Tested</th>
@@ -242,24 +227,14 @@
                         {% for row in schedule_rows %}
                         <tr data-status="{{ row.testing_status }}"
                             data-domain="{{ row.impl.control.domain }}"
-                            data-vendor="{{ row.impl.vendor.name if row.impl.vendor else '' }}"
                             data-owner="{{ row.impl.owner_user_id or '' }}"
-                            data-search="{{ row.impl.control.control_ref|lower }} {{ row.impl.control.title|lower }} {{ row.impl.vendor.name|lower if row.impl.vendor else '' }}">
+                            data-search="{{ row.impl.control.control_ref|lower }} {{ row.impl.control.title|lower }}">
                             <td>
                                 <a href="/controls/{{ row.impl.control.id }}" class="text-decoration-none fw-semibold">
                                     {{ row.impl.control.control_ref }}
                                 </a>
                             </td>
                             <td>{{ row.impl.control.title }}</td>
-                            <td>
-                                {% if row.impl.vendor %}
-                                <a href="/vendors/{{ row.impl.vendor.id }}" class="text-decoration-none">
-                                    {{ row.impl.vendor.name }}
-                                </a>
-                                {% else %}
-                                <span class="text-muted">&mdash;</span>
-                                {% endif %}
-                            </td>
                             <td><small>{{ row.impl.control.domain }}</small></td>
                             <td><small>{{ frequency_labels.get(row.impl.control.test_frequency, row.impl.control.test_frequency) }}</small></td>
                             <td>
@@ -390,7 +365,6 @@
                             <th>Date</th>
                             <th>Control Ref</th>
                             <th>Title</th>
-                            <th>Vendor</th>
                             <th>Type</th>
                             <th>Result</th>
                             <th>Tester</th>
@@ -404,7 +378,7 @@
                             data-type="{{ t.test_type }}"
                             data-domain="{{ t.implementation.control.domain if t.implementation and t.implementation.control else '' }}"
                             data-tester="{{ t.tester_user_id or '' }}"
-                            data-search="{{ t.implementation.control.control_ref|lower if t.implementation and t.implementation.control else '' }} {{ t.implementation.control.title|lower if t.implementation and t.implementation.control else '' }} {{ t.implementation.vendor.name|lower if t.implementation and t.implementation.vendor else '' }}">
+                            data-search="{{ t.implementation.control.control_ref|lower if t.implementation and t.implementation.control else '' }} {{ t.implementation.control.title|lower if t.implementation and t.implementation.control else '' }}">
                             <td>{{ t.test_date.strftime('%Y-%m-%d') if t.test_date else '&mdash;' }}</td>
                             <td>
                                 {% if t.implementation and t.implementation.control %}
@@ -418,15 +392,6 @@
                             <td>
                                 {% if t.implementation and t.implementation.control %}
                                 {{ t.implementation.control.title }}
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if t.implementation and t.implementation.vendor %}
-                                <a href="/vendors/{{ t.implementation.vendor.id }}" class="text-decoration-none">
-                                    {{ t.implementation.vendor.name }}
-                                </a>
-                                {% else %}
-                                <span class="text-muted">&mdash;</span>
                                 {% endif %}
                             </td>
                             <td><small>{{ test_type_labels.get(t.test_type, t.test_type) }}</small></td>
@@ -486,7 +451,7 @@
                         <select name="implementation_id" id="scheduleImplSelect" class="form-select" required>
                             <option value="">Select a control implementation...</option>
                             {% for impl in all_implementations %}
-                            <option value="{{ impl.id }}">{{ impl.control.control_ref }} &mdash; {{ impl.vendor.name if impl.vendor else 'Org-wide' }}</option>
+                            <option value="{{ impl.id }}">{{ impl.control.control_ref }} &mdash; {{ impl.control.title }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -536,7 +501,6 @@ function openScheduleModal(implId) {
 function applyScheduleFilters() {
     var statusVal = document.getElementById('schFilterStatus').value;
     var domainVal = document.getElementById('schFilterDomain').value;
-    var vendorVal = document.getElementById('schFilterVendor').value;
     var ownerVal = document.getElementById('schFilterOwner').value;
     var searchVal = document.getElementById('schFilterSearch').value.toLowerCase().trim();
     var rows = document.querySelectorAll('#scheduleBody tr');
@@ -546,7 +510,6 @@ function applyScheduleFilters() {
         var show = true;
         if (statusVal && row.dataset.status !== statusVal) show = false;
         if (domainVal && row.dataset.domain !== domainVal) show = false;
-        if (vendorVal && row.dataset.vendor !== vendorVal) show = false;
         if (ownerVal === 'unassigned' && row.dataset.owner !== '') show = false;
         else if (ownerVal && ownerVal !== 'unassigned' && row.dataset.owner !== ownerVal) show = false;
         if (searchVal && row.dataset.search.indexOf(searchVal) === -1) show = false;

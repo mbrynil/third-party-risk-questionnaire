@@ -4,14 +4,9 @@
 
 {% block breadcrumbs %}
 <li class="breadcrumb-item"><a href="/">Home</a></li>
-{% if impl.vendor %}
-<li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
-<li class="breadcrumb-item"><a href="/vendors/{{ impl.vendor.id }}">{{ impl.vendor.name }}</a></li>
-<li class="breadcrumb-item"><a href="/vendors/{{ impl.vendor.id }}/controls">Controls</a></li>
-{% else %}
 <li class="breadcrumb-item"><a href="/controls">Control Library</a></li>
-{% endif %}
-<li class="breadcrumb-item active">{{ impl.control.control_ref }}</li>
+<li class="breadcrumb-item"><a href="/controls/{{ impl.control.id }}">{{ impl.control.control_ref }}</a></li>
+<li class="breadcrumb-item active">Implementation</li>
 {% endblock %}
 
 {% block content %}

@@ -39,9 +39,10 @@ def get_framework_coverage(db: Session, vendor_id: int | None = None) -> dict:
                 ControlImplementation.control_id.in_(active_ids),
             ).all()
         else:
-            # Org-wide: count as implemented if ANY vendor has it implemented
+            # Org-level: only count org implementations (vendor_id IS NULL)
             impls = db.query(ControlImplementation).filter(
                 ControlImplementation.control_id.in_(active_ids),
+                ControlImplementation.vendor_id == None,
             ).all()
 
         impl_control_ids = set()
@@ -83,6 +84,8 @@ def get_domain_effectiveness_heatmap(db: Session, vendor_id: int | None = None) 
         )
         if vendor_id:
             q = q.filter(ControlImplementation.vendor_id == vendor_id)
+        else:
+            q = q.filter(ControlImplementation.vendor_id == None)
         impls = q.all()
 
         implemented = sum(1 for i in impls if i.status == IMPL_STATUS_IMPLEMENTED)
@@ -114,7 +117,12 @@ def get_domain_effectiveness_heatmap(db: Session, vendor_id: int | None = None) 
 def get_testing_status_summary(db: Session) -> dict:
     now = datetime.utcnow()
     year_start = datetime(now.year, 1, 1)
-    tests_ytd = db.query(ControlTest).filter(ControlTest.test_date >= year_start).all()
+    tests_ytd = db.query(ControlTest).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlTest.test_date >= year_start,
+        ControlImplementation.vendor_id == None,
+    ).all()
     total = len(tests_ytd)
     passed = sum(1 for t in tests_ytd if t.result == TEST_RESULT_PASS)
     failed = sum(1 for t in tests_ytd if t.result == TEST_RESULT_FAIL)
@@ -122,6 +130,7 @@ def get_testing_status_summary(db: Session) -> dict:
     overdue = db.query(ControlImplementation).filter(
         ControlImplementation.next_test_date < now,
         ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+        ControlImplementation.vendor_id == None,
     ).count()
 
     from app.services.control_service import get_upcoming_tests
@@ -139,7 +148,9 @@ def get_testing_status_summary(db: Session) -> dict:
 def get_control_dashboard_data(db: Session) -> dict:
     active = db.query(Control).filter(Control.is_active == True).count()
 
-    all_impls = db.query(ControlImplementation).all()
+    all_impls = db.query(ControlImplementation).filter(
+        ControlImplementation.vendor_id == None
+    ).all()
     total_impls = len(all_impls)
     impl_count = sum(1 for i in all_impls if i.status == IMPL_STATUS_IMPLEMENTED)
     eff_count = sum(1 for i in all_impls if i.effectiveness in (EFFECTIVENESS_EFFECTIVE, EFFECTIVENESS_LARGELY_EFFECTIVE))
@@ -156,7 +167,11 @@ def get_control_dashboard_data(db: Session) -> dict:
     recent_tests = db.query(ControlTest).options(
         joinedload(ControlTest.tester),
         joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
-        joinedload(ControlTest.implementation).joinedload(ControlImplementation.vendor),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.owner),
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlImplementation.vendor_id == None,
     ).order_by(ControlTest.test_date.desc()).limit(10).all()
 
     return {

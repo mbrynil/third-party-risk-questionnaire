@@ -106,6 +106,10 @@ async def control_create(
     test_frequency: str = Form(...),
     criticality: str = Form(...),
     owner_role: str = Form(""),
+    objective: str = Form(""),
+    procedure: str = Form(""),
+    operation_frequency: str = Form(""),
+    owner_user_id: str = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
@@ -120,6 +124,10 @@ async def control_create(
         description=description.strip(), domain=domain, control_type=control_type,
         implementation_type=implementation_type, test_frequency=test_frequency,
         criticality=criticality, owner_role=owner_role.strip() or None,
+        objective=objective.strip() or None,
+        procedure=procedure.strip() or None,
+        operation_frequency=operation_frequency.strip() or None,
+        owner_user_id=int(owner_user_id) if owner_user_id.strip() else None,
     )
 
     form = await request.form()
@@ -193,18 +201,15 @@ async def gap_analysis(
     if framework:
         controls_with_refs = svc.get_controls_by_framework(db, framework)
         for ctrl, ref in controls_with_refs:
-            impls = db.query(ControlImplementation).filter(
-                ControlImplementation.control_id == ctrl.id
-            ).all()
-            impl_count = sum(1 for i in impls if i.status == "IMPLEMENTED")
-            total_vendors = len(impls)
+            org_impl = db.query(ControlImplementation).filter(
+                ControlImplementation.control_id == ctrl.id,
+                ControlImplementation.vendor_id == None,
+            ).first()
             gaps.append({
                 "control": ctrl,
                 "reference": ref,
-                "impl_count": impl_count,
-                "total_vendors": total_vendors,
-                "status": "IMPLEMENTED" if impl_count > 0 and impl_count == total_vendors else
-                          "PARTIAL" if impl_count > 0 else "NOT_IMPLEMENTED",
+                "implementation": org_impl,
+                "status": org_impl.status if org_impl else "NOT_TRACKED",
             })
 
     return templates.TemplateResponse("gap_analysis.html", {
@@ -294,10 +299,6 @@ async def control_testing_tracker(
 
     # Filter reference data
     users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
-    schedule_vendors = sorted({
-        impl.vendor.name for impl in schedule_impls if impl.vendor
-    })
-
     # Pre-select implementation for schedule modal (from ?schedule=<impl_id>)
     pre_select_impl = request.query_params.get("schedule", "")
 
@@ -314,7 +315,6 @@ async def control_testing_tracker(
         "kpi_pass_rate": pass_rate_ytd,
         "domains": VALID_CONTROL_DOMAINS,
         "users": users,
-        "schedule_vendors": schedule_vendors,
         "all_implementations": schedule_impls,
         "test_types": VALID_TEST_TYPES,
         "test_type_labels": TEST_TYPE_LABELS,
@@ -473,10 +473,16 @@ async def control_detail(request: Request, control_id: int, db: Session = Depend
 
     from sqlalchemy.orm import joinedload as jl
     impls = db.query(ControlImplementation).options(
-        jl(ControlImplementation.vendor),
+        jl(ControlImplementation.owner),
     ).filter(
-        ControlImplementation.control_id == control_id
+        ControlImplementation.control_id == control_id,
+        ControlImplementation.vendor_id == None,
     ).all()
+
+    # Check if org-level impl already exists (to show/hide Implement button)
+    has_org_impl = any(True for i in impls)
+
+    users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
 
     last_tested_date = svc.get_last_tested_date(db, control_id)
 
@@ -485,6 +491,8 @@ async def control_detail(request: Request, control_id: int, db: Session = Depend
         "control": ctrl,
         "implementations": impls,
         "last_tested_date": last_tested_date,
+        "has_org_impl": has_org_impl,
+        "users": users,
         "framework_display": FRAMEWORK_DISPLAY,
         "control_type_labels": CONTROL_TYPE_LABELS,
         "impl_type_labels": CONTROL_IMPL_TYPE_LABELS,
@@ -521,6 +529,10 @@ async def control_update(
     test_frequency: str = Form(...),
     criticality: str = Form(...),
     owner_role: str = Form(""),
+    objective: str = Form(""),
+    procedure: str = Form(""),
+    operation_frequency: str = Form(""),
+    owner_user_id: str = Form(""),
     is_active: str = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
@@ -530,6 +542,10 @@ async def control_update(
         description=description.strip(), domain=domain, control_type=control_type,
         implementation_type=implementation_type, test_frequency=test_frequency,
         criticality=criticality, owner_role=owner_role.strip() or None,
+        objective=objective.strip() or None,
+        procedure=procedure.strip() or None,
+        operation_frequency=operation_frequency.strip() or None,
+        owner_user_id=int(owner_user_id) if owner_user_id.strip() else None,
         is_active=is_active == "on",
     )
     if not ctrl:
@@ -562,6 +578,67 @@ async def control_delete(control_id: int, db: Session = Depends(get_db), current
     db.commit()
 
     return RedirectResponse(url=f"/controls?message={quote('Control deleted')}&message_type=success", status_code=303)
+
+
+# ==================== ORG-LEVEL IMPLEMENTATIONS ====================
+
+@router.post("/controls/{control_id}/implement", response_class=HTMLResponse)
+async def control_implement(
+    control_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Create an org-level implementation for this control."""
+    ctrl = db.query(Control).filter(Control.id == control_id).first()
+    if not ctrl:
+        raise HTTPException(status_code=404, detail="Control not found")
+
+    # Check if org-level impl already exists
+    existing = db.query(ControlImplementation).filter(
+        ControlImplementation.control_id == control_id,
+        ControlImplementation.vendor_id == None,
+    ).first()
+    if existing:
+        return RedirectResponse(
+            url=f"/controls/{control_id}?message={quote('Org implementation already exists')}&message_type=warning",
+            status_code=303,
+        )
+
+    impl = svc.create_implementation(db, control_id)
+    log_audit(db, AUDIT_ACTION_CREATE, AUDIT_ENTITY_CONTROL_IMPL,
+              entity_id=impl.id, entity_label=ctrl.control_ref,
+              description=f"Created org-level implementation for {ctrl.control_ref}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/{control_id}?message={quote('Implementation created')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/bulk-implement", response_class=HTMLResponse)
+async def control_bulk_implement(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Bulk-create org-level implementations for selected controls."""
+    form = await request.form()
+    control_ids = [int(v) for k, v in form.multi_items() if k == "control_ids"]
+
+    if control_ids:
+        count = svc.bulk_create_org_implementations(db, control_ids)
+        log_audit(db, AUDIT_ACTION_CREATE, AUDIT_ENTITY_CONTROL_IMPL,
+                  entity_label="Bulk org implementations",
+                  description=f"Bulk-created {count} org-level implementations",
+                  actor_user=current_user)
+        db.commit()
+        msg = quote(f"Created {count} implementations")
+    else:
+        msg = quote("No controls selected")
+
+    return RedirectResponse(url=f"/controls?message={msg}&message_type=success", status_code=303)
 
 
 # ==================== VENDOR IMPLEMENTATIONS ====================
@@ -940,6 +1017,8 @@ def _form_context(db: Session, control=None, error=None):
         for m in control.framework_mappings:
             existing_fw_refs[m.framework] = m.reference
 
+    users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
+
     return {
         "control": control,
         "domains": VALID_CONTROL_DOMAINS,
@@ -950,8 +1029,10 @@ def _form_context(db: Session, control=None, error=None):
         "frequencies": VALID_CONTROL_FREQUENCIES,
         "frequency_labels": CONTROL_FREQUENCY_LABELS,
         "criticalities": VALID_CONTROL_CRITICALITIES,
+        "operation_frequencies": VALID_CONTROL_FREQUENCIES,
         "frameworks": AVAILABLE_FRAMEWORKS,
         "framework_display": FRAMEWORK_DISPLAY,
+        "users": users,
         "qb_grouped": qb_grouped,
         "rs_grouped": rs_grouped,
         "mapped_question_ids": mapped_question_ids,

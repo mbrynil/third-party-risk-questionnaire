@@ -39,6 +39,14 @@
                             <label class="form-label">Control Objective <small class="text-muted">(sub-control detail)</small></label>
                             <textarea name="description" class="form-control" rows="3" placeholder="Describe the specific objective or sub-control this implements...">{{ control.description if control else '' }}</textarea>
                         </div>
+                        <div class="col-12">
+                            <label class="form-label">Objective</label>
+                            <textarea name="objective" class="form-control" rows="2" placeholder="What does this control achieve?">{{ control.objective if control and control.objective else '' }}</textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Procedure</label>
+                            <textarea name="procedure" class="form-control" rows="3" placeholder="Step-by-step how the control operates...">{{ control.procedure if control and control.procedure else '' }}</textarea>
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label">Domain <span class="text-danger">*</span></label>
                             <select name="domain" class="form-select" required>
@@ -72,6 +80,15 @@
                             </select>
                         </div>
                         <div class="col-md-4">
+                            <label class="form-label">Operation Frequency</label>
+                            <select name="operation_frequency" class="form-select">
+                                <option value="">— Not Set —</option>
+                                {% for f in operation_frequencies %}
+                                <option value="{{ f }}" {% if control and control.operation_frequency == f %}selected{% endif %}>{{ frequency_labels[f] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Criticality <span class="text-danger">*</span></label>
                             <select name="criticality" class="form-select" required>
                                 {% for c in criticalities %}
@@ -80,7 +97,16 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Owner Role</label>
+                            <label class="form-label">Control Owner</label>
+                            <select name="owner_user_id" class="form-select">
+                                <option value="">— Unassigned —</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}" {% if control and control.owner_user_id == u.id %}selected{% endif %}>{{ u.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Owner Role <small class="text-muted">(dept/team)</small></label>
                             <input type="text" name="owner_role" class="form-control" value="{{ control.owner_role if control and control.owner_role else '' }}" placeholder="e.g. IT Security">
                         </div>
                         {% if control %}

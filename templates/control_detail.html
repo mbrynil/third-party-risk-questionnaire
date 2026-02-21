@@ -27,6 +27,8 @@
             <span class="badge bg-{% if control.criticality == 'CRITICAL' %}danger{% elif control.criticality == 'HIGH' %}warning text-dark{% elif control.criticality == 'MEDIUM' %}info{% else %}secondary{% endif %}">{{ control.criticality }}</span>
             {% if not control.is_active %}<span class="badge bg-secondary">Inactive</span>{% endif %}
             {% if control.owner_role %}<span class="badge bg-light text-dark border">{{ control.owner_role }}</span>{% endif %}
+            {% if control.owner %}<span class="badge bg-light text-dark border"><i class="bi bi-person me-1"></i>{{ control.owner.display_name }}</span>{% endif %}
+            {% if control.operation_frequency %}<span class="badge bg-light text-dark border"><i class="bi bi-arrow-repeat me-1"></i>Operates: {{ frequency_labels.get(control.operation_frequency, control.operation_frequency) }}</span>{% endif %}
             {% if last_tested_date %}
             <span class="badge bg-light text-dark border"><i class="bi bi-clipboard-check me-1"></i>Last tested: {{ last_tested_date.strftime('%Y-%m-%d') }}</span>
             {% else %}
@@ -44,12 +46,23 @@
     </div>
 </div>
 
-{# Control Objective #}
-{% if control.description %}
+{# Control Details #}
+{% if control.description or control.objective or control.procedure %}
 <div class="card mb-4">
-    <div class="card-header"><h6 class="mb-0">Control Objective</h6></div>
+    <div class="card-header"><h6 class="mb-0">Control Details</h6></div>
     <div class="card-body">
-        <p class="mb-0">{{ control.description }}</p>
+        {% if control.description %}
+        <h6 class="text-muted" style="font-size:0.8rem;">DESCRIPTION</h6>
+        <p>{{ control.description }}</p>
+        {% endif %}
+        {% if control.objective %}
+        <h6 class="text-muted" style="font-size:0.8rem;">OBJECTIVE</h6>
+        <p>{{ control.objective }}</p>
+        {% endif %}
+        {% if control.procedure %}
+        <h6 class="text-muted" style="font-size:0.8rem;">PROCEDURE</h6>
+        <p class="mb-0">{{ control.procedure }}</p>
+        {% endif %}
     </div>
 </div>
 {% endif %}
@@ -119,21 +132,30 @@
     {% endif %}
 </div>
 
-{# Implementations #}
+{# Org-Level Implementation #}
 <div class="card mb-4">
-    <div class="card-header"><h6 class="mb-0">Implementations <span class="badge bg-secondary ms-1">{{ implementations|length }}</span></h6></div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Implementation</h6>
+        {% if not has_org_impl %}
+        <form method="post" action="/controls/{{ control.id }}/implement" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus-lg me-1"></i>Implement This Control</button>
+        </form>
+        {% endif %}
+    </div>
     {% if implementations %}
     <div class="table-responsive">
         <table class="table table-hover mb-0">
-            <thead><tr><th>Vendor</th><th>Status</th><th>Effectiveness</th><th>Next Test Due</th><th class="text-end">Actions</th></tr></thead>
+            <thead><tr><th>Status</th><th>Effectiveness</th><th>Owner</th><th>Implemented Date</th><th>Next Test Due</th><th class="text-end">Actions</th></tr></thead>
             <tbody>
                 {% for impl in implementations %}
                 <tr>
-                    <td><a href="/controls/implementations/{{ impl.id }}" class="text-decoration-none">{{ impl.vendor.name if impl.vendor else 'Org-wide' }}</a></td>
                     <td><span class="badge" style="background-color:{{ impl_status_colors.get(impl.status, '#6c757d') }}">{{ impl_status_labels.get(impl.status, impl.status) }}</span></td>
                     <td><span class="badge" style="background-color:{{ effectiveness_colors.get(impl.effectiveness, '#6c757d') }}">{{ effectiveness_labels.get(impl.effectiveness, impl.effectiveness) }}</span></td>
+                    <td>{% if impl.owner %}<small>{{ impl.owner.display_name }}</small>{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
+                    <td>{{ impl.implemented_date.strftime('%Y-%m-%d') if impl.implemented_date else '—' }}</td>
                     <td>{{ impl.next_test_date.strftime('%Y-%m-%d') if impl.next_test_date else '—' }}</td>
                     <td class="text-end">
+                        <a href="/controls/implementations/{{ impl.id }}" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                         {% if impl.status == IMPL_STATUS_IMPLEMENTED %}
                         <a href="/controls/implementations/{{ impl.id }}/tests/new" class="btn btn-sm btn-outline-primary" title="Record Test"><i class="bi bi-plus-circle me-1"></i>Test</a>
                         <a href="/controls/testing?schedule={{ impl.id }}" class="btn btn-sm btn-outline-secondary" title="Schedule Test"><i class="bi bi-calendar-plus"></i></a>
@@ -145,7 +167,7 @@
         </table>
     </div>
     {% else %}
-    <div class="card-body text-muted">No implementations tracked yet.</div>
+    <div class="card-body text-muted">Not implemented yet. Click "Implement This Control" to start tracking.</div>
     {% endif %}
 </div>
 

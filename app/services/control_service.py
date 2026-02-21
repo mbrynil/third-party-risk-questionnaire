@@ -31,6 +31,7 @@ def get_control(db: Session, control_id: int):
         joinedload(Control.framework_mappings),
         joinedload(Control.question_mappings).joinedload(ControlQuestionMapping.question_bank_item),
         joinedload(Control.risk_mappings).joinedload(ControlRiskMapping.risk_statement),
+        joinedload(Control.owner),
     ).filter(Control.id == control_id).first()
 
 
@@ -150,6 +151,15 @@ def get_vendor_implementations(db: Session, vendor_id: int):
     ).order_by(ControlImplementation.control_id).all()
 
 
+def get_org_implementations(db: Session):
+    return db.query(ControlImplementation).options(
+        joinedload(ControlImplementation.control).joinedload(Control.framework_mappings),
+        joinedload(ControlImplementation.owner),
+    ).filter(
+        ControlImplementation.vendor_id == None
+    ).order_by(ControlImplementation.control_id).all()
+
+
 def get_implementation(db: Session, impl_id: int):
     return db.query(ControlImplementation).options(
         joinedload(ControlImplementation.control).joinedload(Control.framework_mappings),
@@ -159,7 +169,7 @@ def get_implementation(db: Session, impl_id: int):
     ).filter(ControlImplementation.id == impl_id).first()
 
 
-def create_implementation(db: Session, control_id: int, vendor_id: int, **kwargs) -> ControlImplementation:
+def create_implementation(db: Session, control_id: int, vendor_id: int = None, **kwargs) -> ControlImplementation:
     impl = ControlImplementation(control_id=control_id, vendor_id=vendor_id, **kwargs)
     db.add(impl)
     db.flush()
@@ -202,9 +212,60 @@ def bulk_create_implementations(db: Session, vendor_id: int, control_ids: list[i
     return created
 
 
+def bulk_create_org_implementations(db: Session, control_ids: list[int]) -> int:
+    """Create org-level implementations (vendor_id=NULL) for controls that don't already have one."""
+    existing = set(
+        r[0] for r in db.query(ControlImplementation.control_id).filter(
+            ControlImplementation.vendor_id == None,
+            ControlImplementation.control_id.in_(control_ids),
+        ).all()
+    )
+    created = 0
+    for cid in control_ids:
+        if cid not in existing:
+            db.add(ControlImplementation(
+                control_id=cid, vendor_id=None,
+                status=IMPL_STATUS_NOT_IMPLEMENTED,
+            ))
+            created += 1
+    return created
+
+
 def get_vendor_control_stats(db: Session, vendor_id: int) -> dict:
     impls = db.query(ControlImplementation).filter(
         ControlImplementation.vendor_id == vendor_id
+    ).all()
+    total = len(impls)
+    if total == 0:
+        return {"total": 0, "implemented": 0, "partial": 0, "planned": 0, "not_implemented": 0, "na": 0, "effectiveness_pct": 0}
+
+    counts = {}
+    for impl in impls:
+        counts[impl.status] = counts.get(impl.status, 0) + 1
+
+    from models import (
+        IMPL_STATUS_PLANNED, IMPL_STATUS_PARTIAL,
+        IMPL_STATUS_NOT_APPLICABLE, EFFECTIVENESS_EFFECTIVE,
+        EFFECTIVENESS_LARGELY_EFFECTIVE,
+    )
+    effective = sum(1 for i in impls if i.effectiveness in (EFFECTIVENESS_EFFECTIVE, EFFECTIVENESS_LARGELY_EFFECTIVE))
+    applicable = total - counts.get(IMPL_STATUS_NOT_APPLICABLE, 0)
+
+    return {
+        "total": total,
+        "implemented": counts.get(IMPL_STATUS_IMPLEMENTED, 0),
+        "partial": counts.get(IMPL_STATUS_PARTIAL, 0),
+        "planned": counts.get(IMPL_STATUS_PLANNED, 0),
+        "not_implemented": counts.get(IMPL_STATUS_NOT_IMPLEMENTED, 0),
+        "na": counts.get(IMPL_STATUS_NOT_APPLICABLE, 0),
+        "effectiveness_pct": round(effective / applicable * 100) if applicable > 0 else 0,
+    }
+
+
+def get_org_control_stats(db: Session) -> dict:
+    """Stats for org-level implementations (vendor_id IS NULL)."""
+    impls = db.query(ControlImplementation).filter(
+        ControlImplementation.vendor_id == None
     ).all()
     total = len(impls)
     if total == 0:
@@ -276,10 +337,11 @@ def get_overdue_tests(db: Session):
     now = datetime.utcnow()
     return db.query(ControlImplementation).options(
         joinedload(ControlImplementation.control),
-        joinedload(ControlImplementation.vendor),
+        joinedload(ControlImplementation.owner),
     ).filter(
         ControlImplementation.next_test_date < now,
         ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+        ControlImplementation.vendor_id == None,
     ).all()
 
 
@@ -288,11 +350,12 @@ def get_upcoming_tests(db: Session, days: int = 30):
     threshold = now + timedelta(days=days)
     return db.query(ControlImplementation).options(
         joinedload(ControlImplementation.control),
-        joinedload(ControlImplementation.vendor),
+        joinedload(ControlImplementation.owner),
     ).filter(
         ControlImplementation.next_test_date >= now,
         ControlImplementation.next_test_date <= threshold,
         ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+        ControlImplementation.vendor_id == None,
     ).all()
 
 
@@ -308,27 +371,30 @@ def update_next_test_date(db: Session, implementation):
 
 
 def get_all_testing_schedule(db: Session):
-    """All IMPLEMENTED control implementations — the testing obligation backlog."""
+    """All IMPLEMENTED org-level control implementations — the internal testing obligation backlog."""
     return db.query(ControlImplementation).options(
         joinedload(ControlImplementation.control),
-        joinedload(ControlImplementation.vendor),
         joinedload(ControlImplementation.owner),
     ).filter(
         ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+        ControlImplementation.vendor_id == None,
     ).order_by(
         ControlImplementation.next_test_date.asc().nullsfirst(),
     ).all()
 
 
 def get_all_test_history(db: Session, limit: int = 200):
-    """Most recent completed test executions across all implementations."""
+    """Most recent completed test executions across org-level implementations."""
     return db.query(ControlTest).options(
         joinedload(ControlTest.tester),
         joinedload(ControlTest.evidence_files),
         joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
-        joinedload(ControlTest.implementation).joinedload(ControlImplementation.vendor),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.owner),
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
     ).filter(
         ControlTest.status == TEST_STATUS_COMPLETED,
+        ControlImplementation.vendor_id == None,
     ).order_by(ControlTest.test_date.desc()).limit(limit).all()
 
 
@@ -371,13 +437,16 @@ def complete_scheduled_test(db: Session, test_id: int, result: str,
 
 
 def get_scheduled_tests(db: Session):
-    """All scheduled (not yet completed) tests, ordered by scheduled_date."""
+    """All scheduled (not yet completed) tests for org-level implementations, ordered by scheduled_date."""
     return db.query(ControlTest).options(
         joinedload(ControlTest.tester),
         joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
-        joinedload(ControlTest.implementation).joinedload(ControlImplementation.vendor),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.owner),
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
     ).filter(
         ControlTest.status == TEST_STATUS_SCHEDULED,
+        ControlImplementation.vendor_id == None,
     ).order_by(ControlTest.scheduled_date.asc()).all()
 
 
