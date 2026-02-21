@@ -13,7 +13,10 @@
         <h3 class="mb-1"><i class="bi bi-shield-lock me-2"></i>Control Library</h3>
         <p class="text-muted mb-0">{{ stats.active }} active controls across {{ stats.domains }} domains — {{ stats.frameworks_covered }} frameworks mapped</p>
     </div>
-    <a href="/controls/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Control</a>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#quickAddForm"><i class="bi bi-lightning me-1"></i>Quick Add</button>
+        <a href="/controls/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Control</a>
+    </div>
 </div>
 
 {% set message = request.query_params.get('message', '') %}
@@ -24,8 +27,46 @@
 </div>
 {% endif %}
 
+{# Quick Add Form (collapsed) #}
+<div class="collapse mb-3" id="quickAddForm">
+    <div class="card border-primary">
+        <div class="card-body py-3">
+            <form method="post" action="/controls/quick-add" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm mb-1">Ref <span class="text-danger">*</span></label>
+                    <input type="text" name="control_ref" class="form-control form-control-sm" required placeholder="CTL-XX-001">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Title <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control form-control-sm" required placeholder="Control title">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label form-label-sm mb-1">Domain <span class="text-danger">*</span></label>
+                    <select name="domain" class="form-select form-select-sm" required>
+                        {% for d in domains %}
+                        <option value="{{ d }}">{{ d }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label form-label-sm mb-1">Criticality</label>
+                    <select name="criticality" class="form-select form-select-sm">
+                        {% for c in criticalities %}
+                        <option value="{{ c }}" {% if c == 'HIGH' %}selected{% endif %}>{{ c }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-plus-lg me-1"></i>Create</button>
+                </div>
+            </form>
+            <small class="text-muted mt-1 d-block">Defaults: Preventive, Manual, Annual. Edit after creation for full details.</small>
+        </div>
+    </div>
+</div>
+
 {# Filter Bar #}
-<div class="card mb-4">
+<div class="card mb-3">
     <div class="card-body py-2">
         <form method="get" class="row g-2 align-items-end">
             <div class="col-md-3">
@@ -72,35 +113,47 @@
     </div>
 </div>
 
+{# Instant Search #}
+<div class="mb-3">
+    <input type="text" id="controlSearch" class="form-control" placeholder="Search controls by ref, title, objective, or owner...">
+</div>
+
 {% if grouped %}
 {% for domain, controls in grouped.items() %}
-<div class="card mb-3">
+<div class="card mb-3 domain-section">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h6 class="mb-0"><i class="bi bi-folder me-1"></i>{{ domain }}</h6>
-        <span class="badge bg-secondary">{{ controls|length }}</span>
+        <span class="badge bg-secondary domain-count">{{ controls|length }}</span>
     </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
-                    <th>Ref</th>
-                    <th>Title</th>
-                    <th>Type</th>
-                    <th>Impl</th>
-                    <th>Frequency</th>
-                    <th>Criticality</th>
+                    <th style="width:90px;">Ref</th>
+                    <th>Control</th>
+                    <th>Objective</th>
+                    <th style="width:100px;">Owner</th>
+                    <th style="width:100px;">Last Tested</th>
+                    <th style="width:90px;">Criticality</th>
                     <th>Frameworks</th>
-                    <th class="text-end">Actions</th>
+                    <th class="text-end" style="width:80px;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for ctrl in controls %}
-                <tr>
+                <tr class="control-row" data-text="{{ ctrl.control_ref|lower }} {{ ctrl.title|lower }} {{ (ctrl.description or '')|lower }} {{ (ctrl.owner_role or '')|lower }}">
                     <td><a href="/controls/{{ ctrl.id }}" class="text-decoration-none fw-semibold">{{ ctrl.control_ref }}</a></td>
                     <td><a href="/controls/{{ ctrl.id }}" class="text-decoration-none">{{ ctrl.title }}</a></td>
-                    <td><span class="badge bg-{% if ctrl.control_type == 'PREVENTIVE' %}primary{% elif ctrl.control_type == 'DETECTIVE' %}info{% else %}warning{% endif %} bg-opacity-75">{{ control_type_labels[ctrl.control_type] }}</span></td>
-                    <td><small class="text-muted">{{ impl_type_labels.get(ctrl.implementation_type, ctrl.implementation_type) }}</small></td>
-                    <td><small class="text-muted">{{ frequency_labels.get(ctrl.test_frequency, ctrl.test_frequency) }}</small></td>
+                    <td><small class="text-muted">{{ (ctrl.description or '')[:80] }}{% if ctrl.description and ctrl.description|length > 80 %}...{% endif %}</small></td>
+                    <td><small class="text-muted">{{ ctrl.owner_role or '—' }}</small></td>
+                    <td>
+                        {% set lt = last_tested_map.get(ctrl.id) %}
+                        {% if lt %}
+                        <small class="text-muted">{{ lt.strftime('%Y-%m-%d') }}</small>
+                        {% else %}
+                        <small class="text-muted fst-italic">Never</small>
+                        {% endif %}
+                    </td>
                     <td>
                         <span class="badge bg-{% if ctrl.criticality == 'CRITICAL' %}danger{% elif ctrl.criticality == 'HIGH' %}warning text-dark{% elif ctrl.criticality == 'MEDIUM' %}info{% else %}secondary{% endif %}">{{ ctrl.criticality }}</span>
                     </td>
@@ -110,7 +163,14 @@
                         {% endfor %}
                     </td>
                     <td class="text-end">
-                        <a href="/controls/{{ ctrl.id }}/edit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                        <div class="d-flex gap-1 justify-content-end">
+                            <a href="/controls/{{ ctrl.id }}/edit" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
+                            <form method="post" action="/controls/{{ ctrl.id }}/toggle" class="d-inline">
+                                <button type="submit" class="btn btn-sm btn-outline-{% if ctrl.is_active %}warning{% else %}success{% endif %}" title="{{ 'Deactivate' if ctrl.is_active else 'Activate' }}">
+                                    <i class="bi bi-{% if ctrl.is_active %}pause-circle{% else %}play-circle{% endif %}"></i>
+                                </button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -129,4 +189,34 @@
     </div>
 </div>
 {% endif %}
+
+<script>
+document.getElementById('controlSearch').addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    const rows = document.querySelectorAll('.control-row');
+    const sections = document.querySelectorAll('.domain-section');
+
+    rows.forEach(function(row) {
+        const text = row.getAttribute('data-text');
+        row.style.display = (!query || text.indexOf(query) !== -1) ? '' : 'none';
+    });
+
+    sections.forEach(function(section) {
+        const visibleRows = section.querySelectorAll('.control-row[style=""], .control-row:not([style])');
+        let hasVisible = false;
+        section.querySelectorAll('.control-row').forEach(function(r) {
+            if (r.style.display !== 'none') hasVisible = true;
+        });
+        section.style.display = hasVisible ? '' : 'none';
+
+        // Update count badge
+        let count = 0;
+        section.querySelectorAll('.control-row').forEach(function(r) {
+            if (r.style.display !== 'none') count++;
+        });
+        const badge = section.querySelector('.domain-count');
+        if (badge) badge.textContent = count;
+    });
+});
+</script>
 {% endblock %}

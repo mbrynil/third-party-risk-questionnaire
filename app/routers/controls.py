@@ -61,11 +61,15 @@ async def control_library(
 
     stats = svc.get_control_library_stats(db)
 
+    control_ids = [c.id for c in controls]
+    last_tested_map = svc.get_last_tested_dates(db, control_ids)
+
     return templates.TemplateResponse("control_library.html", {
         "request": request,
         "grouped": grouped,
         "stats": stats,
         "total_count": len(controls),
+        "last_tested_map": last_tested_map,
         "domains": VALID_CONTROL_DOMAINS,
         "frameworks": AVAILABLE_FRAMEWORKS,
         "framework_display": FRAMEWORK_DISPLAY,
@@ -128,6 +132,38 @@ async def control_create(
     return RedirectResponse(url=f"/controls?message={quote('Control created')}&message_type=success", status_code=303)
 
 
+@router.post("/controls/quick-add", response_class=HTMLResponse)
+async def control_quick_add(
+    request: Request,
+    control_ref: str = Form(...),
+    title: str = Form(...),
+    domain: str = Form(...),
+    criticality: str = Form("HIGH"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    existing = db.query(Control).filter(Control.control_ref == control_ref.strip()).first()
+    if existing:
+        return RedirectResponse(
+            url=f"/controls?message={quote('A control with that reference already exists')}&message_type=danger",
+            status_code=303,
+        )
+
+    ctrl = svc.create_control(
+        db, control_ref=control_ref.strip(), title=title.strip(),
+        domain=domain, criticality=criticality,
+        control_type="PREVENTIVE", implementation_type="MANUAL",
+        test_frequency="ANNUAL",
+    )
+    log_audit(db, AUDIT_ACTION_CREATE, AUDIT_ENTITY_CONTROL,
+              entity_id=ctrl.id, entity_label=ctrl.control_ref,
+              description=f"Quick-added control {ctrl.control_ref}: {ctrl.title}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(url=f"/controls?message={quote('Control created')}&message_type=success", status_code=303)
+
+
 @router.get("/controls/dashboard", response_class=HTMLResponse)
 async def control_dashboard(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     data = dash_svc.get_control_dashboard_data(db)
@@ -181,6 +217,23 @@ async def gap_analysis(
     })
 
 
+@router.post("/controls/{control_id}/toggle", response_class=HTMLResponse)
+async def control_toggle(control_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
+    ctrl = db.query(Control).filter(Control.id == control_id).first()
+    if not ctrl:
+        raise HTTPException(status_code=404, detail="Control not found")
+
+    ctrl.is_active = not ctrl.is_active
+    new_state = "activated" if ctrl.is_active else "deactivated"
+    log_audit(db, AUDIT_ACTION_UPDATE, AUDIT_ENTITY_CONTROL,
+              entity_id=ctrl.id, entity_label=ctrl.control_ref,
+              description=f"Control {ctrl.control_ref} {new_state}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(url=f"/controls?message={quote(f'Control {new_state}')}&message_type=success", status_code=303)
+
+
 @router.get("/controls/{control_id}", response_class=HTMLResponse)
 async def control_detail(request: Request, control_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     ctrl = svc.get_control(db, control_id)
@@ -191,10 +244,13 @@ async def control_detail(request: Request, control_id: int, db: Session = Depend
         ControlImplementation.control_id == control_id
     ).all()
 
+    last_tested_date = svc.get_last_tested_date(db, control_id)
+
     return templates.TemplateResponse("control_detail.html", {
         "request": request,
         "control": ctrl,
         "implementations": impls,
+        "last_tested_date": last_tested_date,
         "framework_display": FRAMEWORK_DISPLAY,
         "control_type_labels": CONTROL_TYPE_LABELS,
         "impl_type_labels": CONTROL_IMPL_TYPE_LABELS,
@@ -642,9 +698,12 @@ def _form_context(db: Session, control=None, error=None):
     # Get existing mappings if editing
     mapped_question_ids = set()
     mapped_risk_ids = set()
+    existing_fw_refs = {}
     if control:
         mapped_question_ids = {m.question_bank_item_id for m in control.question_mappings}
         mapped_risk_ids = {m.risk_statement_id for m in control.risk_mappings}
+        for m in control.framework_mappings:
+            existing_fw_refs[m.framework] = m.reference
 
     return {
         "control": control,
@@ -662,23 +721,20 @@ def _form_context(db: Session, control=None, error=None):
         "rs_grouped": rs_grouped,
         "mapped_question_ids": mapped_question_ids,
         "mapped_risk_ids": mapped_risk_ids,
+        "existing_fw_refs": existing_fw_refs,
         "error": error,
     }
 
 
 def _save_mappings(db: Session, control_id: int, form):
     """Parse framework, question, and risk mappings from form data."""
-    # Framework mappings: fw_framework_0, fw_reference_0, ...
+    # Framework mappings: checkbox pattern — fw_{KEY}_enabled + fw_{KEY}_ref
     fw_mappings = []
-    i = 0
-    while True:
-        fw = form.get(f"fw_framework_{i}")
-        ref = form.get(f"fw_reference_{i}")
-        if fw is None:
-            break
-        if fw and ref:
-            fw_mappings.append((fw, ref))
-        i += 1
+    for key, _label in AVAILABLE_FRAMEWORKS:
+        enabled = form.get(f"fw_{key}_enabled")
+        ref = form.get(f"fw_{key}_ref", "").strip()
+        if enabled and ref:
+            fw_mappings.append((key, ref))
     svc.set_framework_mappings(db, control_id, fw_mappings)
 
     # Question mappings

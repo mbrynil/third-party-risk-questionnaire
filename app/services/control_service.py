@@ -93,6 +93,29 @@ def set_risk_mappings(db: Session, control_id: int, ids: list[int]):
         db.add(ControlRiskMapping(control_id=control_id, risk_statement_id=rid))
 
 
+def get_last_tested_date(db: Session, control_id: int):
+    """Most recent test date across all implementations of a control."""
+    result = db.query(func.max(ControlTest.test_date)).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(ControlImplementation.control_id == control_id).scalar()
+    return result
+
+
+def get_last_tested_dates(db: Session, control_ids: list[int]) -> dict:
+    """Batch lookup: {control_id: last_test_date} for multiple controls."""
+    if not control_ids:
+        return {}
+    rows = db.query(
+        ControlImplementation.control_id,
+        func.max(ControlTest.test_date),
+    ).join(
+        ControlTest, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlImplementation.control_id.in_(control_ids)
+    ).group_by(ControlImplementation.control_id).all()
+    return {cid: dt for cid, dt in rows}
+
+
 def get_controls_by_framework(db: Session, framework_key: str):
     mappings = db.query(ControlFrameworkMapping).filter(
         ControlFrameworkMapping.framework == framework_key

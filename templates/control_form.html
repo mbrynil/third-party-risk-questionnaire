@@ -36,8 +36,8 @@
                             <input type="text" name="title" class="form-control" value="{{ control.title if control else '' }}" required>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Description</label>
-                            <textarea name="description" class="form-control" rows="3">{{ control.description if control else '' }}</textarea>
+                            <label class="form-label">Control Objective <small class="text-muted">(sub-control detail)</small></label>
+                            <textarea name="description" class="form-control" rows="3" placeholder="Describe the specific objective or sub-control this implements...">{{ control.description if control else '' }}</textarea>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Domain <span class="text-danger">*</span></label>
@@ -95,85 +95,79 @@
                 </div>
             </div>
 
-            {# Framework Mappings #}
+            {# Framework Mappings — Checkbox Pattern #}
             <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">Framework Mappings</h6>
-                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addFrameworkRow()"><i class="bi bi-plus-lg me-1"></i>Add Mapping</button>
-                </div>
-                <div class="card-body" id="fwMappings">
-                    {% if control and control.framework_mappings %}
-                    {% for m in control.framework_mappings %}
-                    <div class="row g-2 mb-2 fw-row">
-                        <div class="col-md-4">
-                            <select name="fw_framework_{{ loop.index0 }}" class="form-select form-select-sm">
-                                <option value="">Select Framework</option>
-                                {% for key, label in frameworks %}
-                                <option value="{{ key }}" {% if m.framework == key %}selected{% endif %}>{{ label }}</option>
-                                {% endfor %}
-                            </select>
+                <div class="card-header"><h6 class="mb-0">Framework Mappings</h6></div>
+                <div class="card-body">
+                    {% for key, label in frameworks %}
+                    <div class="row g-2 mb-2 align-items-center">
+                        <div class="col-auto">
+                            <div class="form-check">
+                                <input type="checkbox" name="fw_{{ key }}_enabled" value="on" class="form-check-input" id="fw_{{ key }}"
+                                       {% if existing_fw_refs.get(key) %}checked{% endif %}
+                                       onchange="toggleFwRef(this, '{{ key }}')">
+                                <label class="form-check-label fw-semibold" for="fw_{{ key }}" style="min-width:160px;">{{ label }}</label>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <input type="text" name="fw_reference_{{ loop.index0 }}" class="form-control form-control-sm" value="{{ m.reference }}" placeholder="Reference (e.g. CC6.1)">
-                        </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.fw-row').remove()"><i class="bi bi-trash"></i></button>
+                        <div class="col">
+                            <input type="text" name="fw_{{ key }}_ref" id="fw_{{ key }}_ref" class="form-control form-control-sm"
+                                   value="{{ existing_fw_refs.get(key, '') }}"
+                                   placeholder="Reference (e.g. CC6.1, A.9.2.5)"
+                                   {% if not existing_fw_refs.get(key) %}disabled{% endif %}>
                         </div>
                     </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="row g-2 mb-2 fw-row">
-                        <div class="col-md-4">
-                            <select name="fw_framework_0" class="form-select form-select-sm">
-                                <option value="">Select Framework</option>
-                                {% for key, label in frameworks %}
-                                <option value="{{ key }}">{{ label }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <input type="text" name="fw_reference_0" class="form-control form-control-sm" placeholder="Reference (e.g. CC6.1)">
-                        </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.fw-row').remove()"><i class="bi bi-trash"></i></button>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            {# Question Mappings #}
-            <div class="card mb-4">
-                <div class="card-header"><h6 class="mb-0">Linked Questions</h6></div>
-                <div class="card-body" style="max-height:300px;overflow-y:auto;">
-                    {% for cat, items in qb_grouped.items() %}
-                    <h6 class="text-muted mt-2 mb-1" style="font-size:0.8rem;">{{ cat }}</h6>
-                    {% for item in items %}
-                    <div class="form-check">
-                        <input type="checkbox" name="question_ids" value="{{ item.id }}" class="form-check-input" id="q{{ item.id }}" {% if item.id in mapped_question_ids %}checked{% endif %}>
-                        <label class="form-check-label" for="q{{ item.id }}" style="font-size:0.85rem;">{{ item.text[:100] }}{% if item.text|length > 100 %}...{% endif %}</label>
-                    </div>
-                    {% endfor %}
                     {% endfor %}
                 </div>
             </div>
 
-            {# Risk Mappings #}
+            {# Question Mappings — Collapsible #}
             <div class="card mb-4">
-                <div class="card-header"><h6 class="mb-0">Linked Risk Statements</h6></div>
-                <div class="card-body" style="max-height:300px;overflow-y:auto;">
-                    {% for cat, stmts in rs_grouped.items() %}
-                    <h6 class="text-muted mt-2 mb-1" style="font-size:0.8rem;">{{ cat }}</h6>
-                    {% for rs in stmts %}
-                    <div class="form-check">
-                        <input type="checkbox" name="risk_ids" value="{{ rs.id }}" class="form-check-input" id="r{{ rs.id }}" {% if rs.id in mapped_risk_ids %}checked{% endif %}>
-                        <label class="form-check-label" for="r{{ rs.id }}" style="font-size:0.85rem;">
-                            <span class="badge bg-{% if rs.severity == 'CRITICAL' %}danger{% elif rs.severity == 'HIGH' %}warning text-dark{% else %}secondary{% endif %} me-1">{{ rs.severity }}</span>
-                            {{ rs.finding_text[:100] }}{% if rs.finding_text|length > 100 %}...{% endif %}
-                        </label>
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#linkedQuestions">
+                    <h6 class="mb-0">
+                        <i class="bi bi-chevron-right me-1" id="qCollapseIcon"></i>Linked Questions
+                        <span class="badge bg-secondary ms-1">{{ mapped_question_ids|length }}</span>
+                    </h6>
+                </div>
+                <div class="collapse" id="linkedQuestions">
+                    <div class="card-body" style="max-height:300px;overflow-y:auto;">
+                        {% for cat, items in qb_grouped.items() %}
+                        <h6 class="text-muted mt-2 mb-1" style="font-size:0.8rem;">{{ cat }}</h6>
+                        {% for item in items %}
+                        <div class="form-check">
+                            <input type="checkbox" name="question_ids" value="{{ item.id }}" class="form-check-input" id="q{{ item.id }}" {% if item.id in mapped_question_ids %}checked{% endif %}>
+                            <label class="form-check-label" for="q{{ item.id }}" style="font-size:0.85rem;">{{ item.text[:100] }}{% if item.text|length > 100 %}...{% endif %}</label>
+                        </div>
+                        {% endfor %}
+                        {% endfor %}
                     </div>
-                    {% endfor %}
-                    {% endfor %}
+                </div>
+            </div>
+
+            {# Risk Mappings — Collapsible #}
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center"
+                     style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#linkedRisks">
+                    <h6 class="mb-0">
+                        <i class="bi bi-chevron-right me-1" id="rCollapseIcon"></i>Linked Risk Statements
+                        <span class="badge bg-secondary ms-1">{{ mapped_risk_ids|length }}</span>
+                    </h6>
+                </div>
+                <div class="collapse" id="linkedRisks">
+                    <div class="card-body" style="max-height:300px;overflow-y:auto;">
+                        {% for cat, stmts in rs_grouped.items() %}
+                        <h6 class="text-muted mt-2 mb-1" style="font-size:0.8rem;">{{ cat }}</h6>
+                        {% for rs in stmts %}
+                        <div class="form-check">
+                            <input type="checkbox" name="risk_ids" value="{{ rs.id }}" class="form-check-input" id="r{{ rs.id }}" {% if rs.id in mapped_risk_ids %}checked{% endif %}>
+                            <label class="form-check-label" for="r{{ rs.id }}" style="font-size:0.85rem;">
+                                <span class="badge bg-{% if rs.severity == 'CRITICAL' %}danger{% elif rs.severity == 'HIGH' %}warning text-dark{% else %}secondary{% endif %} me-1">{{ rs.severity }}</span>
+                                {{ rs.finding_text[:100] }}{% if rs.finding_text|length > 100 %}...{% endif %}
+                            </label>
+                        </div>
+                        {% endfor %}
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
 
@@ -191,29 +185,29 @@
 </div>
 
 <script>
-let fwIdx = {{ (control.framework_mappings|length if control and control.framework_mappings else 1) }};
-function addFrameworkRow() {
-    const container = document.getElementById('fwMappings');
-    const row = document.createElement('div');
-    row.className = 'row g-2 mb-2 fw-row';
-    row.innerHTML = `
-        <div class="col-md-4">
-            <select name="fw_framework_${fwIdx}" class="form-select form-select-sm">
-                <option value="">Select Framework</option>
-                {% for key, label in frameworks %}
-                <option value="{{ key }}">{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-6">
-            <input type="text" name="fw_reference_${fwIdx}" class="form-control form-control-sm" placeholder="Reference (e.g. CC6.1)">
-        </div>
-        <div class="col-md-2">
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.fw-row').remove()"><i class="bi bi-trash"></i></button>
-        </div>
-    `;
-    container.appendChild(row);
-    fwIdx++;
+function toggleFwRef(checkbox, key) {
+    const input = document.getElementById('fw_' + key + '_ref');
+    if (checkbox.checked) {
+        input.disabled = false;
+        input.focus();
+    } else {
+        input.disabled = true;
+        input.value = '';
+    }
 }
+
+// Toggle collapse chevron icons
+document.getElementById('linkedQuestions')?.addEventListener('show.bs.collapse', function() {
+    document.getElementById('qCollapseIcon').className = 'bi bi-chevron-down me-1';
+});
+document.getElementById('linkedQuestions')?.addEventListener('hide.bs.collapse', function() {
+    document.getElementById('qCollapseIcon').className = 'bi bi-chevron-right me-1';
+});
+document.getElementById('linkedRisks')?.addEventListener('show.bs.collapse', function() {
+    document.getElementById('rCollapseIcon').className = 'bi bi-chevron-down me-1';
+});
+document.getElementById('linkedRisks')?.addEventListener('hide.bs.collapse', function() {
+    document.getElementById('rCollapseIcon').className = 'bi bi-chevron-right me-1';
+});
 </script>
 {% endblock %}
