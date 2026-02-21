@@ -90,6 +90,23 @@
             border-radius: 9999px;
             font-weight: 600;
         }
+        .navbar .dropdown-menu {
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid #e5e7eb;
+        }
+        .navbar .dropdown-item {
+            font-size: 0.875rem;
+            padding: 0.5rem 1rem;
+        }
+        .navbar .dropdown-item:hover {
+            background-color: #f0f7ff;
+        }
+        .navbar .dropdown-item i {
+            color: #6b7280;
+            width: 1.25rem;
+            text-align: center;
+        }
         .link-box {
             background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
             border: 1px solid #f59e0b;
@@ -120,86 +137,66 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
+                    {# My Workspace — standalone link #}
                     {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
                     <li class="nav-item">
                         <a class="nav-link" href="/"><i class="bi bi-house-door me-1"></i>My Workspace</a>
                     </li>
                     {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/portfolio"><i class="bi bi-speedometer2 me-1"></i>Portfolio</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/executive"><i class="bi bi-bar-chart-line me-1"></i>Executive</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/vendors">
-                            <i class="bi bi-building me-1"></i>Vendors
+
+                    {# Dashboards dropdown #}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-speedometer2 me-1"></i>Dashboards
                         </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/portfolio"><i class="bi bi-speedometer2 me-2"></i>Portfolio</a></li>
+                            <li><a class="dropdown-item" href="/executive"><i class="bi bi-bar-chart-line me-2"></i>Executive</a></li>
+                        </ul>
                     </li>
-                    {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/create">
-                            <i class="bi bi-plus-circle me-1"></i>Create
+
+                    {# Vendor Risk dropdown #}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-building me-1"></i>Vendor Risk
                         </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/vendors"><i class="bi bi-building me-2"></i>Vendors</a></li>
+                            {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
+                            <li><a class="dropdown-item" href="/create"><i class="bi bi-plus-circle me-2"></i>Create Assessment</a></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="/assessments/tracker"><i class="bi bi-kanban me-2"></i>Tracker</a></li>
+                            <li><a class="dropdown-item" href="/assessments/calendar"><i class="bi bi-calendar3 me-2"></i>Calendar</a></li>
+                            <li><a class="dropdown-item" href="/responses"><i class="bi bi-inbox me-2"></i>Responses</a></li>
+                            {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
+                            <li><a class="dropdown-item" href="/risk-library"><i class="bi bi-journal-medical me-2"></i>Risk Library</a></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="/question-bank"><i class="bi bi-collection me-2"></i>Question Bank</a></li>
+                            {% if not request.state.current_user or request.state.current_user.role == 'admin' %}
+                            <li><a class="dropdown-item" href="/templates"><i class="bi bi-bookmark-star me-2"></i>Templates</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
+                            <li><a class="dropdown-item" href="/onboarding"><i class="bi bi-magic me-2"></i>Onboarding</a></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="/intake/new"><i class="bi bi-box-arrow-in-right me-2"></i>Intake</a></li>
+                        </ul>
                     </li>
-                    {% endif %}
-                    {% if not request.state.current_user or request.state.current_user.role == 'admin' %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/templates">
-                            <i class="bi bi-bookmark-star me-1"></i>Templates
-                        </a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/assessments/tracker">
-                            <i class="bi bi-kanban me-1"></i>Tracker
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/assessments/calendar">
-                            <i class="bi bi-calendar3 me-1"></i>Calendar
-                        </a>
-                    </li>
-                    {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/risk-library">
-                            <i class="bi bi-journal-medical me-1"></i>Risk Library
-                        </a>
-                    </li>
-                    {% endif %}
-                    {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/controls">
+
+                    {# Controls dropdown #}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-shield-lock me-1"></i>Controls
                         </a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/controls/dashboard">
-                            <i class="bi bi-shield-check me-1"></i>Control Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/question-bank">
-                            <i class="bi bi-collection me-1"></i>Question Bank
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/responses">
-                            <i class="bi bi-inbox me-1"></i>Responses
-                        </a>
-                    </li>
-                    {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/onboarding">
-                            <i class="bi bi-magic me-1"></i>Onboarding
-                        </a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="/intake/new">
-                            <i class="bi bi-box-arrow-in-right me-1"></i>Intake
-                        </a>
+                        <ul class="dropdown-menu">
+                            {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
+                            <li><a class="dropdown-item" href="/controls"><i class="bi bi-shield-lock me-2"></i>Control Library</a></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="/controls/dashboard"><i class="bi bi-shield-check me-2"></i>Control Dashboard</a></li>
+                            {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
+                            <li><a class="dropdown-item" href="/controls/gap-analysis"><i class="bi bi-clipboard-data me-2"></i>Gap Analysis</a></li>
+                            {% endif %}
+                        </ul>
                     </li>
                     <li class="nav-item me-2" style="position:relative;" id="searchBarWrap">
                         <div class="input-group input-group-sm" style="width:220px;">
