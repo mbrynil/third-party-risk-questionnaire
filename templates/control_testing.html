@@ -1,0 +1,462 @@
+{% extends "base.html" %}
+
+{% block title %}Testing Tracker - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item active">Testing Tracker</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .tracker-filters select { min-width: 130px; }
+    .status-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .status-overdue { background: #fee2e2; color: #991b1b; }
+    .status-upcoming { background: #fef3c7; color: #92400e; }
+    .status-on-track { background: #d1fae5; color: #065f46; }
+    .status-never { background: #f3f4f6; color: #6b7280; }
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.8rem; color: #6b7280; }
+    .nav-tabs .nav-link { font-weight: 500; }
+    .nav-tabs .nav-link.active { border-bottom: 2px solid #2563eb; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1><i class="bi bi-clipboard-check me-2"></i>Control Testing Tracker</h1>
+        <p>Central hub for all control testing activity &mdash; schedule, overdue items, and completed tests</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/controls/dashboard" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-shield-check me-1"></i>Dashboard
+        </a>
+        <a href="/controls" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-shield-lock me-1"></i>Library
+        </a>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card kpi-card {% if kpi_overdue > 0 %}border-danger{% endif %}">
+            <div class="card-body py-3">
+                <div class="kpi-value {% if kpi_overdue > 0 %}text-danger{% else %}text-success{% endif %}">{{ kpi_overdue }}</div>
+                <div class="kpi-label">Overdue</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value text-warning">{{ kpi_upcoming }}</div>
+                <div class="kpi-label">Due in 30 Days</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value text-primary">{{ kpi_completed_month }}</div>
+                <div class="kpi-label">Completed This Month</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value {% if kpi_pass_rate >= 80 %}text-success{% elif kpi_pass_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">{{ kpi_pass_rate }}%</div>
+                <div class="kpi-label">Pass Rate YTD</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-0" id="testingTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="schedule-tab" data-bs-toggle="tab" data-bs-target="#schedulePane"
+                type="button" role="tab">
+            <i class="bi bi-calendar-event me-1"></i>Testing Schedule
+            <span class="badge bg-secondary ms-1">{{ schedule_rows|length }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#historyPane"
+                type="button" role="tab">
+            <i class="bi bi-clock-history me-1"></i>Test History
+            <span class="badge bg-secondary ms-1">{{ test_history|length }}</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- ==================== SCHEDULE TAB ==================== -->
+    <div class="tab-pane fade show active" id="schedulePane" role="tabpanel">
+        <div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+            <!-- Schedule Filters -->
+            <div class="card-body py-2 border-bottom">
+                <div class="row g-2 align-items-center tracker-filters">
+                    <div class="col-auto">
+                        <i class="bi bi-funnel me-1 text-muted"></i>
+                        <strong class="small text-muted">Filters:</strong>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="schFilterStatus" onchange="applyScheduleFilters()">
+                            <option value="">All Statuses</option>
+                            <option value="OVERDUE">Overdue</option>
+                            <option value="UPCOMING">Due in 30 Days</option>
+                            <option value="ON_TRACK">On Track</option>
+                            <option value="NEVER_TESTED">Never Tested</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="schFilterDomain" onchange="applyScheduleFilters()">
+                            <option value="">All Domains</option>
+                            {% for d in domains %}
+                            <option value="{{ d }}">{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="schFilterVendor" onchange="applyScheduleFilters()">
+                            <option value="">All Vendors</option>
+                            {% for v in schedule_vendors %}
+                            <option value="{{ v }}">{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="schFilterOwner" onchange="applyScheduleFilters()">
+                            <option value="">All Owners</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.display_name }}</option>
+                            {% endfor %}
+                            <option value="unassigned">Unassigned</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <input type="text" class="form-control form-control-sm" id="schFilterSearch"
+                               placeholder="Search ref or title..." oninput="applyScheduleFilters()">
+                    </div>
+                    <div class="col-auto ms-auto">
+                        <span class="badge bg-secondary" id="schRowCount">{{ schedule_rows|length }}</span>
+                        <small class="text-muted">controls</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Schedule Table -->
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Ref</th>
+                            <th>Title</th>
+                            <th>Vendor</th>
+                            <th>Domain</th>
+                            <th>Frequency</th>
+                            <th>Last Tested</th>
+                            <th>Next Due</th>
+                            <th>Status</th>
+                            <th>Owner</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduleBody">
+                        {% for row in schedule_rows %}
+                        <tr data-status="{{ row.testing_status }}"
+                            data-domain="{{ row.impl.control.domain }}"
+                            data-vendor="{{ row.impl.vendor.name if row.impl.vendor else '' }}"
+                            data-owner="{{ row.impl.owner_user_id or '' }}"
+                            data-search="{{ row.impl.control.control_ref|lower }} {{ row.impl.control.title|lower }} {{ row.impl.vendor.name|lower if row.impl.vendor else '' }}">
+                            <td>
+                                <a href="/controls/{{ row.impl.control.id }}" class="text-decoration-none fw-semibold">
+                                    {{ row.impl.control.control_ref }}
+                                </a>
+                            </td>
+                            <td>{{ row.impl.control.title }}</td>
+                            <td>
+                                {% if row.impl.vendor %}
+                                <a href="/vendors/{{ row.impl.vendor.id }}" class="text-decoration-none">
+                                    {{ row.impl.vendor.name }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ row.impl.control.domain }}</small></td>
+                            <td><small>{{ frequency_labels.get(row.impl.control.test_frequency, row.impl.control.test_frequency) }}</small></td>
+                            <td>
+                                {% if row.last_tested %}
+                                {{ row.last_tested.strftime('%Y-%m-%d') }}
+                                {% else %}
+                                <span class="text-muted">Never</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.impl.next_test_date %}
+                                {{ row.impl.next_test_date.strftime('%Y-%m-%d') }}
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.testing_status == 'OVERDUE' %}
+                                <span class="status-badge status-overdue">Overdue {{ row.days_until_due|abs }}d</span>
+                                {% elif row.testing_status == 'UPCOMING' %}
+                                <span class="status-badge status-upcoming">Due in {{ row.days_until_due }}d</span>
+                                {% elif row.testing_status == 'ON_TRACK' %}
+                                <span class="status-badge status-on-track">On Track</span>
+                                {% else %}
+                                <span class="status-badge status-never">Never Tested</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.impl.owner %}
+                                <small>{{ row.impl.owner.display_name }}</small>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="/controls/implementations/{{ row.impl.id }}/tests/new"
+                                   class="btn btn-sm btn-outline-primary" title="Record Test">
+                                    <i class="bi bi-plus-circle me-1"></i>Test
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if not schedule_rows %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-clipboard-check" style="font-size:2rem;"></i>
+                    <p class="mt-2">No implemented controls with testing obligations yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== HISTORY TAB ==================== -->
+    <div class="tab-pane fade" id="historyPane" role="tabpanel">
+        <div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+            <!-- History Filters -->
+            <div class="card-body py-2 border-bottom">
+                <div class="row g-2 align-items-center tracker-filters">
+                    <div class="col-auto">
+                        <i class="bi bi-funnel me-1 text-muted"></i>
+                        <strong class="small text-muted">Filters:</strong>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="histFilterResult" onchange="applyHistoryFilters()">
+                            <option value="">All Results</option>
+                            {% for key, label in test_result_labels.items() %}
+                            <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="histFilterType" onchange="applyHistoryFilters()">
+                            <option value="">All Types</option>
+                            {% for key, label in test_type_labels.items() %}
+                            <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="histFilterDomain" onchange="applyHistoryFilters()">
+                            <option value="">All Domains</option>
+                            {% for d in domains %}
+                            <option value="{{ d }}">{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="histFilterTester" onchange="applyHistoryFilters()">
+                            <option value="">All Testers</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <input type="text" class="form-control form-control-sm" id="histFilterSearch"
+                               placeholder="Search ref or title..." oninput="applyHistoryFilters()">
+                    </div>
+                    <div class="col-auto ms-auto">
+                        <span class="badge bg-secondary" id="histRowCount">{{ test_history|length }}</span>
+                        <small class="text-muted">tests</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Table -->
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Control Ref</th>
+                            <th>Title</th>
+                            <th>Vendor</th>
+                            <th>Type</th>
+                            <th>Result</th>
+                            <th>Tester</th>
+                            <th>Evidence</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody">
+                        {% for t in test_history %}
+                        <tr data-result="{{ t.result }}"
+                            data-type="{{ t.test_type }}"
+                            data-domain="{{ t.implementation.control.domain if t.implementation and t.implementation.control else '' }}"
+                            data-tester="{{ t.tester_user_id or '' }}"
+                            data-search="{{ t.implementation.control.control_ref|lower if t.implementation and t.implementation.control else '' }} {{ t.implementation.control.title|lower if t.implementation and t.implementation.control else '' }} {{ t.implementation.vendor.name|lower if t.implementation and t.implementation.vendor else '' }}">
+                            <td>{{ t.test_date.strftime('%Y-%m-%d') if t.test_date else '&mdash;' }}</td>
+                            <td>
+                                {% if t.implementation and t.implementation.control %}
+                                <a href="/controls/{{ t.implementation.control.id }}" class="text-decoration-none fw-semibold">
+                                    {{ t.implementation.control.control_ref }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.implementation and t.implementation.control %}
+                                {{ t.implementation.control.title }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.implementation and t.implementation.vendor %}
+                                <a href="/vendors/{{ t.implementation.vendor.id }}" class="text-decoration-none">
+                                    {{ t.implementation.vendor.name }}
+                                </a>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td><small>{{ test_type_labels.get(t.test_type, t.test_type) }}</small></td>
+                            <td>
+                                <span class="badge" style="background:{{ test_result_colors.get(t.result, '#6c757d') }};color:#fff;">
+                                    {{ test_result_labels.get(t.result, t.result) }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if t.tester %}
+                                <small>{{ t.tester.display_name }}</small>
+                                {% else %}
+                                <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.evidence_files %}
+                                <span class="badge bg-light text-dark">
+                                    <i class="bi bi-paperclip"></i> {{ t.evidence_files|length }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <a href="/controls/tests/{{ t.id }}" class="btn btn-sm btn-outline-secondary" title="View test details">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% if not test_history %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-clock-history" style="font-size:2rem;"></i>
+                    <p class="mt-2">No tests recorded yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function applyScheduleFilters() {
+    var statusVal = document.getElementById('schFilterStatus').value;
+    var domainVal = document.getElementById('schFilterDomain').value;
+    var vendorVal = document.getElementById('schFilterVendor').value;
+    var ownerVal = document.getElementById('schFilterOwner').value;
+    var searchVal = document.getElementById('schFilterSearch').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('#scheduleBody tr');
+    var visible = 0;
+
+    rows.forEach(function(row) {
+        var show = true;
+        if (statusVal && row.dataset.status !== statusVal) show = false;
+        if (domainVal && row.dataset.domain !== domainVal) show = false;
+        if (vendorVal && row.dataset.vendor !== vendorVal) show = false;
+        if (ownerVal === 'unassigned' && row.dataset.owner !== '') show = false;
+        else if (ownerVal && ownerVal !== 'unassigned' && row.dataset.owner !== ownerVal) show = false;
+        if (searchVal && row.dataset.search.indexOf(searchVal) === -1) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('schRowCount').textContent = visible;
+}
+
+function applyHistoryFilters() {
+    var resultVal = document.getElementById('histFilterResult').value;
+    var typeVal = document.getElementById('histFilterType').value;
+    var domainVal = document.getElementById('histFilterDomain').value;
+    var testerVal = document.getElementById('histFilterTester').value;
+    var searchVal = document.getElementById('histFilterSearch').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('#historyBody tr');
+    var visible = 0;
+
+    rows.forEach(function(row) {
+        var show = true;
+        if (resultVal && row.dataset.result !== resultVal) show = false;
+        if (typeVal && row.dataset.type !== typeVal) show = false;
+        if (domainVal && row.dataset.domain !== domainVal) show = false;
+        if (testerVal && row.dataset.tester !== testerVal) show = false;
+        if (searchVal && row.dataset.search.indexOf(searchVal) === -1) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('histRowCount').textContent = visible;
+}
+
+// URL param handling: ?status=OVERDUE pre-selects filter, ?tab=history switches tab
+(function() {
+    var params = new URLSearchParams(window.location.search);
+
+    if (params.get('tab') === 'history') {
+        var histTab = document.getElementById('history-tab');
+        if (histTab) {
+            var tab = new bootstrap.Tab(histTab);
+            tab.show();
+        }
+    }
+
+    if (params.get('status')) {
+        document.getElementById('schFilterStatus').value = params.get('status');
+        applyScheduleFilters();
+    }
+
+    if (params.get('result')) {
+        document.getElementById('histFilterResult').value = params.get('result');
+        applyHistoryFilters();
+    }
+})();
+</script>
+{% endblock %}

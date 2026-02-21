@@ -217,6 +217,95 @@ async def gap_analysis(
     })
 
 
+@router.get("/controls/testing", response_class=HTMLResponse)
+async def control_testing_tracker(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from datetime import timedelta
+    now = datetime.utcnow()
+    thirty_days = now + timedelta(days=30)
+
+    # Schedule: all implemented controls with testing obligations
+    schedule_impls = svc.get_all_testing_schedule(db)
+    impl_ids_for_last_tested = list({impl.control_id for impl in schedule_impls})
+    last_tested_map = svc.get_last_tested_dates(db, impl_ids_for_last_tested)
+
+    # Per-implementation last tested (more granular than per-control)
+    from sqlalchemy import func as sa_func
+    from models import ControlTest as CT
+    impl_last_tested_rows = db.query(
+        CT.implementation_id, sa_func.max(CT.test_date),
+    ).filter(
+        CT.implementation_id.in_([i.id for i in schedule_impls]) if schedule_impls else False,
+    ).group_by(CT.implementation_id).all()
+    impl_last_tested = {iid: dt for iid, dt in impl_last_tested_rows}
+
+    schedule_rows = []
+    for impl in schedule_impls:
+        last_tested = impl_last_tested.get(impl.id)
+        next_due = impl.next_test_date
+        if next_due:
+            delta = (next_due - now).days
+            if delta < 0:
+                testing_status = "OVERDUE"
+            elif delta <= 30:
+                testing_status = "UPCOMING"
+            else:
+                testing_status = "ON_TRACK"
+            days_until_due = delta
+        else:
+            testing_status = "NEVER_TESTED"
+            days_until_due = None
+
+        schedule_rows.append({
+            "impl": impl,
+            "testing_status": testing_status,
+            "last_tested": last_tested,
+            "days_until_due": days_until_due,
+        })
+
+    # Test history
+    test_history = svc.get_all_test_history(db)
+
+    # KPIs
+    testing_summary = dash_svc.get_testing_status_summary(db)
+    month_start = datetime(now.year, now.month, 1)
+    completed_this_month = sum(
+        1 for t in test_history if t.test_date and t.test_date >= month_start
+    )
+    year_start = datetime(now.year, 1, 1)
+    ytd_tests = [t for t in test_history if t.test_date and t.test_date >= year_start]
+    ytd_total = len(ytd_tests)
+    from models import TEST_RESULT_PASS
+    ytd_pass = sum(1 for t in ytd_tests if t.result == TEST_RESULT_PASS)
+    pass_rate_ytd = round(ytd_pass / ytd_total * 100) if ytd_total > 0 else 0
+
+    # Filter reference data
+    users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
+    schedule_vendors = sorted({
+        impl.vendor.name for impl in schedule_impls if impl.vendor
+    })
+
+    return templates.TemplateResponse("control_testing.html", {
+        "request": request,
+        "schedule_rows": schedule_rows,
+        "test_history": test_history,
+        "kpi_overdue": testing_summary["overdue"],
+        "kpi_upcoming": testing_summary["upcoming"],
+        "kpi_completed_month": completed_this_month,
+        "kpi_pass_rate": pass_rate_ytd,
+        "domains": VALID_CONTROL_DOMAINS,
+        "users": users,
+        "schedule_vendors": schedule_vendors,
+        "test_type_labels": TEST_TYPE_LABELS,
+        "test_result_labels": TEST_RESULT_LABELS,
+        "test_result_colors": TEST_RESULT_COLORS,
+        "frequency_labels": CONTROL_FREQUENCY_LABELS,
+    })
+
+
 @router.post("/controls/{control_id}/toggle", response_class=HTMLResponse)
 async def control_toggle(control_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
     ctrl = db.query(Control).filter(Control.id == control_id).first()

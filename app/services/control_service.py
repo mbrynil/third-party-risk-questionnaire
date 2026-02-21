@@ -306,6 +306,29 @@ def update_next_test_date(db: Session, implementation):
     implementation.next_test_date = base_date + timedelta(days=freq_days)
 
 
+def get_all_testing_schedule(db: Session):
+    """All IMPLEMENTED control implementations — the testing obligation backlog."""
+    return db.query(ControlImplementation).options(
+        joinedload(ControlImplementation.control),
+        joinedload(ControlImplementation.vendor),
+        joinedload(ControlImplementation.owner),
+    ).filter(
+        ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+    ).order_by(
+        ControlImplementation.next_test_date.asc().nullsfirst(),
+    ).all()
+
+
+def get_all_test_history(db: Session, limit: int = 200):
+    """Most recent test executions across all implementations."""
+    return db.query(ControlTest).options(
+        joinedload(ControlTest.tester),
+        joinedload(ControlTest.evidence_files),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.vendor),
+    ).order_by(ControlTest.test_date.desc()).limit(limit).all()
+
+
 # ==================== CONTROL EVIDENCE ====================
 
 EVIDENCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "uploads", "control_evidence")
