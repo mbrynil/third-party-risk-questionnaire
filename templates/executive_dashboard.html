@@ -149,6 +149,32 @@
     </div>
 </div>
 
+{# ==================== CONTROL PROGRAM KPIs ==================== #}
+{% if data.control_stats %}
+{% set cstats = data.control_stats %}
+<div class="row g-3 mb-4">
+    <div class="col-12"><h6 class="text-muted text-uppercase" style="font-size:0.75rem;letter-spacing:0.05em;"><i class="bi bi-shield-lock me-1"></i>Control Program</h6></div>
+    <div class="col-md-4 col-6">
+        <div class="kpi-card-exec" style="border-left: 4px solid #6f42c1;">
+            <div class="kpi-value" style="color: #6f42c1;">{{ cstats.active_controls }}</div>
+            <div class="kpi-label">Active Controls</div>
+        </div>
+    </div>
+    <div class="col-md-4 col-6">
+        <div class="kpi-card-exec" style="border-left: 4px solid {% if cstats.effectiveness_pct >= 70 %}#198754{% elif cstats.effectiveness_pct >= 40 %}#ffc107{% else %}#dc3545{% endif %};">
+            <div class="kpi-value" style="color: {% if cstats.effectiveness_pct >= 70 %}#198754{% elif cstats.effectiveness_pct >= 40 %}#ffc107{% else %}#dc3545{% endif %};">{{ cstats.effectiveness_pct }}%</div>
+            <div class="kpi-label">Control Effectiveness</div>
+        </div>
+    </div>
+    <div class="col-md-4 col-6">
+        <div class="kpi-card-exec" style="border-left: 4px solid {% if cstats.overdue_tests > 0 %}#dc3545{% else %}#198754{% endif %};">
+            <div class="kpi-value" style="color: {% if cstats.overdue_tests > 0 %}#dc3545{% else %}#198754{% endif %};">{{ cstats.overdue_tests }}</div>
+            <div class="kpi-label">Overdue Control Tests</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# ==================== ROW: Risk Dist + Top 5 ==================== #}
 <div class="row g-4 mb-4">
     <div class="col-lg-5">

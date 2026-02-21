@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}{{ control.control_ref }} — {{ control.title }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Control Library</a></li>
+<li class="breadcrumb-item active">{{ control.control_ref }}</li>
+{% endblock %}
+
+{% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">{{ control.control_ref }} — {{ control.title }}</h3>
+        <div class="d-flex gap-2 flex-wrap mt-2">
+            <span class="badge bg-{% if control.control_type == 'PREVENTIVE' %}primary{% elif control.control_type == 'DETECTIVE' %}info{% else %}warning{% endif %}">{{ control_type_labels[control.control_type] }}</span>
+            <span class="badge bg-secondary">{{ impl_type_labels[control.implementation_type] }}</span>
+            <span class="badge bg-dark">{{ frequency_labels[control.test_frequency] }}</span>
+            <span class="badge bg-{% if control.criticality == 'CRITICAL' %}danger{% elif control.criticality == 'HIGH' %}warning text-dark{% elif control.criticality == 'MEDIUM' %}info{% else %}secondary{% endif %}">{{ control.criticality }}</span>
+            {% if not control.is_active %}<span class="badge bg-secondary">Inactive</span>{% endif %}
+            {% if control.owner_role %}<span class="badge bg-light text-dark border">{{ control.owner_role }}</span>{% endif %}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/controls/{{ control.id }}/edit" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i>Edit</a>
+    </div>
+</div>
+
+{# Description #}
+{% if control.description %}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Description</h6></div>
+    <div class="card-body">
+        <p class="mb-0">{{ control.description }}</p>
+    </div>
+</div>
+{% endif %}
+
+{# Framework Mappings #}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Framework Mappings</h6></div>
+    {% if control.framework_mappings %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Framework</th><th>Reference</th></tr></thead>
+            <tbody>
+                {% for m in control.framework_mappings %}
+                <tr>
+                    <td>{{ framework_display.get(m.framework, m.framework) }}</td>
+                    <td><code>{{ m.reference }}</code></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted">No framework mappings.</div>
+    {% endif %}
+</div>
+
+{# Linked Questions #}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Linked Questions <span class="badge bg-secondary ms-1">{{ control.question_mappings|length }}</span></h6></div>
+    {% if control.question_mappings %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Category</th><th>Question</th></tr></thead>
+            <tbody>
+                {% for m in control.question_mappings %}
+                <tr>
+                    <td><small class="text-muted">{{ m.question_bank_item.category if m.question_bank_item else '—' }}</small></td>
+                    <td>{{ m.question_bank_item.text if m.question_bank_item else '(deleted)' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted">No linked questions.</div>
+    {% endif %}
+</div>
+
+{# Linked Risk Statements #}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Linked Risk Statements <span class="badge bg-secondary ms-1">{{ control.risk_mappings|length }}</span></h6></div>
+    {% if control.risk_mappings %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Category</th><th>Severity</th><th>Finding</th></tr></thead>
+            <tbody>
+                {% for m in control.risk_mappings %}
+                <tr>
+                    <td><small class="text-muted">{{ m.risk_statement.category if m.risk_statement else '—' }}</small></td>
+                    <td>
+                        {% if m.risk_statement %}
+                        <span class="badge bg-{% if m.risk_statement.severity == 'CRITICAL' %}danger{% elif m.risk_statement.severity == 'HIGH' %}warning text-dark{% elif m.risk_statement.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">{{ m.risk_statement.severity }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ m.risk_statement.finding_text[:120] if m.risk_statement else '(deleted)' }}{% if m.risk_statement and m.risk_statement.finding_text|length > 120 %}...{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted">No linked risk statements.</div>
+    {% endif %}
+</div>
+
+{# Implementations #}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Implementations <span class="badge bg-secondary ms-1">{{ implementations|length }}</span></h6></div>
+    {% if implementations %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Vendor</th><th>Status</th><th>Effectiveness</th></tr></thead>
+            <tbody>
+                {% for impl in implementations %}
+                <tr>
+                    <td><a href="/controls/implementations/{{ impl.id }}" class="text-decoration-none">{{ impl.vendor.name if impl.vendor else 'Org-wide' }}</a></td>
+                    <td><span class="badge" style="background-color:{{ impl_status_colors.get(impl.status, '#6c757d') }}">{{ impl_status_labels.get(impl.status, impl.status) }}</span></td>
+                    <td><span class="badge" style="background-color:{{ effectiveness_colors.get(impl.effectiveness, '#6c757d') }}">{{ effectiveness_labels.get(impl.effectiveness, impl.effectiveness) }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted">No implementations tracked yet.</div>
+    {% endif %}
+</div>
+
+{# Comments #}
+{% set comment_entity_type = "control" %}
+{% set comment_entity_id = control.id %}
+{% include "partials/comments.html" %}
+{% endblock %}

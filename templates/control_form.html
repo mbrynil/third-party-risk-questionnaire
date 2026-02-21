@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Edit' if control else 'New' }} Control{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Control Library</a></li>
+{% if control %}
+<li class="breadcrumb-item"><a href="/controls/{{ control.id }}">{{ control.control_ref }}</a></li>
+<li class="breadcrumb-item active">Edit</li>
+{% else %}
+<li class="breadcrumb-item active">New Control</li>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <h3 class="mb-4"><i class="bi bi-shield-lock me-2"></i>{{ 'Edit' if control else 'New' }} Control</h3>
+
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/controls/{{ control.id ~ '/edit' if control else 'new' }}">
+            <div class="card mb-4">
+                <div class="card-header"><h6 class="mb-0">Control Details</h6></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Control Ref <span class="text-danger">*</span></label>
+                            <input type="text" name="control_ref" class="form-control" value="{{ control.control_ref if control else '' }}" required placeholder="CTL-XX-001">
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label">Title <span class="text-danger">*</span></label>
+                            <input type="text" name="title" class="form-control" value="{{ control.title if control else '' }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-control" rows="3">{{ control.description if control else '' }}</textarea>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Domain <span class="text-danger">*</span></label>
+                            <select name="domain" class="form-select" required>
+                                {% for d in domains %}
+                                <option value="{{ d }}" {% if control and control.domain == d %}selected{% endif %}>{{ d }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Control Type <span class="text-danger">*</span></label>
+                            <select name="control_type" class="form-select" required>
+                                {% for t in control_types %}
+                                <option value="{{ t }}" {% if control and control.control_type == t %}selected{% endif %}>{{ control_type_labels[t] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Implementation Type <span class="text-danger">*</span></label>
+                            <select name="implementation_type" class="form-select" required>
+                                {% for t in impl_types %}
+                                <option value="{{ t }}" {% if control and control.implementation_type == t %}selected{% endif %}>{{ impl_type_labels[t] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Test Frequency <span class="text-danger">*</span></label>
+                            <select name="test_frequency" class="form-select" required>
+                                {% for f in frequencies %}
+                                <option value="{{ f }}" {% if control and control.test_frequency == f %}selected{% endif %}>{{ frequency_labels[f] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Criticality <span class="text-danger">*</span></label>
+                            <select name="criticality" class="form-select" required>
+                                {% for c in criticalities %}
+                                <option value="{{ c }}" {% if control and control.criticality == c %}selected{% endif %}>{{ c }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Owner Role</label>
+                            <input type="text" name="owner_role" class="form-control" value="{{ control.owner_role if control and control.owner_role else '' }}" placeholder="e.g. IT Security">
+                        </div>
+                        {% if control %}
+                        <div class="col-md-4">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" name="is_active" class="form-check-input" id="isActive" {% if control.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="isActive">Active</label>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# Framework Mappings #}
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">Framework Mappings</h6>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addFrameworkRow()"><i class="bi bi-plus-lg me-1"></i>Add Mapping</button>
+                </div>
+                <div class="card-body" id="fwMappings">
+                    {% if control and control.framework_mappings %}
+                    {% for m in control.framework_mappings %}
+                    <div class="row g-2 mb-2 fw-row">
+                        <div class="col-md-4">
+                            <select name="fw_framework_{{ loop.index0 }}" class="form-select form-select-sm">
+                                <option value="">Select Framework</option>
+                                {% for key, label in frameworks %}
+                                <option value="{{ key }}" {% if m.framework == key %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <input type="text" name="fw_reference_{{ loop.index0 }}" class="form-control form-control-sm" value="{{ m.reference }}" placeholder="Reference (e.g. CC6.1)">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.fw-row').remove()"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div class="row g-2 mb-2 fw-row">
+                        <div class="col-md-4">
+                            <select name="fw_framework_0" class="form-select form-select-sm">
+                                <option value="">Select Framework</option>
+                                {% for key, label in frameworks %}
+                                <option value="{{ key }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <input type="text" name="fw_reference_0" class="form-control form-control-sm" placeholder="Reference (e.g. CC6.1)">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.fw-row').remove()"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# Question Mappings #}
+            <div class="card mb-4">
+                <div class="card-header"><h6 class="mb-0">Linked Questions</h6></div>
+                <div class="card-body" style="max-height:300px;overflow-y:auto;">
+                    {% for cat, items in qb_grouped.items() %}
+                    <h6 class="text-muted mt-2 mb-1" style="font-size:0.8rem;">{{ cat }}</h6>
+                    {% for item in items %}
+                    <div class="form-check">
+                        <input type="checkbox" name="question_ids" value="{{ item.id }}" class="form-check-input" id="q{{ item.id }}" {% if item.id in mapped_question_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="q{{ item.id }}" style="font-size:0.85rem;">{{ item.text[:100] }}{% if item.text|length > 100 %}...{% endif %}</label>
+                    </div>
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Risk Mappings #}
+            <div class="card mb-4">
+                <div class="card-header"><h6 class="mb-0">Linked Risk Statements</h6></div>
+                <div class="card-body" style="max-height:300px;overflow-y:auto;">
+                    {% for cat, stmts in rs_grouped.items() %}
+                    <h6 class="text-muted mt-2 mb-1" style="font-size:0.8rem;">{{ cat }}</h6>
+                    {% for rs in stmts %}
+                    <div class="form-check">
+                        <input type="checkbox" name="risk_ids" value="{{ rs.id }}" class="form-check-input" id="r{{ rs.id }}" {% if rs.id in mapped_risk_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="r{{ rs.id }}" style="font-size:0.85rem;">
+                            <span class="badge bg-{% if rs.severity == 'CRITICAL' %}danger{% elif rs.severity == 'HIGH' %}warning text-dark{% else %}secondary{% endif %} me-1">{{ rs.severity }}</span>
+                            {{ rs.finding_text[:100] }}{% if rs.finding_text|length > 100 %}...{% endif %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{{ 'Update' if control else 'Create' }} Control</button>
+                <a href="{{ '/controls/' ~ control.id if control else '/controls' }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+        {% if control %}
+        <form method="post" action="/controls/{{ control.id }}/delete" class="mt-3" onsubmit="return confirm('Delete this control?')">
+            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+let fwIdx = {{ (control.framework_mappings|length if control and control.framework_mappings else 1) }};
+function addFrameworkRow() {
+    const container = document.getElementById('fwMappings');
+    const row = document.createElement('div');
+    row.className = 'row g-2 mb-2 fw-row';
+    row.innerHTML = `
+        <div class="col-md-4">
+            <select name="fw_framework_${fwIdx}" class="form-select form-select-sm">
+                <option value="">Select Framework</option>
+                {% for key, label in frameworks %}
+                <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6">
+            <input type="text" name="fw_reference_${fwIdx}" class="form-control form-control-sm" placeholder="Reference (e.g. CC6.1)">
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.fw-row').remove()"><i class="bi bi-trash"></i></button>
+        </div>
+    `;
+    container.appendChild(row);
+    fwIdx++;
+}
+</script>
+{% endblock %}

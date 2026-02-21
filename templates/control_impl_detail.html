@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}{{ impl.control.control_ref }} — {{ impl.vendor.name if impl.vendor else 'Org' }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+{% if impl.vendor %}
+<li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ impl.vendor.id }}">{{ impl.vendor.name }}</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ impl.vendor.id }}/controls">Controls</a></li>
+{% else %}
+<li class="breadcrumb-item"><a href="/controls">Control Library</a></li>
+{% endif %}
+<li class="breadcrumb-item active">{{ impl.control.control_ref }}</li>
+{% endblock %}
+
+{% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<h3 class="mb-4">{{ impl.control.control_ref }} — {{ impl.control.title }}</h3>
+
+<div class="row g-4">
+    {# Control Info Card (read-only) #}
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0">Control Info</h6></div>
+            <div class="card-body">
+                <dl class="mb-0">
+                    <dt>Domain</dt><dd>{{ impl.control.domain }}</dd>
+                    <dt>Type</dt><dd>{{ control_type_labels[impl.control.control_type] }}</dd>
+                    <dt>Implementation</dt><dd>{{ impl_type_labels[impl.control.implementation_type] }}</dd>
+                    <dt>Test Frequency</dt><dd>{{ frequency_labels[impl.control.test_frequency] }}</dd>
+                    <dt>Criticality</dt><dd><span class="badge bg-{% if impl.control.criticality == 'CRITICAL' %}danger{% elif impl.control.criticality == 'HIGH' %}warning text-dark{% else %}secondary{% endif %}">{{ impl.control.criticality }}</span></dd>
+                    {% if impl.control.description %}
+                    <dt>Description</dt><dd><small>{{ impl.control.description }}</small></dd>
+                    {% endif %}
+                    {% if impl.control.framework_mappings %}
+                    <dt>Frameworks</dt>
+                    <dd>
+                        {% for m in impl.control.framework_mappings %}
+                        <span class="badge bg-light text-dark border" style="font-size:0.7rem;">{{ framework_display.get(m.framework, m.framework) }}: {{ m.reference }}</span>
+                        {% endfor %}
+                    </dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+        <a href="/controls/{{ impl.control.id }}" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-arrow-right me-1"></i>View Full Control</a>
+    </div>
+
+    {# Edit Implementation Form #}
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0">Implementation Details</h6></div>
+            <div class="card-body">
+                <form method="post" action="/controls/implementations/{{ impl.id }}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select">
+                                {% for s in impl_statuses %}
+                                <option value="{{ s }}" {% if impl.status == s %}selected{% endif %}>{{ impl_status_labels[s] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Effectiveness</label>
+                            <select name="effectiveness" class="form-select">
+                                {% for e in effectiveness_levels %}
+                                <option value="{{ e }}" {% if impl.effectiveness == e %}selected{% endif %}>{{ effectiveness_labels[e] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Owner</label>
+                            <select name="owner_user_id" class="form-select">
+                                <option value="">— Unassigned —</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}" {% if impl.owner_user_id == u.id %}selected{% endif %}>{{ u.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Implemented Date</label>
+                            <input type="date" name="implemented_date" class="form-control" value="{{ impl.implemented_date.strftime('%Y-%m-%d') if impl.implemented_date else '' }}">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3">{{ impl.notes or '' }}</textarea>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+                    </div>
+                </form>
+                <form method="post" action="/controls/implementations/{{ impl.id }}/delete" class="mt-2" onsubmit="return confirm('Delete this implementation?')">
+                    <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete Implementation</button>
+                </form>
+            </div>
+        </div>
+
+        {# Test History #}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Test History</h6>
+                <a href="/controls/implementations/{{ impl.id }}/tests/new" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Record Test</a>
+            </div>
+            {% if impl.tests %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Result</th>
+                            <th>Tester</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in impl.tests %}
+                        <tr>
+                            <td>{{ t.test_date.strftime('%Y-%m-%d') if t.test_date else '—' }}</td>
+                            <td><span class="badge bg-secondary">{{ test_type_labels.get(t.test_type, t.test_type) }}</span></td>
+                            <td><span class="badge" style="background-color:{{ test_result_colors.get(t.result, '#6c757d') }}">{{ test_result_labels.get(t.result, t.result) }}</span></td>
+                            <td><small>{{ t.tester.display_name if t.tester else '—' }}</small></td>
+                            <td class="text-end"><a href="/controls/tests/{{ t.id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body text-muted">No tests recorded yet.</div>
+            {% endif %}
+        </div>
+
+        {# Next Test Info #}
+        {% if impl.next_test_date %}
+        <div class="alert alert-info d-flex align-items-center">
+            <i class="bi bi-calendar-event me-2"></i>
+            Next test due: <strong class="ms-1">{{ impl.next_test_date.strftime('%Y-%m-%d') }}</strong>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# Comments #}
+{% set comment_entity_type = "control_implementation" %}
+{% set comment_entity_id = impl.id %}
+{% include "partials/comments.html" %}
+{% endblock %}

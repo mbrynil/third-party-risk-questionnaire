@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}{{ vendor.name }} — Controls{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ vendor.id }}">{{ vendor.name }}</a></li>
+<li class="breadcrumb-item active">Controls</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-shield-lock me-2"></i>{{ vendor.name }} — Control Implementations</h3>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addControlsModal"><i class="bi bi-plus-lg me-1"></i>Add Controls</button>
+</div>
+
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md-2 col-4">
+        <div class="card text-center p-2">
+            <div style="font-size:1.5rem;font-weight:700;color:#2563eb;">{{ stats.total }}</div>
+            <small class="text-muted">Total</small>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card text-center p-2">
+            <div style="font-size:1.5rem;font-weight:700;color:#198754;">{{ stats.implemented }}</div>
+            <small class="text-muted">Implemented</small>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card text-center p-2">
+            <div style="font-size:1.5rem;font-weight:700;color:#fd7e14;">{{ stats.partial }}</div>
+            <small class="text-muted">Partial</small>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card text-center p-2">
+            <div style="font-size:1.5rem;font-weight:700;color:#6f42c1;">{{ stats.planned }}</div>
+            <small class="text-muted">Planned</small>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card text-center p-2">
+            <div style="font-size:1.5rem;font-weight:700;color:#dc3545;">{{ stats.not_implemented }}</div>
+            <small class="text-muted">Not Impl</small>
+        </div>
+    </div>
+    <div class="col-md-2 col-4">
+        <div class="card text-center p-2">
+            <div style="font-size:1.5rem;font-weight:700;color:{% if stats.effectiveness_pct >= 70 %}#198754{% elif stats.effectiveness_pct >= 40 %}#ffc107{% else %}#dc3545{% endif %};">{{ stats.effectiveness_pct }}%</div>
+            <small class="text-muted">Effective</small>
+        </div>
+    </div>
+</div>
+
+{# Progress Bar #}
+{% if stats.total > 0 %}
+<div class="progress mb-4" style="height:24px;border-radius:8px;">
+    {% if stats.implemented > 0 %}<div class="progress-bar" style="width:{{ stats.implemented / stats.total * 100 }}%;background-color:#198754;" title="Implemented: {{ stats.implemented }}">{{ stats.implemented }}</div>{% endif %}
+    {% if stats.partial > 0 %}<div class="progress-bar" style="width:{{ stats.partial / stats.total * 100 }}%;background-color:#fd7e14;" title="Partial: {{ stats.partial }}">{{ stats.partial }}</div>{% endif %}
+    {% if stats.planned > 0 %}<div class="progress-bar" style="width:{{ stats.planned / stats.total * 100 }}%;background-color:#6f42c1;" title="Planned: {{ stats.planned }}">{{ stats.planned }}</div>{% endif %}
+    {% if stats.not_implemented > 0 %}<div class="progress-bar" style="width:{{ stats.not_implemented / stats.total * 100 }}%;background-color:#dc3545;" title="Not Impl: {{ stats.not_implemented }}">{{ stats.not_implemented }}</div>{% endif %}
+    {% if stats.na > 0 %}<div class="progress-bar" style="width:{{ stats.na / stats.total * 100 }}%;background-color:#6c757d;" title="N/A: {{ stats.na }}">{{ stats.na }}</div>{% endif %}
+</div>
+{% endif %}
+
+{# Filter Bar #}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <select name="domain" class="form-select form-select-sm">
+                    <option value="">All Domains</option>
+                    {% for d in domains %}
+                    <option value="{{ d }}" {% if f_domain == d %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    {% for s in impl_statuses %}
+                    <option value="{{ s }}" {% if f_status == s %}selected{% endif %}>{{ impl_status_labels[s] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-outline-primary">Filter</button>
+                <a href="/vendors/{{ vendor.id }}/controls" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+            <div class="col-md-2 text-end">
+                <a href="/vendors/{{ vendor.id }}/controls/gaps" class="btn btn-sm btn-outline-info"><i class="bi bi-clipboard-data me-1"></i>Gap Analysis</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Implementations Table #}
+{% if implementations %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Ref</th>
+                    <th>Title</th>
+                    <th>Domain</th>
+                    <th>Status</th>
+                    <th>Effectiveness</th>
+                    <th>Owner</th>
+                    <th>Next Test</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for impl in implementations %}
+                <tr>
+                    <td><a href="/controls/implementations/{{ impl.id }}" class="text-decoration-none fw-semibold">{{ impl.control.control_ref }}</a></td>
+                    <td>{{ impl.control.title }}</td>
+                    <td><small class="text-muted">{{ impl.control.domain }}</small></td>
+                    <td><span class="badge" style="background-color:{{ impl_status_colors.get(impl.status, '#6c757d') }}">{{ impl_status_labels.get(impl.status, impl.status) }}</span></td>
+                    <td><span class="badge" style="background-color:{{ effectiveness_colors.get(impl.effectiveness, '#6c757d') }}">{{ effectiveness_labels.get(impl.effectiveness, impl.effectiveness) }}</span></td>
+                    <td><small>{{ impl.owner.display_name if impl.owner else '—' }}</small></td>
+                    <td>
+                        {% if impl.next_test_date %}
+                        <small>{{ impl.next_test_date.strftime('%Y-%m-%d') }}</small>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="/controls/implementations/{{ impl.id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-shield-lock" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No controls tracked</h5>
+        <p class="text-muted">Add controls from the library to start tracking implementation.</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addControlsModal"><i class="bi bi-plus-lg me-1"></i>Add Controls</button>
+    </div>
+</div>
+{% endif %}
+
+{# Add Controls Modal #}
+<div class="modal fade" id="addControlsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="/vendors/{{ vendor.id }}/controls/bulk">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add Controls from Library</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="max-height:400px;overflow-y:auto;">
+                    {% if available_controls %}
+                    <div class="mb-2 d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelectorAll('#addControlsModal input[type=checkbox]').forEach(c=>c.checked=true)">Select All</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.querySelectorAll('#addControlsModal input[type=checkbox]').forEach(c=>c.checked=false)">Deselect All</button>
+                    </div>
+                    {% set ns = namespace(current_domain='') %}
+                    {% for ctrl in available_controls %}
+                    {% if ctrl.domain != ns.current_domain %}
+                    {% set ns.current_domain = ctrl.domain %}
+                    <h6 class="text-muted mt-3 mb-1" style="font-size:0.8rem;">{{ ctrl.domain }}</h6>
+                    {% endif %}
+                    <div class="form-check">
+                        <input type="checkbox" name="control_ids" value="{{ ctrl.id }}" class="form-check-input" id="ctrl{{ ctrl.id }}">
+                        <label class="form-check-label" for="ctrl{{ ctrl.id }}">
+                            <strong>{{ ctrl.control_ref }}</strong> — {{ ctrl.title }}
+                            <span class="badge bg-{% if ctrl.criticality == 'CRITICAL' %}danger{% elif ctrl.criticality == 'HIGH' %}warning text-dark{% else %}secondary{% endif %} ms-1" style="font-size:0.65rem;">{{ ctrl.criticality }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-muted mb-0">All library controls are already tracked for this vendor.</p>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    {% if available_controls %}
+                    <button type="submit" class="btn btn-primary">Add Selected</button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

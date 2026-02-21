@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Control Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item active">Control Dashboard</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0"><i class="bi bi-shield-check me-2"></i>Control Program Dashboard</h3>
+    <div class="d-flex gap-2">
+        <a href="/controls" class="btn btn-outline-primary"><i class="bi bi-shield-lock me-1"></i>Library</a>
+        <a href="/controls/gap-analysis" class="btn btn-outline-info"><i class="bi bi-clipboard-data me-1"></i>Gap Analysis</a>
+    </div>
+</div>
+
+{# KPIs #}
+{% set kpis = data.kpis %}
+<div class="row g-3 mb-4">
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#2563eb;">{{ kpis.active_controls }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Active Controls</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:{% if kpis.impl_pct >= 70 %}#198754{% elif kpis.impl_pct >= 40 %}#ffc107{% else %}#dc3545{% endif %};">{{ kpis.impl_pct }}%</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Implemented</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:{% if kpis.eff_pct >= 70 %}#198754{% elif kpis.eff_pct >= 40 %}#ffc107{% else %}#dc3545{% endif %};">{{ kpis.eff_pct }}%</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Effective</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:{% if kpis.overdue_tests > 0 %}#dc3545{% else %}#198754{% endif %};">{{ kpis.overdue_tests }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Overdue Tests</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#6f42c1;">{{ kpis.frameworks_covered }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Frameworks</small>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    {# Framework Coverage #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-collection me-1"></i>Framework Coverage</h6></div>
+            {% if data.fw_coverage %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Framework</th><th>Controls</th><th>Coverage</th><th>Effectiveness</th></tr></thead>
+                    <tbody>
+                        {% for key, fw in data.fw_coverage.items() %}
+                        <tr>
+                            <td class="fw-semibold">{{ fw.label }}</td>
+                            <td>{{ fw.implemented }} / {{ fw.total }}</td>
+                            <td>
+                                <div class="progress" style="height:16px;min-width:80px;">
+                                    <div class="progress-bar bg-{% if fw.coverage_pct >= 70 %}success{% elif fw.coverage_pct >= 40 %}warning{% else %}danger{% endif %}" style="width:{{ fw.coverage_pct }}%;">{{ fw.coverage_pct }}%</div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="progress" style="height:16px;min-width:80px;">
+                                    <div class="progress-bar bg-{% if fw.effectiveness_pct >= 70 %}success{% elif fw.effectiveness_pct >= 40 %}warning{% else %}danger{% endif %}" style="width:{{ fw.effectiveness_pct }}%;">{{ fw.effectiveness_pct }}%</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body text-muted">No framework mappings yet. <a href="/controls">Configure controls</a>.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Domain Effectiveness Heatmap #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-grid-3x3 me-1"></i>Domain Effectiveness</h6></div>
+            {% if data.domain_heatmap %}
+            <div class="card-body">
+                <div class="row g-2">
+                    {% for d in data.domain_heatmap %}
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:{{ d.color }}15;border-left:4px solid {{ d.color }};">
+                            <div style="font-size:1.1rem;font-weight:700;color:{{ d.color }};min-width:42px;">{{ d.pct }}%</div>
+                            <div>
+                                <div class="fw-semibold" style="font-size:0.8rem;">{{ d.domain }}</div>
+                                <div class="text-muted" style="font-size:0.7rem;">{{ d.effective }}/{{ d.total }} effective</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="card-body text-muted">No control implementations yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    {# Testing Status #}
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-clipboard-check me-1"></i>Testing Status (YTD)</h6></div>
+            <div class="card-body">
+                <div class="row g-3 text-center">
+                    <div class="col-6">
+                        <div style="font-size:1.5rem;font-weight:700;">{{ data.testing.total_ytd }}</div>
+                        <small class="text-muted">Total Tests</small>
+                    </div>
+                    <div class="col-6">
+                        <div style="font-size:1.5rem;font-weight:700;color:#198754;">{{ data.testing.pass }}</div>
+                        <small class="text-muted">Passed</small>
+                    </div>
+                    <div class="col-6">
+                        <div style="font-size:1.5rem;font-weight:700;color:#dc3545;">{{ data.testing.fail }}</div>
+                        <small class="text-muted">Failed</small>
+                    </div>
+                    <div class="col-6">
+                        <div style="font-size:1.5rem;font-weight:700;color:#fd7e14;">{{ data.testing.upcoming }}</div>
+                        <small class="text-muted">Upcoming (30d)</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Recent Tests #}
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-clock-history me-1"></i>Recent Test Results</h6></div>
+            {% if data.recent_tests %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Date</th><th>Control</th><th>Vendor</th><th>Type</th><th>Result</th><th>Tester</th></tr></thead>
+                    <tbody>
+                        {% for t in data.recent_tests %}
+                        <tr>
+                            <td><a href="/controls/tests/{{ t.id }}" class="text-decoration-none">{{ t.test_date.strftime('%Y-%m-%d') if t.test_date else '—' }}</a></td>
+                            <td>{{ t.implementation.control.control_ref if t.implementation and t.implementation.control else '—' }}</td>
+                            <td><small>{{ t.implementation.vendor.name if t.implementation and t.implementation.vendor else '—' }}</small></td>
+                            <td><span class="badge bg-secondary" style="font-size:0.7rem;">{{ test_type_labels.get(t.test_type, t.test_type) }}</span></td>
+                            <td><span class="badge" style="background-color:{{ test_result_colors.get(t.result, '#6c757d') }}">{{ test_result_labels.get(t.result, t.result) }}</span></td>
+                            <td><small>{{ t.tester.display_name if t.tester else '—' }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body text-muted">No tests recorded yet.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

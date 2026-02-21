@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ vendor.name }} — Gap Analysis{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/vendors">Vendors</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ vendor.id }}">{{ vendor.name }}</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ vendor.id }}/controls">Controls</a></li>
+<li class="breadcrumb-item active">Gap Analysis</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-clipboard-data me-2"></i>{{ vendor.name }} — Gap Analysis</h3>
+        <p class="text-muted mb-0">{{ impl_count }} of {{ total }} controls implemented, {{ gap_count }} gap{{ 's' if gap_count != 1 else '' }}</p>
+    </div>
+</div>
+
+{# Framework Selector #}
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label form-label-sm mb-1">Filter by Framework</label>
+                <select name="framework" class="form-select form-select-sm">
+                    <option value="">All Frameworks</option>
+                    {% for key, label in frameworks %}
+                    <option value="{{ key }}" {% if f_framework == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Summary Bar #}
+{% if total > 0 %}
+<div class="progress mb-4" style="height:24px;border-radius:8px;">
+    {% set impl_pct = (impl_count / total * 100)|round %}
+    {% set gap_pct = 100 - impl_pct %}
+    <div class="progress-bar bg-success" style="width:{{ impl_pct }}%;" title="Implemented">{{ impl_count }} impl</div>
+    <div class="progress-bar bg-danger" style="width:{{ gap_pct }}%;" title="Gaps">{{ gap_count }} gaps</div>
+</div>
+{% endif %}
+
+{# Gap Table #}
+{% if gaps %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Ref</th>
+                    <th>Title</th>
+                    <th>Domain</th>
+                    <th>Frameworks</th>
+                    <th>Status</th>
+                    <th>Effectiveness</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in gaps %}
+                <tr class="{% if g.is_gap %}table-{% if g.status == 'NOT_TRACKED' %}danger{% else %}warning{% endif %}{% endif %}">
+                    <td>
+                        <a href="/controls/{{ g.control.id }}" class="text-decoration-none fw-semibold">{{ g.control.control_ref }}</a>
+                    </td>
+                    <td>{{ g.control.title }}</td>
+                    <td><small class="text-muted">{{ g.control.domain }}</small></td>
+                    <td>
+                        {% for m in g.control.framework_mappings %}
+                        <span class="badge bg-light text-dark border" style="font-size:0.65rem;">{{ framework_display.get(m.framework, m.framework) }}: {{ m.reference }}</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if g.status == 'NOT_TRACKED' %}
+                        <span class="badge bg-danger">Not Tracked</span>
+                        {% else %}
+                        <span class="badge" style="background-color:{{ impl_status_colors.get(g.status, '#6c757d') }}">{{ impl_status_labels.get(g.status, g.status) }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge" style="background-color:{{ effectiveness_colors.get(g.effectiveness, '#6c757d') }}">{{ effectiveness_labels.get(g.effectiveness, g.effectiveness) }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5 text-muted">
+        <p>No controls found for the selected filter.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

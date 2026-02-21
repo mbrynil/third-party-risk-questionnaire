@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Test Result — {{ test.implementation.control.control_ref }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+{% if test.implementation.vendor %}
+<li class="breadcrumb-item"><a href="/vendors/{{ test.implementation.vendor.id }}">{{ test.implementation.vendor.name }}</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ test.implementation.vendor.id }}/controls">Controls</a></li>
+{% endif %}
+<li class="breadcrumb-item"><a href="/controls/implementations/{{ test.implementation.id }}">{{ test.implementation.control.control_ref }}</a></li>
+<li class="breadcrumb-item active">Test Result</li>
+{% endblock %}
+
+{% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<h3 class="mb-4"><i class="bi bi-clipboard-check me-2"></i>Test Result — {{ test.implementation.control.control_ref }}</h3>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0">Test Details</h6></div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="text-muted small">Date</label>
+                        <p class="fw-semibold mb-0">{{ test.test_date.strftime('%Y-%m-%d %H:%M') if test.test_date else '—' }}</p>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="text-muted small">Type</label>
+                        <p class="mb-0"><span class="badge bg-secondary">{{ test_type_labels.get(test.test_type, test.test_type) }}</span></p>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="text-muted small">Result</label>
+                        <p class="mb-0"><span class="badge" style="background-color:{{ test_result_colors.get(test.result, '#6c757d') }};font-size:0.9rem;">{{ test_result_labels.get(test.result, test.result) }}</span></p>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="text-muted small">Tester</label>
+                        <p class="mb-0">{{ test.tester.display_name if test.tester else '—' }}</p>
+                    </div>
+                </div>
+
+                {% if test.test_procedure %}
+                <div class="mb-3">
+                    <label class="text-muted small">Test Procedure</label>
+                    <div class="bg-light p-3 rounded">{{ test.test_procedure }}</div>
+                </div>
+                {% endif %}
+
+                {% if test.findings %}
+                <div class="mb-3">
+                    <label class="text-muted small">Findings</label>
+                    <div class="bg-light p-3 rounded">{{ test.findings }}</div>
+                </div>
+                {% endif %}
+
+                {% if test.recommendations %}
+                <div>
+                    <label class="text-muted small">Recommendations</label>
+                    <div class="bg-light p-3 rounded">{{ test.recommendations }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Evidence Files #}
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Evidence Files <span class="badge bg-secondary ms-1">{{ test.evidence_files|length }}</span></h6>
+            </div>
+            {% if test.evidence_files %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>File</th><th>Size</th><th>Uploaded</th><th class="text-end">Actions</th></tr></thead>
+                    <tbody>
+                        {% for ev in test.evidence_files %}
+                        <tr>
+                            <td><i class="bi bi-file-earmark me-1"></i>{{ ev.original_filename }}</td>
+                            <td><small class="text-muted">{% if ev.size_bytes %}{{ (ev.size_bytes / 1024)|round(1) }} KB{% endif %}</small></td>
+                            <td><small class="text-muted">{{ ev.uploaded_at.strftime('%Y-%m-%d') if ev.uploaded_at else '' }}</small></td>
+                            <td class="text-end">
+                                <a href="/controls/evidence/{{ ev.id }}/download" class="btn btn-sm btn-outline-primary"><i class="bi bi-download"></i></a>
+                                <form method="post" action="/controls/evidence/{{ ev.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this file?')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body text-muted">No evidence files attached.</div>
+            {% endif %}
+            <div class="card-footer">
+                <form method="post" action="/controls/tests/{{ test.id }}/evidence" enctype="multipart/form-data" class="d-flex gap-2">
+                    <input type="file" name="evidence_files" class="form-control form-control-sm" multiple>
+                    <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i>Upload</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">Control</h6></div>
+            <div class="card-body">
+                <p class="fw-semibold mb-1">{{ test.implementation.control.control_ref }}</p>
+                <p class="mb-2">{{ test.implementation.control.title }}</p>
+                {% if test.implementation.vendor %}
+                <p class="text-muted mb-1"><small>Vendor: {{ test.implementation.vendor.name }}</small></p>
+                {% endif %}
+                {% for m in test.implementation.control.framework_mappings %}
+                <span class="badge bg-light text-dark border" style="font-size:0.7rem;">{{ framework_display.get(m.framework, m.framework) }}: {{ m.reference }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

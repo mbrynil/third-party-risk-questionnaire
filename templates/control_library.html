@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Control Library{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item active">Control Library</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-shield-lock me-2"></i>Control Library</h3>
+        <p class="text-muted mb-0">{{ stats.active }} active controls across {{ stats.domains }} domains — {{ stats.frameworks_covered }} frameworks mapped</p>
+    </div>
+    <a href="/controls/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Control</a>
+</div>
+
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# Filter Bar #}
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Domain</label>
+                <select name="domain" class="form-select form-select-sm">
+                    <option value="">All Domains</option>
+                    {% for d in domains %}
+                    <option value="{{ d }}" {% if f_domain == d %}selected{% endif %}>{{ d }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Framework</label>
+                <select name="framework" class="form-select form-select-sm">
+                    <option value="">All Frameworks</option>
+                    {% for key, label in frameworks %}
+                    <option value="{{ key }}" {% if f_framework == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Type</label>
+                <select name="control_type" class="form-select form-select-sm">
+                    <option value="">All Types</option>
+                    {% for t in control_types %}
+                    <option value="{{ t }}" {% if f_control_type == t %}selected{% endif %}>{{ control_type_labels[t] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Criticality</label>
+                <select name="criticality" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for c in criticalities %}
+                    <option value="{{ c }}" {% if f_criticality == c %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">Filter</button>
+                <a href="/controls" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if grouped %}
+{% for domain, controls in grouped.items() %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-folder me-1"></i>{{ domain }}</h6>
+        <span class="badge bg-secondary">{{ controls|length }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Ref</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Impl</th>
+                    <th>Frequency</th>
+                    <th>Criticality</th>
+                    <th>Frameworks</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ctrl in controls %}
+                <tr>
+                    <td><a href="/controls/{{ ctrl.id }}" class="text-decoration-none fw-semibold">{{ ctrl.control_ref }}</a></td>
+                    <td><a href="/controls/{{ ctrl.id }}" class="text-decoration-none">{{ ctrl.title }}</a></td>
+                    <td><span class="badge bg-{% if ctrl.control_type == 'PREVENTIVE' %}primary{% elif ctrl.control_type == 'DETECTIVE' %}info{% else %}warning{% endif %} bg-opacity-75">{{ control_type_labels[ctrl.control_type] }}</span></td>
+                    <td><small class="text-muted">{{ impl_type_labels.get(ctrl.implementation_type, ctrl.implementation_type) }}</small></td>
+                    <td><small class="text-muted">{{ frequency_labels.get(ctrl.test_frequency, ctrl.test_frequency) }}</small></td>
+                    <td>
+                        <span class="badge bg-{% if ctrl.criticality == 'CRITICAL' %}danger{% elif ctrl.criticality == 'HIGH' %}warning text-dark{% elif ctrl.criticality == 'MEDIUM' %}info{% else %}secondary{% endif %}">{{ ctrl.criticality }}</span>
+                    </td>
+                    <td>
+                        {% for m in ctrl.framework_mappings %}
+                        <span class="badge bg-light text-dark border" style="font-size:0.7rem;">{{ framework_display.get(m.framework, m.framework) }}: {{ m.reference }}</span>
+                        {% endfor %}
+                    </td>
+                    <td class="text-end">
+                        <a href="/controls/{{ ctrl.id }}/edit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-shield-lock" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No controls found</h5>
+        <p class="text-muted">Add your first control to build the library.</p>
+        <a href="/controls/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Control</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

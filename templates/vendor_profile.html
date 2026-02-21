@@ -799,6 +799,40 @@
     {% endif %}
 </div>
 
+{# ==================== CONTROL IMPLEMENTATIONS ==================== #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Control Implementations
+            {% if control_stats and control_stats.total > 0 %}
+            <span class="badge bg-primary ms-2">{{ control_stats.implemented }}/{{ control_stats.total }}</span>
+            {% endif %}
+        </h6>
+        <a href="/vendors/{{ vendor.id }}/controls" class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-right me-1"></i>View All Controls</a>
+    </div>
+    <div class="card-body">
+        {% if control_stats and control_stats.total > 0 %}
+        <div class="row g-2 text-center mb-2">
+            <div class="col"><small class="text-muted">Implemented</small><br><strong style="color:#198754;">{{ control_stats.implemented }}</strong></div>
+            <div class="col"><small class="text-muted">Partial</small><br><strong style="color:#fd7e14;">{{ control_stats.partial }}</strong></div>
+            <div class="col"><small class="text-muted">Planned</small><br><strong style="color:#6f42c1;">{{ control_stats.planned }}</strong></div>
+            <div class="col"><small class="text-muted">Not Impl</small><br><strong style="color:#dc3545;">{{ control_stats.not_implemented }}</strong></div>
+            <div class="col"><small class="text-muted">Effectiveness</small><br><strong style="color:{% if control_stats.effectiveness_pct >= 70 %}#198754{% elif control_stats.effectiveness_pct >= 40 %}#ffc107{% else %}#dc3545{% endif %};">{{ control_stats.effectiveness_pct }}%</strong></div>
+        </div>
+        <div class="progress" style="height:12px;border-radius:6px;">
+            {% if control_stats.implemented > 0 %}<div class="progress-bar" style="width:{{ control_stats.implemented / control_stats.total * 100 }}%;background-color:#198754;"></div>{% endif %}
+            {% if control_stats.partial > 0 %}<div class="progress-bar" style="width:{{ control_stats.partial / control_stats.total * 100 }}%;background-color:#fd7e14;"></div>{% endif %}
+            {% if control_stats.planned > 0 %}<div class="progress-bar" style="width:{{ control_stats.planned / control_stats.total * 100 }}%;background-color:#6f42c1;"></div>{% endif %}
+            {% if control_stats.not_implemented > 0 %}<div class="progress-bar" style="width:{{ control_stats.not_implemented / control_stats.total * 100 }}%;background-color:#dc3545;"></div>{% endif %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-2">
+            <p class="mb-1 small">No controls tracked yet.</p>
+            <a href="/vendors/{{ vendor.id }}/controls" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg me-1"></i>Add Controls</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 {# ==================== ACTIVITY TIMELINE ==================== #}
 <div class="card mb-4">
     <div class="card-header"><h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Activity Timeline</h6></div>

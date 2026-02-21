@@ -517,6 +517,29 @@ def get_executive_summary(db: Session) -> dict:
             "date": d.finalized_at.strftime("%Y-%m-%d") if d.finalized_at else "",
         })
 
+    # Control program stats
+    try:
+        from models import Control, ControlImplementation, ControlTest, IMPL_STATUS_IMPLEMENTED, IMPL_STATUS_NOT_APPLICABLE, EFFECTIVENESS_EFFECTIVE, EFFECTIVENESS_LARGELY_EFFECTIVE
+        active_controls = db.query(Control).filter(Control.is_active == True).count()
+        all_impls = db.query(ControlImplementation).all()
+        applicable_impls = [i for i in all_impls if i.status != IMPL_STATUS_NOT_APPLICABLE]
+        effective_impls = [i for i in all_impls if i.effectiveness in (EFFECTIVENESS_EFFECTIVE, EFFECTIVENESS_LARGELY_EFFECTIVE)]
+        ctrl_eff_pct = round(len(effective_impls) / len(applicable_impls) * 100) if applicable_impls else 0
+        overdue_ctrl_tests = db.query(ControlImplementation).filter(
+            ControlImplementation.next_test_date < datetime.combine(today, datetime.min.time()),
+            ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+        ).count()
+    except Exception:
+        active_controls = 0
+        ctrl_eff_pct = 0
+        overdue_ctrl_tests = 0
+
+    control_stats = {
+        "active_controls": active_controls,
+        "effectiveness_pct": ctrl_eff_pct,
+        "overdue_tests": overdue_ctrl_tests,
+    }
+
     return {
         "headline_kpis": headline_kpis,
         "risk_distribution": risk_distribution,
@@ -527,4 +550,5 @@ def get_executive_summary(db: Session) -> dict:
         "overdue_reviews": overdue_reviews,
         "overdue_remediations": overdue_remediations,
         "recent_decisions": recent_decisions,
+        "control_stats": control_stats,
     }

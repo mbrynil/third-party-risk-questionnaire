@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from models import get_db, Vendor, Assessment, RemediationItem
+from models import get_db, Vendor, Assessment, RemediationItem, Control
 from app.services.auth_service import require_login
 
 router = APIRouter()
@@ -58,6 +58,20 @@ def api_search(
             "title": r.title[:80],
             "subtitle": f"{r.status.replace('_', ' ').title()} — {r.severity}",
             "url": f"/remediations/{r.id}",
+        })
+
+    # Controls
+    controls = db.query(Control).filter(
+        or_(Control.title.ilike(term), Control.control_ref.ilike(term),
+            Control.domain.ilike(term))
+    ).limit(5).all()
+    for c in controls:
+        results.append({
+            "type": "control",
+            "icon": "bi-shield-lock",
+            "title": f"{c.control_ref} — {c.title}",
+            "subtitle": c.domain,
+            "url": f"/controls/{c.id}",
         })
 
     return {"results": results, "query": q}

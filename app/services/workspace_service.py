@@ -292,6 +292,29 @@ def get_workspace_data(db: Session, user: User) -> dict:
                 "due_info": None,
             })
 
+    # P3.5: Overdue control tests on my vendors
+    if my_vendor_ids:
+        from models import ControlImplementation, IMPL_STATUS_IMPLEMENTED
+        overdue_ctrl_tests = db.query(ControlImplementation).filter(
+            ControlImplementation.vendor_id.in_(my_vendor_ids),
+            ControlImplementation.next_test_date < now,
+            ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+        ).all()
+        for impl in overdue_ctrl_tests:
+            days_over = (now - impl.next_test_date).days if impl.next_test_date else 0
+            vendor = next((v for v in my_vendors if v.id == impl.vendor_id), None)
+            ctrl_ref = impl.control.control_ref if impl.control else "Control"
+            action_items.append({
+                "priority": 3.5,
+                "type": "overdue_control_test",
+                "icon": "bi-shield-exclamation",
+                "color": "#dc3545",
+                "title": f"{ctrl_ref} — test overdue",
+                "subtitle": f"Overdue by {days_over} day{'s' if days_over != 1 else ''}" + (f" — {vendor.name}" if vendor else ""),
+                "link": f"/controls/implementations/{impl.id}",
+                "due_info": impl.next_test_date.strftime("%Y-%m-%d") if impl.next_test_date else None,
+            })
+
     action_items.sort(key=lambda x: x["priority"])
 
     # ===================== MY VENDORS TABLE =====================

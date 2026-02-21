@@ -1339,7 +1339,9 @@ COMMENT_ENTITY_VENDOR = "vendor"
 COMMENT_ENTITY_ASSESSMENT = "assessment"
 COMMENT_ENTITY_DECISION = "decision"
 COMMENT_ENTITY_REMEDIATION = "remediation"
-VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION]
+COMMENT_ENTITY_CONTROL = "control"
+COMMENT_ENTITY_CONTROL_IMPL = "control_implementation"
+VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION, COMMENT_ENTITY_CONTROL, COMMENT_ENTITY_CONTROL_IMPL]
 
 
 class Comment(Base):
@@ -1763,6 +1765,8 @@ AUDIT_ENTITY_SCORING_CONFIG = "scoring_config"
 AUDIT_ENTITY_TIERING_RULE = "tiering_rule"
 AUDIT_ENTITY_REMINDER_CONFIG = "reminder_config"
 AUDIT_ENTITY_SLA_CONFIG = "sla_config"
+AUDIT_ENTITY_CONTROL = "control"
+AUDIT_ENTITY_CONTROL_IMPL = "control_implementation"
 
 
 class AuditLog(Base):
@@ -1892,6 +1896,443 @@ def backfill_onboarding_column():
             pass
     conn.commit()
     conn.close()
+
+
+# ==================== CONTROLS MODULE ====================
+
+# Control type constants
+CONTROL_TYPE_PREVENTIVE = "PREVENTIVE"
+CONTROL_TYPE_DETECTIVE = "DETECTIVE"
+CONTROL_TYPE_CORRECTIVE = "CORRECTIVE"
+VALID_CONTROL_TYPES = [CONTROL_TYPE_PREVENTIVE, CONTROL_TYPE_DETECTIVE, CONTROL_TYPE_CORRECTIVE]
+CONTROL_TYPE_LABELS = {
+    CONTROL_TYPE_PREVENTIVE: "Preventive",
+    CONTROL_TYPE_DETECTIVE: "Detective",
+    CONTROL_TYPE_CORRECTIVE: "Corrective",
+}
+
+CONTROL_IMPL_MANUAL = "MANUAL"
+CONTROL_IMPL_AUTOMATED = "AUTOMATED"
+CONTROL_IMPL_HYBRID = "HYBRID"
+VALID_CONTROL_IMPL_TYPES = [CONTROL_IMPL_MANUAL, CONTROL_IMPL_AUTOMATED, CONTROL_IMPL_HYBRID]
+CONTROL_IMPL_TYPE_LABELS = {
+    CONTROL_IMPL_MANUAL: "Manual",
+    CONTROL_IMPL_AUTOMATED: "Automated",
+    CONTROL_IMPL_HYBRID: "Hybrid",
+}
+
+VALID_CONTROL_CRITICALITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+
+CONTROL_FREQ_CONTINUOUS = "CONTINUOUS"
+CONTROL_FREQ_DAILY = "DAILY"
+CONTROL_FREQ_WEEKLY = "WEEKLY"
+CONTROL_FREQ_MONTHLY = "MONTHLY"
+CONTROL_FREQ_QUARTERLY = "QUARTERLY"
+CONTROL_FREQ_SEMI_ANNUAL = "SEMI_ANNUAL"
+CONTROL_FREQ_ANNUAL = "ANNUAL"
+VALID_CONTROL_FREQUENCIES = [
+    CONTROL_FREQ_CONTINUOUS, CONTROL_FREQ_DAILY, CONTROL_FREQ_WEEKLY,
+    CONTROL_FREQ_MONTHLY, CONTROL_FREQ_QUARTERLY, CONTROL_FREQ_SEMI_ANNUAL,
+    CONTROL_FREQ_ANNUAL,
+]
+CONTROL_FREQUENCY_LABELS = {
+    CONTROL_FREQ_CONTINUOUS: "Continuous",
+    CONTROL_FREQ_DAILY: "Daily",
+    CONTROL_FREQ_WEEKLY: "Weekly",
+    CONTROL_FREQ_MONTHLY: "Monthly",
+    CONTROL_FREQ_QUARTERLY: "Quarterly",
+    CONTROL_FREQ_SEMI_ANNUAL: "Semi-Annual",
+    CONTROL_FREQ_ANNUAL: "Annual",
+}
+CONTROL_FREQUENCY_DAYS = {
+    CONTROL_FREQ_CONTINUOUS: 1,
+    CONTROL_FREQ_DAILY: 1,
+    CONTROL_FREQ_WEEKLY: 7,
+    CONTROL_FREQ_MONTHLY: 30,
+    CONTROL_FREQ_QUARTERLY: 90,
+    CONTROL_FREQ_SEMI_ANNUAL: 182,
+    CONTROL_FREQ_ANNUAL: 365,
+}
+
+VALID_CONTROL_DOMAINS = [
+    "Access Control",
+    "Asset Management",
+    "Business Continuity",
+    "Change Management",
+    "Cryptography",
+    "Data Protection",
+    "Governance",
+    "Human Resources",
+    "Incident Management",
+    "Network Security",
+    "Physical Security",
+    "Risk Management",
+    "Secure Development",
+    "Security Monitoring",
+    "Security Operations",
+    "Third-Party Management",
+    "Training & Awareness",
+    "Vulnerability Management",
+]
+
+# Implementation status
+IMPL_STATUS_NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
+IMPL_STATUS_PLANNED = "PLANNED"
+IMPL_STATUS_PARTIAL = "PARTIAL"
+IMPL_STATUS_IMPLEMENTED = "IMPLEMENTED"
+IMPL_STATUS_NOT_APPLICABLE = "NOT_APPLICABLE"
+VALID_IMPL_STATUSES = [
+    IMPL_STATUS_NOT_IMPLEMENTED, IMPL_STATUS_PLANNED, IMPL_STATUS_PARTIAL,
+    IMPL_STATUS_IMPLEMENTED, IMPL_STATUS_NOT_APPLICABLE,
+]
+IMPL_STATUS_LABELS = {
+    IMPL_STATUS_NOT_IMPLEMENTED: "Not Implemented",
+    IMPL_STATUS_PLANNED: "Planned",
+    IMPL_STATUS_PARTIAL: "Partial",
+    IMPL_STATUS_IMPLEMENTED: "Implemented",
+    IMPL_STATUS_NOT_APPLICABLE: "N/A",
+}
+IMPL_STATUS_COLORS = {
+    IMPL_STATUS_NOT_IMPLEMENTED: "#dc3545",
+    IMPL_STATUS_PLANNED: "#6f42c1",
+    IMPL_STATUS_PARTIAL: "#fd7e14",
+    IMPL_STATUS_IMPLEMENTED: "#198754",
+    IMPL_STATUS_NOT_APPLICABLE: "#6c757d",
+}
+
+# Effectiveness
+EFFECTIVENESS_NONE = "NONE"
+EFFECTIVENESS_INEFFECTIVE = "INEFFECTIVE"
+EFFECTIVENESS_PARTIALLY_EFFECTIVE = "PARTIALLY_EFFECTIVE"
+EFFECTIVENESS_LARGELY_EFFECTIVE = "LARGELY_EFFECTIVE"
+EFFECTIVENESS_EFFECTIVE = "EFFECTIVE"
+VALID_EFFECTIVENESS_LEVELS = [
+    EFFECTIVENESS_NONE, EFFECTIVENESS_INEFFECTIVE,
+    EFFECTIVENESS_PARTIALLY_EFFECTIVE, EFFECTIVENESS_LARGELY_EFFECTIVE,
+    EFFECTIVENESS_EFFECTIVE,
+]
+EFFECTIVENESS_LABELS = {
+    EFFECTIVENESS_NONE: "None",
+    EFFECTIVENESS_INEFFECTIVE: "Ineffective",
+    EFFECTIVENESS_PARTIALLY_EFFECTIVE: "Partially Effective",
+    EFFECTIVENESS_LARGELY_EFFECTIVE: "Largely Effective",
+    EFFECTIVENESS_EFFECTIVE: "Effective",
+}
+EFFECTIVENESS_COLORS = {
+    EFFECTIVENESS_NONE: "#6c757d",
+    EFFECTIVENESS_INEFFECTIVE: "#dc3545",
+    EFFECTIVENESS_PARTIALLY_EFFECTIVE: "#fd7e14",
+    EFFECTIVENESS_LARGELY_EFFECTIVE: "#0dcaf0",
+    EFFECTIVENESS_EFFECTIVE: "#198754",
+}
+
+# Test type / result
+TEST_TYPE_DESIGN = "DESIGN"
+TEST_TYPE_OPERATING = "OPERATING"
+VALID_TEST_TYPES = [TEST_TYPE_DESIGN, TEST_TYPE_OPERATING]
+TEST_TYPE_LABELS = {TEST_TYPE_DESIGN: "Design", TEST_TYPE_OPERATING: "Operating"}
+
+TEST_RESULT_PASS = "PASS"
+TEST_RESULT_FAIL = "FAIL"
+TEST_RESULT_PARTIAL = "PARTIAL"
+TEST_RESULT_NOT_TESTED = "NOT_TESTED"
+VALID_TEST_RESULTS = [TEST_RESULT_PASS, TEST_RESULT_FAIL, TEST_RESULT_PARTIAL, TEST_RESULT_NOT_TESTED]
+TEST_RESULT_LABELS = {
+    TEST_RESULT_PASS: "Pass",
+    TEST_RESULT_FAIL: "Fail",
+    TEST_RESULT_PARTIAL: "Partial",
+    TEST_RESULT_NOT_TESTED: "Not Tested",
+}
+TEST_RESULT_COLORS = {
+    TEST_RESULT_PASS: "#198754",
+    TEST_RESULT_FAIL: "#dc3545",
+    TEST_RESULT_PARTIAL: "#fd7e14",
+    TEST_RESULT_NOT_TESTED: "#6c757d",
+}
+
+# Activity / notification constants for controls
+ACTIVITY_CONTROL_IMPL_UPDATED = "CONTROL_IMPL_UPDATED"
+ACTIVITY_ICONS[ACTIVITY_CONTROL_IMPL_UPDATED] = "bi-shield-lock"
+ACTIVITY_COLORS[ACTIVITY_CONTROL_IMPL_UPDATED] = "#6f42c1"
+
+NOTIF_CONTROL_TEST_OVERDUE = "CONTROL_TEST_OVERDUE"
+NOTIF_ICONS[NOTIF_CONTROL_TEST_OVERDUE] = "bi-shield-exclamation"
+
+
+class Control(Base):
+    __tablename__ = "controls"
+
+    id = Column(Integer, primary_key=True, index=True)
+    control_ref = Column(String(50), unique=True, nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    domain = Column(String(100), nullable=False, index=True)
+    control_type = Column(String(20), nullable=False, default=CONTROL_TYPE_PREVENTIVE)
+    implementation_type = Column(String(20), nullable=False, default=CONTROL_IMPL_MANUAL)
+    test_frequency = Column(String(20), nullable=False, default=CONTROL_FREQ_ANNUAL)
+    criticality = Column(String(20), nullable=False, default="MEDIUM")
+    owner_role = Column(String(100), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    framework_mappings = relationship("ControlFrameworkMapping", back_populates="control", cascade="all, delete-orphan")
+    question_mappings = relationship("ControlQuestionMapping", back_populates="control", cascade="all, delete-orphan")
+    risk_mappings = relationship("ControlRiskMapping", back_populates="control", cascade="all, delete-orphan")
+    implementations = relationship("ControlImplementation", back_populates="control", cascade="all, delete-orphan")
+
+
+class ControlFrameworkMapping(Base):
+    __tablename__ = "control_framework_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
+    framework = Column(String(50), nullable=False)
+    reference = Column(String(100), nullable=False)
+
+    control = relationship("Control", back_populates="framework_mappings")
+
+
+class ControlQuestionMapping(Base):
+    __tablename__ = "control_question_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
+    question_bank_item_id = Column(Integer, ForeignKey("question_bank_items.id"), nullable=False)
+
+    control = relationship("Control", back_populates="question_mappings")
+    question_bank_item = relationship("QuestionBankItem")
+
+
+class ControlRiskMapping(Base):
+    __tablename__ = "control_risk_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
+    risk_statement_id = Column(Integer, ForeignKey("risk_statements.id"), nullable=False)
+
+    control = relationship("Control", back_populates="risk_mappings")
+    risk_statement = relationship("RiskStatement")
+
+
+class ControlImplementation(Base):
+    __tablename__ = "control_implementations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+    status = Column(String(30), default=IMPL_STATUS_NOT_IMPLEMENTED, nullable=False)
+    effectiveness = Column(String(30), default=EFFECTIVENESS_NONE, nullable=False)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+    implemented_date = Column(DateTime, nullable=True)
+    next_test_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    control = relationship("Control", back_populates="implementations")
+    vendor = relationship("Vendor")
+    owner = relationship("User", foreign_keys=[owner_user_id])
+    tests = relationship("ControlTest", back_populates="implementation", cascade="all, delete-orphan")
+
+
+class ControlTest(Base):
+    __tablename__ = "control_tests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    implementation_id = Column(Integer, ForeignKey("control_implementations.id"), nullable=False)
+    test_type = Column(String(20), nullable=False, default=TEST_TYPE_OPERATING)
+    test_procedure = Column(Text, nullable=True)
+    tester_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    test_date = Column(DateTime, default=datetime.utcnow)
+    result = Column(String(20), nullable=False, default=TEST_RESULT_NOT_TESTED)
+    findings = Column(Text, nullable=True)
+    recommendations = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    implementation = relationship("ControlImplementation", back_populates="tests")
+    tester = relationship("User", foreign_keys=[tester_user_id])
+    evidence_files = relationship("ControlEvidence", back_populates="test", cascade="all, delete-orphan")
+
+
+class ControlEvidence(Base):
+    __tablename__ = "control_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    test_id = Column(Integer, ForeignKey("control_tests.id"), nullable=False)
+    original_filename = Column(String(255), nullable=False)
+    stored_filename = Column(String(255), nullable=False)
+    stored_path = Column(String(512), nullable=False)
+    content_type = Column(String(100), nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    test = relationship("ControlTest", back_populates="evidence_files")
+
+
+def backfill_controls_tables():
+    """New tables are auto-created by init_db(). Nothing to backfill yet."""
+    pass
+
+
+def seed_default_controls():
+    """Seed 35 controls across 12 domains, each mapped to SOC 2 + ISO 27001 + NIST CSF 2.0."""
+    db = SessionLocal()
+    try:
+        if db.query(Control).count() > 0:
+            return
+
+        seed_data = [
+            # Access Control
+            ("CTL-AC-001", "User Access Reviews", "Periodic review of user access rights to ensure appropriateness.",
+             "Access Control", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_QUARTERLY, "HIGH",
+             [("SOC_2", "CC6.1"), ("ISO_27001", "A.9.2.5"), ("NIST_CSF_2", "PR.AC-1")]),
+            ("CTL-AC-002", "Multi-Factor Authentication", "MFA enforced for all privileged and remote access.",
+             "Access Control", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_CONTINUOUS, "CRITICAL",
+             [("SOC_2", "CC6.1"), ("ISO_27001", "A.9.4.2"), ("NIST_CSF_2", "PR.AC-7")]),
+            ("CTL-AC-003", "Least Privilege Enforcement", "Users granted minimum access necessary for their role.",
+             "Access Control", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_QUARTERLY, "HIGH",
+             [("SOC_2", "CC6.3"), ("ISO_27001", "A.9.1.2"), ("NIST_CSF_2", "PR.AC-4")]),
+
+            # Cryptography
+            ("CTL-CR-001", "Data Encryption at Rest", "All sensitive data encrypted at rest using AES-256 or equivalent.",
+             "Cryptography", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_ANNUAL, "CRITICAL",
+             [("SOC_2", "CC6.7"), ("ISO_27001", "A.10.1.1"), ("NIST_CSF_2", "PR.DS-1")]),
+            ("CTL-CR-002", "Data Encryption in Transit", "All data in transit encrypted using TLS 1.2+.",
+             "Cryptography", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_ANNUAL, "CRITICAL",
+             [("SOC_2", "CC6.7"), ("ISO_27001", "A.10.1.1"), ("NIST_CSF_2", "PR.DS-2")]),
+            ("CTL-CR-003", "Encryption Key Management", "Formal key management lifecycle including rotation and revocation.",
+             "Cryptography", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "CC6.1"), ("ISO_27001", "A.10.1.2"), ("NIST_CSF_2", "PR.DS-1")]),
+
+            # Incident Management
+            ("CTL-IR-001", "Incident Response Plan", "Documented IRP with roles, escalation paths, and notification timelines.",
+             "Incident Management", CONTROL_TYPE_CORRECTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "CRITICAL",
+             [("SOC_2", "CC7.3"), ("ISO_27001", "A.16.1.1"), ("NIST_CSF_2", "RS.RP-1")]),
+            ("CTL-IR-002", "Incident Detection & Alerting", "Automated detection and alerting for security incidents.",
+             "Incident Management", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_CONTINUOUS, "HIGH",
+             [("SOC_2", "CC7.2"), ("ISO_27001", "A.16.1.2"), ("NIST_CSF_2", "DE.AE-5")]),
+            ("CTL-IR-003", "Post-Incident Review", "Formal lessons-learned process after security incidents.",
+             "Incident Management", CONTROL_TYPE_CORRECTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "MEDIUM",
+             [("SOC_2", "CC7.5"), ("ISO_27001", "A.16.1.6"), ("NIST_CSF_2", "RS.IM-1")]),
+
+            # Vulnerability Management
+            ("CTL-VM-001", "Vulnerability Scanning", "Regular automated vulnerability scans of all production systems.",
+             "Vulnerability Management", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_MONTHLY, "HIGH",
+             [("SOC_2", "CC7.1"), ("ISO_27001", "A.12.6.1"), ("NIST_CSF_2", "DE.CM-8")]),
+            ("CTL-VM-002", "Penetration Testing", "Annual third-party penetration testing of critical systems.",
+             "Vulnerability Management", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "CC4.1"), ("ISO_27001", "A.18.2.3"), ("NIST_CSF_2", "DE.CM-8")]),
+            ("CTL-VM-003", "Patch Management", "Timely patching of systems based on criticality and risk severity.",
+             "Vulnerability Management", CONTROL_TYPE_CORRECTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_MONTHLY, "CRITICAL",
+             [("SOC_2", "CC7.1"), ("ISO_27001", "A.12.6.1"), ("NIST_CSF_2", "PR.IP-12")]),
+
+            # Business Continuity
+            ("CTL-BC-001", "Business Continuity Plan", "Documented BCP covering critical business functions.",
+             "Business Continuity", CONTROL_TYPE_CORRECTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "A1.2"), ("ISO_27001", "A.17.1.1"), ("NIST_CSF_2", "RC.RP-1")]),
+            ("CTL-BC-002", "Disaster Recovery Testing", "Regular DR testing with documented results and RTO/RPO validation.",
+             "Business Continuity", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "A1.3"), ("ISO_27001", "A.17.1.3"), ("NIST_CSF_2", "RC.RP-1")]),
+            ("CTL-BC-003", "Backup & Recovery", "Encrypted backups with geographic separation and regular restoration tests.",
+             "Business Continuity", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_MONTHLY, "CRITICAL",
+             [("SOC_2", "A1.2"), ("ISO_27001", "A.12.3.1"), ("NIST_CSF_2", "PR.IP-4")]),
+
+            # Governance
+            ("CTL-GV-001", "Security Policy Framework", "Documented and published security policies aligned to standards.",
+             "Governance", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "CC1.1"), ("ISO_27001", "A.5.1.1"), ("NIST_CSF_2", "GV.PO-1")]),
+            ("CTL-GV-002", "Risk Assessment Program", "Regular risk assessments aligned with recognized frameworks.",
+             "Governance", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "CC3.2"), ("ISO_27001", "A.8.2.1"), ("NIST_CSF_2", "ID.RA-1")]),
+            ("CTL-GV-003", "Security Awareness Training", "Annual security awareness training for all personnel.",
+             "Governance", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_ANNUAL, "MEDIUM",
+             [("SOC_2", "CC1.4"), ("ISO_27001", "A.7.2.2"), ("NIST_CSF_2", "PR.AT-1")]),
+
+            # Data Protection
+            ("CTL-DP-001", "Data Classification", "Formal data classification scheme with handling requirements.",
+             "Data Protection", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "CC6.5"), ("ISO_27001", "A.8.2.1"), ("NIST_CSF_2", "ID.AM-5")]),
+            ("CTL-DP-002", "Data Loss Prevention", "DLP controls to prevent unauthorized data exfiltration.",
+             "Data Protection", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_CONTINUOUS, "HIGH",
+             [("SOC_2", "CC6.7"), ("ISO_27001", "A.13.2.1"), ("NIST_CSF_2", "PR.DS-5")]),
+            ("CTL-DP-003", "Data Retention & Disposal", "Formal data retention schedule and secure disposal procedures.",
+             "Data Protection", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_ANNUAL, "MEDIUM",
+             [("SOC_2", "CC6.5"), ("ISO_27001", "A.8.3.2"), ("NIST_CSF_2", "PR.IP-6")]),
+
+            # Security Monitoring
+            ("CTL-SM-001", "SIEM / Log Aggregation", "Centralized security event logging and correlation.",
+             "Security Monitoring", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_CONTINUOUS, "HIGH",
+             [("SOC_2", "CC7.2"), ("ISO_27001", "A.12.4.1"), ("NIST_CSF_2", "DE.AE-3")]),
+            ("CTL-SM-002", "Audit Log Integrity", "Tamper-evident audit logs with restricted access.",
+             "Security Monitoring", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_CONTINUOUS, "HIGH",
+             [("SOC_2", "CC7.2"), ("ISO_27001", "A.12.4.2"), ("NIST_CSF_2", "PR.PT-1")]),
+
+            # Network Security
+            ("CTL-NS-001", "Network Segmentation", "Production networks segmented from corporate and development.",
+             "Network Security", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "CC6.6"), ("ISO_27001", "A.13.1.3"), ("NIST_CSF_2", "PR.AC-5")]),
+            ("CTL-NS-002", "Firewall Management", "Firewall rules reviewed and documented with change control.",
+             "Network Security", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_QUARTERLY, "HIGH",
+             [("SOC_2", "CC6.6"), ("ISO_27001", "A.13.1.1"), ("NIST_CSF_2", "PR.PT-4")]),
+
+            # Change Management
+            ("CTL-CM-001", "Change Management Process", "Formal change control process for production environments.",
+             "Change Management", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_CONTINUOUS, "HIGH",
+             [("SOC_2", "CC8.1"), ("ISO_27001", "A.12.1.2"), ("NIST_CSF_2", "PR.IP-3")]),
+            ("CTL-CM-002", "Configuration Baseline", "Documented configuration baselines for critical systems.",
+             "Change Management", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_QUARTERLY, "MEDIUM",
+             [("SOC_2", "CC8.1"), ("ISO_27001", "A.12.1.1"), ("NIST_CSF_2", "PR.IP-1")]),
+
+            # Third-Party Management
+            ("CTL-TP-001", "Third-Party Risk Assessment", "Formal vendor risk assessment for all third-party providers.",
+             "Third-Party Management", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "HIGH",
+             [("SOC_2", "CC9.2"), ("ISO_27001", "A.15.1.1"), ("NIST_CSF_2", "ID.SC-1")]),
+            ("CTL-TP-002", "Vendor Contract Security Requirements", "Security requirements embedded in vendor contracts.",
+             "Third-Party Management", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_MANUAL, CONTROL_FREQ_ANNUAL, "MEDIUM",
+             [("SOC_2", "CC9.2"), ("ISO_27001", "A.15.1.2"), ("NIST_CSF_2", "ID.SC-3")]),
+
+            # Physical Security
+            ("CTL-PS-001", "Physical Access Controls", "Badge access and visitor management for secure areas.",
+             "Physical Security", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_QUARTERLY, "MEDIUM",
+             [("SOC_2", "CC6.4"), ("ISO_27001", "A.11.1.2"), ("NIST_CSF_2", "PR.AC-2")]),
+            ("CTL-PS-002", "Environmental Controls", "Fire suppression, HVAC, and power redundancy for data centers.",
+             "Physical Security", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_ANNUAL, "MEDIUM",
+             [("SOC_2", "A1.1"), ("ISO_27001", "A.11.1.4"), ("NIST_CSF_2", "PR.IP-5")]),
+
+            # Secure Development
+            ("CTL-SD-001", "Secure SDLC", "Security integrated into all phases of the development lifecycle.",
+             "Secure Development", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_CONTINUOUS, "HIGH",
+             [("SOC_2", "CC8.1"), ("ISO_27001", "A.14.2.1"), ("NIST_CSF_2", "PR.IP-2")]),
+            ("CTL-SD-002", "Code Review & Static Analysis", "Mandatory code reviews and SAST before production deployment.",
+             "Secure Development", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_CONTINUOUS, "HIGH",
+             [("SOC_2", "CC8.1"), ("ISO_27001", "A.14.2.5"), ("NIST_CSF_2", "PR.IP-2")]),
+
+            # Asset Management
+            ("CTL-AM-001", "Asset Inventory", "Comprehensive hardware and software asset inventory maintained.",
+             "Asset Management", CONTROL_TYPE_DETECTIVE, CONTROL_IMPL_HYBRID, CONTROL_FREQ_QUARTERLY, "MEDIUM",
+             [("SOC_2", "CC6.1"), ("ISO_27001", "A.8.1.1"), ("NIST_CSF_2", "ID.AM-1")]),
+            ("CTL-AM-002", "Endpoint Protection", "Antivirus/EDR deployed on all endpoints with central management.",
+             "Asset Management", CONTROL_TYPE_PREVENTIVE, CONTROL_IMPL_AUTOMATED, CONTROL_FREQ_CONTINUOUS, "HIGH",
+             [("SOC_2", "CC6.8"), ("ISO_27001", "A.12.2.1"), ("NIST_CSF_2", "DE.CM-4")]),
+        ]
+
+        for ref, title, desc, domain, ctype, itype, freq, crit, mappings in seed_data:
+            ctrl = Control(
+                control_ref=ref, title=title, description=desc,
+                domain=domain, control_type=ctype, implementation_type=itype,
+                test_frequency=freq, criticality=crit, is_active=True,
+            )
+            db.add(ctrl)
+            db.flush()
+            for fw, reference in mappings:
+                db.add(ControlFrameworkMapping(
+                    control_id=ctrl.id, framework=fw, reference=reference,
+                ))
+
+        db.commit()
+    finally:
+        db.close()
 
 
 def get_db():

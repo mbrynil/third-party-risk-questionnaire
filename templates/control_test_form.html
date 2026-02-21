@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Record Test — {{ impl.control.control_ref }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+{% if impl.vendor %}
+<li class="breadcrumb-item"><a href="/vendors/{{ impl.vendor.id }}">{{ impl.vendor.name }}</a></li>
+<li class="breadcrumb-item"><a href="/vendors/{{ impl.vendor.id }}/controls">Controls</a></li>
+{% endif %}
+<li class="breadcrumb-item"><a href="/controls/implementations/{{ impl.id }}">{{ impl.control.control_ref }}</a></li>
+<li class="breadcrumb-item active">Record Test</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h3 class="mb-2"><i class="bi bi-clipboard-check me-2"></i>Record Test</h3>
+        <p class="text-muted mb-4">{{ impl.control.control_ref }} — {{ impl.control.title }}{% if impl.vendor %} ({{ impl.vendor.name }}){% endif %}</p>
+
+        <form method="post" action="/controls/implementations/{{ impl.id }}/tests" enctype="multipart/form-data">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Test Type <span class="text-danger">*</span></label>
+                            <select name="test_type" class="form-select" required>
+                                {% for t in test_types %}
+                                <option value="{{ t }}">{{ test_type_labels[t] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Result <span class="text-danger">*</span></label>
+                            <select name="result" class="form-select" required>
+                                {% for r in test_results %}
+                                <option value="{{ r }}">{{ test_result_labels[r] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Test Procedure</label>
+                            <textarea name="test_procedure" class="form-control" rows="3" placeholder="Describe the test procedure performed..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Findings</label>
+                            <textarea name="findings" class="form-control" rows="3" placeholder="Document findings..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Recommendations</label>
+                            <textarea name="recommendations" class="form-control" rows="2" placeholder="Recommendations for improvement..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Evidence Files</label>
+                            <input type="file" name="evidence_files" class="form-control" multiple>
+                            <small class="text-muted">Upload supporting evidence (screenshots, reports, etc.)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Record Test</button>
+                <a href="/controls/implementations/{{ impl.id }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -318,6 +318,10 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
     from app.services.exception_service import get_vendor_exceptions
     vendor_exceptions = get_vendor_exceptions(db, vendor_id)
 
+    # Control implementation stats
+    from app.services.control_service import get_vendor_control_stats
+    control_stats = get_vendor_control_stats(db, vendor_id)
+
     # Parse offboarding checklist
     import json as _json
     offboarding_checklist = []
@@ -354,6 +358,7 @@ async def vendor_profile(request: Request, vendor_id: int, db: Session = Depends
         "analysts": analysts,
         "offboarding_checklist": offboarding_checklist,
         "vendor_exceptions": vendor_exceptions,
+        "control_stats": control_stats,
     })
 
 

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Framework Gap Analysis{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls/dashboard">Control Dashboard</a></li>
+<li class="breadcrumb-item active">Gap Analysis</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>Framework Gap Analysis</h3>
+</div>
+
+{# Framework Selector #}
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label form-label-sm mb-1">Framework</label>
+                <select name="framework" class="form-select form-select-sm">
+                    <option value="">Select a framework...</option>
+                    {% for key, label in frameworks %}
+                    <option value="{{ key }}" {% if f_framework == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-primary">Analyze</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Framework Coverage Summary #}
+{% if fw_coverage %}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Coverage Overview</h6></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Framework</th><th>Mapped Controls</th><th>Coverage</th><th>Effectiveness</th></tr></thead>
+            <tbody>
+                {% for key, fw in fw_coverage.items() %}
+                <tr class="{% if f_framework == key %}table-active{% endif %}">
+                    <td>
+                        <a href="?framework={{ key }}" class="text-decoration-none fw-semibold">{{ fw.label }}</a>
+                    </td>
+                    <td>{{ fw.implemented }} / {{ fw.total }}</td>
+                    <td>
+                        <div class="progress" style="height:16px;min-width:100px;">
+                            <div class="progress-bar bg-{% if fw.coverage_pct >= 70 %}success{% elif fw.coverage_pct >= 40 %}warning{% else %}danger{% endif %}" style="width:{{ fw.coverage_pct }}%;">{{ fw.coverage_pct }}%</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="progress" style="height:16px;min-width:100px;">
+                            <div class="progress-bar bg-{% if fw.effectiveness_pct >= 70 %}success{% elif fw.effectiveness_pct >= 40 %}warning{% else %}danger{% endif %}" style="width:{{ fw.effectiveness_pct }}%;">{{ fw.effectiveness_pct }}%</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# Gap Detail Table #}
+{% if f_framework and gaps %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">{{ framework_display.get(f_framework, f_framework) }} — Control Gaps</h6>
+        <span class="badge bg-secondary">{{ gaps|length }} controls</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Ref</th>
+                    <th>Framework Ref</th>
+                    <th>Title</th>
+                    <th>Domain</th>
+                    <th>Status</th>
+                    <th>Vendors Implemented</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in gaps %}
+                <tr class="{% if g.status == 'NOT_IMPLEMENTED' %}table-danger{% elif g.status == 'PARTIAL' %}table-warning{% endif %}">
+                    <td><a href="/controls/{{ g.control.id }}" class="text-decoration-none fw-semibold">{{ g.control.control_ref }}</a></td>
+                    <td><code>{{ g.reference }}</code></td>
+                    <td>{{ g.control.title }}</td>
+                    <td><small class="text-muted">{{ g.control.domain }}</small></td>
+                    <td>
+                        <span class="badge" style="background-color:{{ impl_status_colors.get(g.status, '#6c757d') }}">{{ impl_status_labels.get(g.status, g.status) }}</span>
+                    </td>
+                    <td>{{ g.impl_count }}{% if g.total_vendors > 0 %} / {{ g.total_vendors }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% elif f_framework %}
+<div class="card">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-check-circle" style="font-size:3rem;color:#198754;"></i>
+        <h5 class="mt-3">No controls mapped to this framework</h5>
+        <p>Add framework mappings to controls in the <a href="/controls">Control Library</a>.</p>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-clipboard-data" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3">Select a framework to analyze</h5>
+        <p>Choose a framework above to see gap analysis.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
