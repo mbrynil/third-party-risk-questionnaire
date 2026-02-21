@@ -72,11 +72,12 @@
         <a href="/controls/{{ impl.control.id }}" class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-arrow-right me-1"></i>View Full Control</a>
     </div>
 
-    {# Edit Implementation Form #}
+    {# Edit Implementation Form / Read-Only View #}
     <div class="col-lg-8">
         <div class="card mb-4">
             <div class="card-header"><h6 class="mb-0">Implementation Details</h6></div>
             <div class="card-body">
+                {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
                 <form method="post" action="/controls/implementations/{{ impl.id }}">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -120,6 +121,15 @@
                 <form method="post" action="/controls/implementations/{{ impl.id }}/delete" class="mt-2" onsubmit="return confirm('Delete this implementation?')">
                     <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete Implementation</button>
                 </form>
+                {% else %}
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="text-muted small text-uppercase">Status</label><p><span class="badge" style="background-color:{{ impl_status_colors.get(impl.status, '#6c757d') }}">{{ impl_status_labels.get(impl.status, impl.status) }}</span></p></div>
+                    <div class="col-md-6"><label class="text-muted small text-uppercase">Effectiveness</label><p><span class="badge" style="background-color:{{ effectiveness_colors.get(impl.effectiveness, '#6c757d') }}">{{ effectiveness_labels.get(impl.effectiveness, impl.effectiveness) }}</span></p></div>
+                    <div class="col-md-6"><label class="text-muted small text-uppercase">Owner</label><p>{{ impl.owner.display_name if impl.owner else '—' }}</p></div>
+                    <div class="col-md-6"><label class="text-muted small text-uppercase">Implemented Date</label><p>{{ impl.implemented_date.strftime('%Y-%m-%d') if impl.implemented_date else '—' }}</p></div>
+                    {% if impl.notes %}<div class="col-12"><label class="text-muted small text-uppercase">Notes</label><p>{{ impl.notes }}</p></div>{% endif %}
+                </div>
+                {% endif %}
             </div>
         </div>
 

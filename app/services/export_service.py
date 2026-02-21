@@ -226,3 +226,41 @@ def generate_assessment_responses_csv(db: Session, submission_id: int) -> str:
             answer.notes if answer and answer.notes else "",
         ])
     return _csv_string(rows, headers)
+
+
+def generate_testing_summary_csv(db: Session) -> str:
+    """All completed org-level control tests as CSV."""
+    from sqlalchemy.orm import joinedload
+    from models import ControlTest, ControlImplementation, Control, TEST_STATUS_COMPLETED
+
+    tests = db.query(ControlTest).options(
+        joinedload(ControlTest.tester),
+        joinedload(ControlTest.reviewer),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlTest.status == TEST_STATUS_COMPLETED,
+        ControlImplementation.vendor_id == None,
+    ).order_by(ControlTest.test_date.desc()).all()
+
+    headers = [
+        "Control Ref", "Title", "Domain", "Test Type", "Test Date",
+        "Result", "Tester", "Exceptions", "Risk Rating", "Reviewer",
+    ]
+    rows = []
+    for t in tests:
+        ctrl = t.implementation.control if t.implementation else None
+        rows.append([
+            ctrl.control_ref if ctrl else "",
+            ctrl.title if ctrl else "",
+            ctrl.domain if ctrl else "",
+            t.test_type or "",
+            t.test_date.strftime("%Y-%m-%d") if t.test_date else "",
+            t.result or "",
+            t.tester.display_name if t.tester else "",
+            t.exceptions_count if t.exceptions_count is not None else "",
+            t.finding_risk_rating or "",
+            t.reviewer.display_name if t.reviewer else "",
+        ])
+    return _csv_string(rows, headers)

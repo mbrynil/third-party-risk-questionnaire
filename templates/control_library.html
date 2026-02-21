@@ -69,7 +69,7 @@
 <div class="card mb-3">
     <div class="card-body py-2">
         <form method="get" class="row g-2 align-items-end">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label form-label-sm mb-1">Domain</label>
                 <select name="domain" class="form-select form-select-sm">
                     <option value="">All Domains</option>
@@ -78,7 +78,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label form-label-sm mb-1">Framework</label>
                 <select name="framework" class="form-select form-select-sm">
                     <option value="">All Frameworks</option>
@@ -87,7 +87,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col">
                 <label class="form-label form-label-sm mb-1">Type</label>
                 <select name="control_type" class="form-select form-select-sm">
                     <option value="">All Types</option>
@@ -96,7 +96,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col">
                 <label class="form-label form-label-sm mb-1">Criticality</label>
                 <select name="criticality" class="form-select form-select-sm">
                     <option value="">All</option>
@@ -105,7 +105,36 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2 d-flex gap-1">
+            <div class="col">
+                <label class="form-label form-label-sm mb-1">Owner</label>
+                <select name="owner" class="form-select form-select-sm">
+                    <option value="">All Owners</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if f_owner == u.id|string %}selected{% endif %}>{{ u.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col">
+                <label class="form-label form-label-sm mb-1">Impl. Status</label>
+                <select name="impl_status" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for s in impl_statuses %}
+                    <option value="{{ s }}" {% if f_impl_status == s %}selected{% endif %}>{{ impl_status_labels[s] }}</option>
+                    {% endfor %}
+                    <option value="NOT_TRACKED" {% if f_impl_status == 'NOT_TRACKED' %}selected{% endif %}>Not Tracked</option>
+                </select>
+            </div>
+            <div class="col">
+                <label class="form-label form-label-sm mb-1">Health</label>
+                <select name="health" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    <option value="healthy" {% if f_health == 'healthy' %}selected{% endif %}>Healthy</option>
+                    <option value="adequate" {% if f_health == 'adequate' %}selected{% endif %}>Adequate</option>
+                    <option value="at_risk" {% if f_health == 'at_risk' %}selected{% endif %}>At Risk</option>
+                    <option value="critical" {% if f_health == 'critical' %}selected{% endif %}>Critical</option>
+                </select>
+            </div>
+            <div class="col d-flex gap-1">
                 <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">Filter</button>
                 <a href="/controls" class="btn btn-sm btn-outline-secondary">Clear</a>
             </div>
@@ -116,6 +145,17 @@
 {# Instant Search #}
 <div class="mb-3">
     <input type="text" id="controlSearch" class="form-control" placeholder="Search controls by ref, title, objective, or owner...">
+</div>
+
+{# Bulk Implement Floating Bar #}
+<div id="bulkBar" class="card border-primary mb-3" style="display:none;position:sticky;top:60px;z-index:100;">
+    <div class="card-body py-2 d-flex align-items-center gap-3">
+        <span class="fw-semibold"><span id="selectedCount">0</span> selected</span>
+        <form method="post" action="/controls/bulk-implement" id="bulkForm">
+            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-gear me-1"></i>Implement Selected</button>
+        </form>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSelection()">Clear</button>
+    </div>
 </div>
 
 {% if grouped %}
@@ -129,10 +169,13 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
+                    <th style="width:36px;"><input type="checkbox" class="form-check-input select-all-domain" onchange="toggleDomainAll(this)"></th>
                     <th style="width:90px;">Ref</th>
                     <th>Control</th>
                     <th>Objective</th>
                     <th style="width:100px;">Owner</th>
+                    <th style="width:80px;">Impl.</th>
+                    <th style="width:80px;">Health</th>
                     <th style="width:100px;">Last Tested</th>
                     <th style="width:90px;">Criticality</th>
                     <th>Frameworks</th>
@@ -141,11 +184,28 @@
             </thead>
             <tbody>
                 {% for ctrl in controls %}
-                <tr class="control-row" data-text="{{ ctrl.control_ref|lower }} {{ ctrl.title|lower }} {{ (ctrl.description or '')|lower }} {{ (ctrl.owner_role or '')|lower }}">
+                <tr class="control-row" data-text="{{ ctrl.control_ref|lower }} {{ ctrl.title|lower }} {{ (ctrl.objective or '')|lower }} {{ (ctrl.owner.display_name|lower if ctrl.owner else (ctrl.owner_role or '')|lower) }}">
+                    <td><input type="checkbox" class="form-check-input ctrl-checkbox" value="{{ ctrl.id }}" onchange="updateBulkBar()"></td>
                     <td><a href="/controls/{{ ctrl.id }}" class="text-decoration-none fw-semibold">{{ ctrl.control_ref }}</a></td>
                     <td><a href="/controls/{{ ctrl.id }}" class="text-decoration-none">{{ ctrl.title }}</a></td>
-                    <td><small class="text-muted">{{ (ctrl.description or '')[:80] }}{% if ctrl.description and ctrl.description|length > 80 %}...{% endif %}</small></td>
-                    <td><small class="text-muted">{{ ctrl.owner_role or '—' }}</small></td>
+                    <td><small class="text-muted">{{ (ctrl.objective or '')[:80] }}{% if ctrl.objective and ctrl.objective|length > 80 %}...{% endif %}</small></td>
+                    <td><small class="text-muted">{{ ctrl.owner.display_name if ctrl.owner else (ctrl.owner_role or '—') }}</small></td>
+                    <td>
+                        {% set ist = impl_status_map.get(ctrl.id) %}
+                        {% if ist %}
+                        <span class="badge" style="background-color:{{ impl_status_colors.get(ist, '#6c757d') }};font-size:0.65rem;">{{ impl_status_labels.get(ist, ist) }}</span>
+                        {% else %}
+                        <small class="text-muted fst-italic">—</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% set h = health_map.get(ctrl.id) %}
+                        {% if h %}
+                        <span class="badge" style="background-color:{{ h.health_color }};font-size:0.65rem;">{{ h.score }}</span>
+                        {% else %}
+                        <small class="text-muted">—</small>
+                        {% endif %}
+                    </td>
                     <td>
                         {% set lt = last_tested_map.get(ctrl.id) %}
                         {% if lt %}
@@ -191,6 +251,7 @@
 {% endif %}
 
 <script>
+// Instant search
 document.getElementById('controlSearch').addEventListener('input', function() {
     const query = this.value.toLowerCase().trim();
     const rows = document.querySelectorAll('.control-row');
@@ -202,21 +263,53 @@ document.getElementById('controlSearch').addEventListener('input', function() {
     });
 
     sections.forEach(function(section) {
-        const visibleRows = section.querySelectorAll('.control-row[style=""], .control-row:not([style])');
         let hasVisible = false;
-        section.querySelectorAll('.control-row').forEach(function(r) {
-            if (r.style.display !== 'none') hasVisible = true;
-        });
-        section.style.display = hasVisible ? '' : 'none';
-
-        // Update count badge
         let count = 0;
         section.querySelectorAll('.control-row').forEach(function(r) {
-            if (r.style.display !== 'none') count++;
+            if (r.style.display !== 'none') { hasVisible = true; count++; }
         });
+        section.style.display = hasVisible ? '' : 'none';
         const badge = section.querySelector('.domain-count');
         if (badge) badge.textContent = count;
     });
 });
+
+// Bulk selection
+function updateBulkBar() {
+    var checked = document.querySelectorAll('.ctrl-checkbox:checked');
+    var bar = document.getElementById('bulkBar');
+    var count = document.getElementById('selectedCount');
+    if (checked.length > 0) {
+        bar.style.display = '';
+        count.textContent = checked.length;
+        // Sync hidden inputs
+        var form = document.getElementById('bulkForm');
+        form.querySelectorAll('input[name="control_ids"]').forEach(function(el) { el.remove(); });
+        checked.forEach(function(cb) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'control_ids';
+            inp.value = cb.value;
+            form.appendChild(inp);
+        });
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+function toggleDomainAll(el) {
+    var tbody = el.closest('table').querySelector('tbody');
+    tbody.querySelectorAll('.ctrl-checkbox').forEach(function(cb) {
+        var row = cb.closest('tr');
+        if (row.style.display !== 'none') cb.checked = el.checked;
+    });
+    updateBulkBar();
+}
+
+function clearSelection() {
+    document.querySelectorAll('.ctrl-checkbox').forEach(function(cb) { cb.checked = false; });
+    document.querySelectorAll('.select-all-domain').forEach(function(cb) { cb.checked = false; });
+    updateBulkBar();
+}
 </script>
 {% endblock %}

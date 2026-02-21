@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+
+{% block title %}My Work — Controls{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item active">My Work</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+    .overdue-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; background: #fee2e2; color: #991b1b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header">
+    <h1><i class="bi bi-person-check me-2"></i>My Work</h1>
+    <p>Personal control queue for {{ current_user.display_name }}</p>
+</div>
+
+{% set pending_tests_count = (my_scheduled|length) + (my_in_progress|length) %}
+{% set open_findings_count = my_findings|length %}
+{% set pending_attestations_count = my_attestations|length %}
+{% set my_controls_count = my_controls|length %}
+
+<!-- KPI Row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#2563eb;">{{ my_controls_count }}</div>
+                <div class="kpi-label">My Controls</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if pending_tests_count > 0 %}#fd7e14{% else %}#198754{% endif %};">{{ pending_tests_count }}</div>
+                <div class="kpi-label">Pending Tests</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if open_findings_count > 0 %}#dc3545{% else %}#198754{% endif %};">{{ open_findings_count }}</div>
+                <div class="kpi-label">Open Findings</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if pending_attestations_count > 0 %}#6f42c1{% else %}#198754{% endif %};">{{ pending_attestations_count }}</div>
+                <div class="kpi-label">Pending Attestations</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% set has_any = my_overdue_impls or my_in_progress or my_scheduled or my_findings or my_attestations or my_controls %}
+
+{% if not has_any %}
+<!-- All Caught Up -->
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-check-circle" style="font-size:3rem;color:#198754;"></i>
+        <h4 class="mt-3" style="color:#198754;">All caught up!</h4>
+        <p class="text-muted mb-0">You have no pending work items. Check back later or browse the <a href="/controls">Control Library</a>.</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Overdue Tests -->
+{% if my_overdue_impls %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-exclamation-triangle text-danger me-1"></i>Overdue Tests <span class="badge bg-danger ms-1">{{ my_overdue_impls|length }}</span></h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Control Ref</th>
+                    <th>Title</th>
+                    <th>Domain</th>
+                    <th>Next Test Date</th>
+                    <th>Days Overdue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for impl in my_overdue_impls %}
+                <tr>
+                    <td>
+                        <a href="/controls/implementations/{{ impl.id }}" class="text-decoration-none fw-semibold">
+                            {{ impl.control.control_ref }}
+                        </a>
+                    </td>
+                    <td>{{ impl.control.title }}</td>
+                    <td><small>{{ impl.control.domain }}</small></td>
+                    <td>{{ impl.next_test_date.strftime('%Y-%m-%d') if impl.next_test_date else '—' }}</td>
+                    <td>
+                        {% if impl.next_test_date %}
+                        {% set today = import_module('datetime').date.today() if import_module is defined else none %}
+                        <span class="overdue-badge">
+                            <i class="bi bi-clock me-1"></i>Overdue
+                        </span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- In-Progress Tests -->
+{% if my_in_progress %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-pencil-square text-primary me-1"></i>In-Progress Tests <span class="badge bg-primary ms-1">{{ my_in_progress|length }}</span></h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Control Ref</th>
+                    <th>Test Type</th>
+                    <th>Started</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in my_in_progress %}
+                <tr>
+                    <td>
+                        <a href="/controls/tests/{{ t.id }}" class="text-decoration-none fw-semibold">
+                            {{ t.implementation.control.control_ref }}
+                        </a>
+                        <small class="text-muted ms-1">{{ t.implementation.control.title }}</small>
+                    </td>
+                    <td><span class="badge bg-secondary" style="font-size:0.7rem;">{{ test_type_labels.get(t.test_type, t.test_type) }}</span></td>
+                    <td><small>{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}</small></td>
+                    <td class="text-end">
+                        <a href="/controls/tests/{{ t.id }}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-pencil-square me-1"></i>Continue
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Scheduled Tests -->
+{% if my_scheduled %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-calendar-event me-1" style="color:#4f46e5;"></i>Scheduled Tests <span class="badge ms-1" style="background:#4f46e5;">{{ my_scheduled|length }}</span></h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Control Ref</th>
+                    <th>Test Type</th>
+                    <th>Scheduled Date</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in my_scheduled %}
+                <tr>
+                    <td>
+                        <a href="/controls/tests/{{ t.id }}" class="text-decoration-none fw-semibold">
+                            {{ t.implementation.control.control_ref }}
+                        </a>
+                        <small class="text-muted ms-1">{{ t.implementation.control.title }}</small>
+                    </td>
+                    <td><span class="badge bg-secondary" style="font-size:0.7rem;">{{ test_type_labels.get(t.test_type, t.test_type) }}</span></td>
+                    <td>{{ t.scheduled_date.strftime('%Y-%m-%d') if t.scheduled_date else '—' }}</td>
+                    <td class="text-end">
+                        <a href="/controls/tests/{{ t.id }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye me-1"></i>View
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Open Findings -->
+{% if my_findings %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-bug text-danger me-1"></i>Open Findings <span class="badge bg-danger ms-1">{{ my_findings|length }}</span></h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Control Ref</th>
+                    <th>Type</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Due Date</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in my_findings %}
+                <tr>
+                    <td>
+                        <a href="/controls/tests/{{ f.test.id }}#findings" class="text-decoration-none fw-semibold">
+                            {{ f.test.implementation.control.control_ref }}
+                        </a>
+                    </td>
+                    <td><span class="badge bg-secondary" style="font-size:0.7rem;">{{ finding_type_labels.get(f.finding_type, f.finding_type) }}</span></td>
+                    <td>
+                        <span class="badge bg-{% if f.severity == 'CRITICAL' %}danger{% elif f.severity == 'HIGH' %}warning text-dark{% elif f.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">{{ f.severity }}</span>
+                    </td>
+                    <td>
+                        <span class="badge" style="background-color:{{ finding_status_colors.get(f.status, '#6c757d') }};color:#fff;">{{ finding_status_labels.get(f.status, f.status) }}</span>
+                    </td>
+                    <td>{{ f.due_date.strftime('%Y-%m-%d') if f.due_date else '—' }}</td>
+                    <td><small>{{ f.created_at.strftime('%Y-%m-%d') if f.created_at else '—' }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Pending Attestations -->
+{% if my_attestations %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-patch-check me-1" style="color:#6f42c1;"></i>Pending Attestations <span class="badge ms-1" style="background:#6f42c1;">{{ my_attestations|length }}</span></h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Control Ref</th>
+                    <th>Requested</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in my_attestations %}
+                <tr>
+                    <td>
+                        <a href="/controls/implementations/{{ a.implementation.id }}" class="text-decoration-none fw-semibold">
+                            {{ a.implementation.control.control_ref }}
+                        </a>
+                    </td>
+                    <td><small>{{ a.requested_date.strftime('%Y-%m-%d') if a.requested_date else '—' }}</small></td>
+                    <td>{{ a.due_date.strftime('%Y-%m-%d') if a.due_date else '—' }}</td>
+                    <td>
+                        <span class="badge" style="background-color:{{ attestation_status_colors.get(a.status, '#6c757d') }};color:#fff;">{{ attestation_status_labels.get(a.status, a.status) }}</span>
+                    </td>
+                    <td class="text-end">
+                        <a href="/controls/implementations/{{ a.implementation.id }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-arrow-right me-1"></i>Review
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Controls I Own -->
+{% if my_controls %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-shield-lock me-1" style="color:#2563eb;"></i>Controls I Own <span class="badge-count ms-1">{{ my_controls|length }}</span></h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Ref</th>
+                    <th>Title</th>
+                    <th>Domain</th>
+                    <th>Criticality</th>
+                    <th>Test Frequency</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in my_controls %}
+                <tr>
+                    <td>
+                        <a href="/controls/{{ c.id }}" class="text-decoration-none fw-semibold">{{ c.control_ref }}</a>
+                    </td>
+                    <td>{{ c.title }}</td>
+                    <td><small>{{ c.domain }}</small></td>
+                    <td>
+                        <span class="badge bg-{% if c.criticality == 'CRITICAL' %}danger{% elif c.criticality == 'HIGH' %}warning text-dark{% elif c.criticality == 'MEDIUM' %}info{% else %}secondary{% endif %}">{{ c.criticality }}</span>
+                    </td>
+                    <td><small>{{ frequency_labels.get(c.test_frequency, c.test_frequency) }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

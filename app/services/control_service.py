@@ -22,6 +22,7 @@ from models import (
 def get_all_controls(db: Session, active_only: bool = True):
     q = db.query(Control).options(
         joinedload(Control.framework_mappings),
+        joinedload(Control.owner),
     )
     if active_only:
         q = q.filter(Control.is_active == True)
@@ -606,6 +607,21 @@ def get_test_findings(db: Session, test_id: int) -> list:
         joinedload(ControlFinding.remediation_item),
     ).filter(
         ControlFinding.control_test_id == test_id
+    ).order_by(ControlFinding.created_at.desc()).all()
+
+
+def get_all_findings(db: Session) -> list:
+    """Get all findings for org-level implementations (all statuses)."""
+    return db.query(ControlFinding).options(
+        joinedload(ControlFinding.test).joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+        joinedload(ControlFinding.owner),
+        joinedload(ControlFinding.remediation_item),
+    ).join(
+        ControlTest, ControlFinding.control_test_id == ControlTest.id
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlImplementation.vendor_id == None,
     ).order_by(ControlFinding.created_at.desc()).all()
 
 

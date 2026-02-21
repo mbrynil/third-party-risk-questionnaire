@@ -9,6 +9,7 @@ from datetime import datetime
 from app import templates
 from models import (
     get_db, User, Vendor, Control, ControlImplementation, ControlFinding,
+    ControlTest, ControlAttestation,
     QuestionBankItem, RiskStatement,
     AVAILABLE_FRAMEWORKS, FRAMEWORK_DISPLAY, VALID_CONTROL_DOMAINS,
     VALID_CONTROL_TYPES, CONTROL_TYPE_LABELS,
@@ -25,7 +26,7 @@ from models import (
     VALID_FINDING_RISK_RATINGS, FINDING_RISK_LABELS, FINDING_RISK_COLORS,
     VALID_FINDING_TYPES, FINDING_TYPE_LABELS,
     VALID_FINDING_STATUSES, FINDING_STATUS_LABELS, FINDING_STATUS_COLORS,
-    FINDING_STATUS_OPEN,
+    FINDING_STATUS_OPEN, FINDING_STATUS_IN_PROGRESS as FINDING_STATUS_IP,
     VALID_SEVERITIES,
     VALID_ATTESTATION_STATUSES, ATTESTATION_STATUS_LABELS, ATTESTATION_STATUS_COLORS,
     ATTESTATION_STATUS_PENDING,
@@ -36,7 +37,7 @@ from app.services.auth_service import require_role, require_login
 from app.services.audit_service import log_audit
 from app.services import control_service as svc
 from app.services import control_dashboard_service as dash_svc
-from app.services.export_service import generate_control_test_pdf
+from app.services.export_service import generate_control_test_pdf, generate_testing_summary_csv
 from app.services.health_score_service import compute_health_score, compute_readiness, compute_health_scores_bulk
 from app.services.health_score_service import record_health_snapshot, record_all_health_snapshots, get_health_trend, get_portfolio_health_trend
 from app.services import attestation_service as att_svc
@@ -55,6 +56,9 @@ async def control_library(
     framework: str = "",
     control_type: str = "",
     criticality: str = "",
+    owner: str = "",
+    impl_status: str = "",
+    health: str = "",
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
@@ -70,6 +74,39 @@ async def control_library(
         controls = [c for c in controls if c.control_type == control_type]
     if criticality:
         controls = [c for c in controls if c.criticality == criticality]
+    if owner:
+        owner_int = int(owner) if owner.isdigit() else None
+        controls = [c for c in controls if c.owner_user_id == owner_int]
+
+    # Build impl status map for all controls (org-level implementations)
+    control_ids = [c.id for c in controls]
+    org_impls = db.query(ControlImplementation).filter(
+        ControlImplementation.vendor_id == None,
+        ControlImplementation.control_id.in_(control_ids) if control_ids else False,
+    ).all()
+    impl_status_map = {i.control_id: i.status for i in org_impls}
+    impl_id_map = {i.control_id: i.id for i in org_impls}
+
+    # Compute health scores for org impls
+    health_scores = compute_health_scores_bulk(db, org_impls) if org_impls else {}
+    health_map = {}
+    for impl in org_impls:
+        h = health_scores.get(impl.id)
+        if h:
+            health_map[impl.control_id] = h
+
+    # Apply impl_status filter
+    if impl_status:
+        if impl_status == "NOT_TRACKED":
+            controls = [c for c in controls if c.id not in impl_status_map]
+        else:
+            controls = [c for c in controls if impl_status_map.get(c.id) == impl_status]
+
+    # Apply health filter
+    if health:
+        thresholds = {"healthy": (80, 101), "adequate": (60, 80), "at_risk": (40, 60), "critical": (0, 40)}
+        lo, hi = thresholds.get(health, (0, 101))
+        controls = [c for c in controls if health_map.get(c.id) and lo <= health_map[c.id]["score"] < hi]
 
     grouped = {}
     for c in controls:
@@ -80,12 +117,16 @@ async def control_library(
     control_ids = [c.id for c in controls]
     last_tested_map = svc.get_last_tested_dates(db, control_ids)
 
+    users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
+
     return templates.TemplateResponse("control_library.html", {
         "request": request,
         "grouped": grouped,
         "stats": stats,
         "total_count": len(controls),
         "last_tested_map": last_tested_map,
+        "impl_status_map": impl_status_map,
+        "health_map": health_map,
         "domains": VALID_CONTROL_DOMAINS,
         "frameworks": AVAILABLE_FRAMEWORKS,
         "framework_display": FRAMEWORK_DISPLAY,
@@ -94,10 +135,17 @@ async def control_library(
         "criticalities": VALID_CONTROL_CRITICALITIES,
         "frequency_labels": CONTROL_FREQUENCY_LABELS,
         "impl_type_labels": CONTROL_IMPL_TYPE_LABELS,
+        "impl_statuses": VALID_IMPL_STATUSES,
+        "impl_status_labels": IMPL_STATUS_LABELS,
+        "impl_status_colors": IMPL_STATUS_COLORS,
+        "users": users,
         "f_domain": domain,
         "f_framework": framework,
         "f_control_type": control_type,
         "f_criticality": criticality,
+        "f_owner": owner,
+        "f_impl_status": impl_status,
+        "f_health": health,
     })
 
 
@@ -226,6 +274,7 @@ async def control_dashboard(request: Request, db: Session = Depends(get_db), cur
 
     return templates.TemplateResponse("control_dashboard.html", {
         "request": request,
+        "current_user": current_user,
         "data": data,
         "avg_health": avg_health,
         "health_distribution": health_distribution,
@@ -432,6 +481,253 @@ async def control_test_schedule(
     )
 
 
+@router.post("/controls/testing/bulk-schedule", response_class=HTMLResponse)
+async def control_test_bulk_schedule(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Bulk-schedule tests for multiple implementations."""
+    form = await request.form()
+    impl_ids = [int(v) for k, v in form.multi_items() if k == "impl_ids"]
+    test_type = form.get("test_type", "OPERATING")
+    scheduled_date = form.get("scheduled_date", "")
+    tester_user_id = form.get("tester_user_id", "")
+
+    if not impl_ids or not scheduled_date.strip():
+        return RedirectResponse(
+            url=f"/controls/testing?message={quote('Missing required fields')}&message_type=warning",
+            status_code=303,
+        )
+
+    sched_dt = datetime.strptime(scheduled_date.strip(), "%Y-%m-%d")
+    tester_id = int(tester_user_id) if tester_user_id.strip() else None
+    count = 0
+    for iid in impl_ids:
+        impl = db.query(ControlImplementation).filter(ControlImplementation.id == iid).first()
+        if impl:
+            svc.create_scheduled_test(db, iid, test_type, sched_dt, tester_id)
+            count += 1
+
+    log_audit(db, AUDIT_ACTION_CREATE, "control_test",
+              entity_label=f"Bulk scheduled {count} tests",
+              description=f"Bulk-scheduled {count} tests for {scheduled_date}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/testing?message={quote(f'Scheduled {count} tests')}&message_type=success",
+        status_code=303,
+    )
+
+
+# ==================== TESTING EXPORT (Feature 20) ====================
+
+@router.get("/controls/testing/export.csv")
+async def control_testing_export_csv(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Download all completed org-level test results as CSV."""
+    csv_content = generate_testing_summary_csv(db)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="testing_summary.csv"'},
+    )
+
+
+# ==================== PERSONAL WORK QUEUE & REGISTERS ====================
+
+
+@router.get("/controls/my-work", response_class=HTMLResponse)
+async def control_my_work(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    """Personal work queue -- controls I own, tests assigned to me, findings assigned to me, attestations pending."""
+    from sqlalchemy.orm import joinedload as jl
+
+    uid = current_user.id
+
+    # Controls I own
+    my_controls = db.query(Control).filter(
+        Control.owner_user_id == uid,
+        Control.is_active == True,
+    ).order_by(Control.control_ref).all()
+
+    # Tests assigned to me (scheduled + in-progress)
+    my_tests = db.query(ControlTest).options(
+        jl(ControlTest.implementation).joinedload(ControlImplementation.control),
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlTest.tester_user_id == uid,
+        ControlTest.status.in_([TEST_STATUS_SCHEDULED, TEST_STATUS_IN_PROGRESS]),
+        ControlImplementation.vendor_id == None,
+    ).order_by(ControlTest.scheduled_date.asc().nullsfirst()).all()
+
+    my_scheduled = [t for t in my_tests if t.status == TEST_STATUS_SCHEDULED]
+    my_in_progress = [t for t in my_tests if t.status == TEST_STATUS_IN_PROGRESS]
+
+    # Overdue tests for impls I own
+    from datetime import datetime as dt_cls
+    now = dt_cls.utcnow()
+    my_overdue_impls = db.query(ControlImplementation).options(
+        jl(ControlImplementation.control),
+    ).filter(
+        ControlImplementation.owner_user_id == uid,
+        ControlImplementation.vendor_id == None,
+        ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+        ControlImplementation.next_test_date != None,
+        ControlImplementation.next_test_date < now,
+    ).order_by(ControlImplementation.next_test_date.asc()).all()
+
+    # Findings assigned to me (open/in-progress)
+    my_findings = db.query(ControlFinding).options(
+        jl(ControlFinding.test).joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+        jl(ControlFinding.owner),
+    ).join(
+        ControlTest, ControlFinding.control_test_id == ControlTest.id
+    ).join(
+        ControlImplementation, ControlTest.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlFinding.owner_user_id == uid,
+        ControlFinding.status.in_([FINDING_STATUS_OPEN, FINDING_STATUS_IP]),
+        ControlImplementation.vendor_id == None,
+    ).order_by(ControlFinding.due_date.asc().nullslast()).all()
+
+    # Attestations pending for me
+    my_attestations = db.query(ControlAttestation).options(
+        jl(ControlAttestation.implementation).joinedload(ControlImplementation.control),
+        jl(ControlAttestation.attestor),
+    ).join(
+        ControlImplementation, ControlAttestation.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlAttestation.attestor_user_id == uid,
+        ControlAttestation.status == ATTESTATION_STATUS_PENDING,
+        ControlImplementation.vendor_id == None,
+    ).order_by(ControlAttestation.due_date.asc().nullslast()).all()
+
+    return templates.TemplateResponse("my_controls.html", {
+        "request": request,
+        "current_user": current_user,
+        "my_controls": my_controls,
+        "my_scheduled": my_scheduled,
+        "my_in_progress": my_in_progress,
+        "my_overdue_impls": my_overdue_impls,
+        "my_findings": my_findings,
+        "my_attestations": my_attestations,
+        "finding_status_labels": FINDING_STATUS_LABELS,
+        "finding_status_colors": FINDING_STATUS_COLORS,
+        "finding_type_labels": FINDING_TYPE_LABELS,
+        "test_type_labels": TEST_TYPE_LABELS,
+        "attestation_status_labels": ATTESTATION_STATUS_LABELS,
+        "attestation_status_colors": ATTESTATION_STATUS_COLORS,
+        "frequency_labels": CONTROL_FREQUENCY_LABELS,
+    })
+
+
+@router.get("/controls/findings", response_class=HTMLResponse)
+async def control_findings_register(
+    request: Request,
+    status: str = "",
+    severity: str = "",
+    owner: str = "",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Cross-control findings register with server-side filtering."""
+    findings = svc.get_all_findings(db)
+
+    # Server-side filters
+    if status:
+        findings = [f for f in findings if f.status == status]
+    if severity:
+        findings = [f for f in findings if f.severity == severity]
+    if owner:
+        owner_int = int(owner) if owner.isdigit() else None
+        findings = [f for f in findings if f.owner_user_id == owner_int]
+
+    # KPIs (unfiltered)
+    all_findings = svc.get_all_findings(db)
+    from datetime import datetime as dt_cls
+    now = dt_cls.utcnow()
+    kpi_total = len(all_findings)
+    kpi_open = sum(1 for f in all_findings if f.status == FINDING_STATUS_OPEN)
+    kpi_in_progress = sum(1 for f in all_findings if f.status == FINDING_STATUS_IP)
+    kpi_overdue = sum(1 for f in all_findings if f.status in (FINDING_STATUS_OPEN, FINDING_STATUS_IP) and f.due_date and f.due_date < now)
+    month_start = dt_cls(now.year, now.month, 1)
+    kpi_closed_month = sum(1 for f in all_findings if f.status == 'CLOSED' and f.closed_date and f.closed_date >= month_start)
+
+    users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
+
+    return templates.TemplateResponse("findings_register.html", {
+        "request": request,
+        "current_user": current_user,
+        "findings": findings,
+        "kpi_total": kpi_total,
+        "kpi_open": kpi_open,
+        "kpi_in_progress": kpi_in_progress,
+        "kpi_overdue": kpi_overdue,
+        "kpi_closed_month": kpi_closed_month,
+        "users": users,
+        "finding_statuses": VALID_FINDING_STATUSES,
+        "finding_status_labels": FINDING_STATUS_LABELS,
+        "finding_status_colors": FINDING_STATUS_COLORS,
+        "finding_types": VALID_FINDING_TYPES,
+        "finding_type_labels": FINDING_TYPE_LABELS,
+        "severities": VALID_SEVERITIES,
+        "f_status": status,
+        "f_severity": severity,
+        "f_owner": owner,
+    })
+
+
+@router.get("/controls/attestations", response_class=HTMLResponse)
+async def control_attestation_tracker(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    """Cross-control attestation tracker."""
+    from sqlalchemy.orm import joinedload as jl
+
+    attestations = db.query(ControlAttestation).options(
+        jl(ControlAttestation.implementation).joinedload(ControlImplementation.control),
+        jl(ControlAttestation.attestor),
+    ).join(
+        ControlImplementation, ControlAttestation.implementation_id == ControlImplementation.id
+    ).filter(
+        ControlImplementation.vendor_id == None,
+    ).order_by(ControlAttestation.created_at.desc()).all()
+
+    # KPIs
+    from datetime import datetime as dt_cls
+    now = dt_cls.utcnow()
+    kpi_pending = sum(1 for a in attestations if a.status == ATTESTATION_STATUS_PENDING)
+    kpi_overdue = sum(1 for a in attestations if a.status == ATTESTATION_STATUS_PENDING and a.due_date and a.due_date < now)
+    kpi_attested = sum(1 for a in attestations if a.status == 'ATTESTED')
+    kpi_rejected = sum(1 for a in attestations if a.status == 'REJECTED')
+
+    users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
+
+    return templates.TemplateResponse("attestation_tracker.html", {
+        "request": request,
+        "current_user": current_user,
+        "attestations": attestations,
+        "kpi_pending": kpi_pending,
+        "kpi_overdue": kpi_overdue,
+        "kpi_attested": kpi_attested,
+        "kpi_rejected": kpi_rejected,
+        "users": users,
+        "attestation_statuses": VALID_ATTESTATION_STATUSES,
+        "attestation_status_labels": ATTESTATION_STATUS_LABELS,
+        "attestation_status_colors": ATTESTATION_STATUS_COLORS,
+    })
+
+
 @router.post("/controls/tests/{test_id}/start", response_class=HTMLResponse)
 async def control_test_start(
     test_id: int,
@@ -598,7 +894,7 @@ async def control_toggle(control_id: int, db: Session = Depends(get_db), current
 
 
 @router.get("/controls/{control_id}", response_class=HTMLResponse)
-async def control_detail(request: Request, control_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep)):
+async def control_detail(request: Request, control_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
     ctrl = svc.get_control(db, control_id)
     if not ctrl:
         raise HTTPException(status_code=404, detail="Control not found")
@@ -859,7 +1155,7 @@ async def vendor_controls_bulk(
 
 @router.get("/controls/implementations/{impl_id}", response_class=HTMLResponse)
 async def control_impl_detail(
-    request: Request, impl_id: int, db: Session = Depends(get_db), current_user: User = Depends(_analyst_dep),
+    request: Request, impl_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_login),
 ):
     impl = svc.get_implementation(db, impl_id)
     if not impl:
@@ -1040,12 +1336,28 @@ async def control_test_detail(request: Request, test_id: int, db: Session = Depe
         and test.reviewer_user_id == test.tester_user_id
     )
 
+    # Next test navigation (#11) — find next overdue/upcoming org-level impl
+    next_impl = None
+    if test.status == TEST_STATUS_COMPLETED:
+        from sqlalchemy.orm import joinedload as jl
+        next_impl = db.query(ControlImplementation).options(
+            jl(ControlImplementation.control),
+        ).filter(
+            ControlImplementation.vendor_id == None,
+            ControlImplementation.status == IMPL_STATUS_IMPLEMENTED,
+            ControlImplementation.next_test_date != None,
+            ControlImplementation.id != test.implementation_id,
+        ).order_by(
+            ControlImplementation.next_test_date.asc(),
+        ).first()
+
     return templates.TemplateResponse("control_test_detail.html", {
         "request": request,
         "test": test,
         "current_user": current_user,
         "users": users,
         "test_findings": test_findings,
+        "next_impl": next_impl,
         "sod_tester_is_owner": sod_tester_is_owner,
         "sod_reviewer_is_tester": sod_reviewer_is_tester,
         "test_types": VALID_TEST_TYPES,

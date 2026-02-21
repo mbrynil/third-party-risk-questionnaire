@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Findings Register{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item active">Findings</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tracker-filters select { min-width: 130px; }
+    .condition-text { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1><i class="bi bi-bug me-2"></i>Findings Register</h1>
+        <p>Cross-control findings tracker — identify, remediate, and close findings from control testing</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/controls/testing" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-clipboard-check me-1"></i>Testing
+        </a>
+        <a href="/controls/dashboard" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-shield-check me-1"></i>Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- KPI Row -->
+<div class="row g-3 mb-4">
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#2563eb;">{{ kpi_total }}</div>
+                <div class="kpi-label">Total Findings</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if kpi_open > 0 %}#dc3545{% else %}#198754{% endif %};">{{ kpi_open }}</div>
+                <div class="kpi-label">Open</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#fd7e14;">{{ kpi_in_progress }}</div>
+                <div class="kpi-label">In Progress</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if kpi_overdue > 0 %}#dc3545{% else %}#198754{% endif %};">{{ kpi_overdue }}</div>
+                <div class="kpi-label">Overdue</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#198754;">{{ kpi_closed_month }}</div>
+                <div class="kpi-label">Closed This Month</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" action="/controls/findings" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    {% for s in finding_statuses %}
+                    <option value="{{ s }}" {% if f_status == s %}selected{% endif %}>{{ finding_status_labels.get(s, s) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Severity</label>
+                <select name="severity" class="form-select form-select-sm">
+                    <option value="">All Severities</option>
+                    {% for sev in severities %}
+                    <option value="{{ sev }}" {% if f_severity == sev %}selected{% endif %}>{{ sev }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm mb-1">Owner</label>
+                <select name="owner" class="form-select form-select-sm">
+                    <option value="">All Owners</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if f_owner == u.id|string %}selected{% endif %}>{{ u.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">
+                    <i class="bi bi-funnel me-1"></i>Apply
+                </button>
+                <a href="/controls/findings" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Search Bar -->
+<div class="mb-3">
+    <input type="text" id="findingsSearch" class="form-control" placeholder="Search findings by control ref, domain, condition, or owner...">
+</div>
+
+<!-- Findings Table -->
+<div class="card">
+    {% if findings %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Control Ref</th>
+                    <th>Domain</th>
+                    <th>Type</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Owner</th>
+                    <th>Due Date</th>
+                    <th>Created</th>
+                    <th>Condition</th>
+                </tr>
+            </thead>
+            <tbody id="findingsBody">
+                {% for f in findings %}
+                <tr data-search="{{ f.test.implementation.control.control_ref|lower }} {{ f.test.implementation.control.title|lower }} {{ f.test.implementation.control.domain|lower }} {{ (f.owner.display_name|lower if f.owner else '') }} {{ (f.condition or '')|lower }}">
+                    <td>
+                        <a href="/controls/tests/{{ f.test.id }}#findings" class="text-decoration-none fw-semibold">
+                            {{ f.test.implementation.control.control_ref }}
+                        </a>
+                        <br><small class="text-muted">{{ f.test.implementation.control.title }}</small>
+                    </td>
+                    <td><small>{{ f.test.implementation.control.domain }}</small></td>
+                    <td><span class="badge bg-secondary" style="font-size:0.7rem;">{{ finding_type_labels.get(f.finding_type, f.finding_type) }}</span></td>
+                    <td>
+                        <span class="badge bg-{% if f.severity == 'CRITICAL' %}danger{% elif f.severity == 'HIGH' %}warning text-dark{% elif f.severity == 'MEDIUM' %}info{% else %}secondary{% endif %}">{{ f.severity }}</span>
+                    </td>
+                    <td>
+                        <span class="badge" style="background-color:{{ finding_status_colors.get(f.status, '#6c757d') }};color:#fff;">{{ finding_status_labels.get(f.status, f.status) }}</span>
+                    </td>
+                    <td><small>{{ f.owner.display_name if f.owner else '—' }}</small></td>
+                    <td>{{ f.due_date.strftime('%Y-%m-%d') if f.due_date else '—' }}</td>
+                    <td><small>{{ f.created_at.strftime('%Y-%m-%d') if f.created_at else '—' }}</small></td>
+                    <td class="condition-text" title="{{ f.condition or '' }}">
+                        <small>{{ (f.condition or '')[:80] }}{% if f.condition and f.condition|length > 80 %}...{% endif %}</small>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-5">
+        <i class="bi bi-check-circle" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No findings found</h5>
+        <p class="text-muted mb-0">Adjust your filters or check back after control testing has identified findings.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Client-side search
+document.getElementById('findingsSearch').addEventListener('input', function() {
+    var query = this.value.toLowerCase().trim();
+    var rows = document.querySelectorAll('#findingsBody tr');
+    rows.forEach(function(row) {
+        var text = row.getAttribute('data-search') || '';
+        row.style.display = (!query || text.indexOf(query) !== -1) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

@@ -212,6 +212,7 @@
                             <i class="bi bi-shield-lock me-1"></i>Controls
                         </a>
                         <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/controls/my-work"><i class="bi bi-person-check me-2"></i>My Work</a></li>
                             {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
                             <li><a class="dropdown-item" href="/controls"><i class="bi bi-shield-lock me-2"></i>Control Library</a></li>
                             {% endif %}
@@ -219,6 +220,9 @@
                             {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
                             <li><a class="dropdown-item" href="/controls/testing"><i class="bi bi-clipboard-check me-2"></i>Control Testing</a></li>
                             <li><a class="dropdown-item" href="/controls/gap-analysis"><i class="bi bi-clipboard-data me-2"></i>Gap Analysis</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/controls/findings"><i class="bi bi-exclamation-triangle me-2"></i>Findings</a></li>
+                            <li><a class="dropdown-item" href="/controls/attestations"><i class="bi bi-patch-check me-2"></i>Attestations</a></li>
                             {% endif %}
                         </ul>
                     </li>

@@ -49,6 +49,9 @@
         <form method="post" action="/controls/tests/{{ test.id }}/roll-forward" class="d-inline">
             <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-arrow-repeat me-1"></i>Roll Forward</button>
         </form>
+        {% if next_impl %}
+        <a href="/controls/implementations/{{ next_impl.id }}" class="btn btn-outline-info" title="Next control due for testing"><i class="bi bi-skip-forward me-1"></i>Next: {{ next_impl.control.control_ref }}</a>
+        {% endif %}
         {% endif %}
         <a href="/controls/implementations/{{ test.implementation.id }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
     </div>
@@ -399,7 +402,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small">Owner</label>
-                            <select name="owner_id" class="form-select form-select-sm">
+                            <select name="owner_user_id" class="form-select form-select-sm">
                                 <option value="">-- Select --</option>
                                 {% for u in users %}
                                 <option value="{{ u.id }}">{{ u.display_name }}</option>
@@ -726,7 +729,7 @@ toggleExceptionDetails();
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label small">Owner</label>
-                                <select name="owner_id" class="form-select form-select-sm">
+                                <select name="owner_user_id" class="form-select form-select-sm">
                                     <option value="">-- Select --</option>
                                     {% for u in users %}
                                     <option value="{{ u.id }}">{{ u.display_name }}</option>

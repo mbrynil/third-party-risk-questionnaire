@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Attestation Tracker{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item active">Attestations</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+    .tracker-filters select { min-width: 130px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header d-flex justify-content-between align-items-start">
+    <div>
+        <h1><i class="bi bi-patch-check me-2"></i>Attestation Tracker</h1>
+        <p>Track control owner attestations across the control program</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/controls/testing" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-clipboard-check me-1"></i>Testing
+        </a>
+        <a href="/controls/dashboard" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-shield-check me-1"></i>Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- KPI Row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#fd7e14;">{{ kpi_pending }}</div>
+                <div class="kpi-label">Pending</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if kpi_overdue > 0 %}#dc3545{% else %}#198754{% endif %};">{{ kpi_overdue }}</div>
+                <div class="kpi-label">Overdue</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#198754;">{{ kpi_attested }}</div>
+                <div class="kpi-label">Attested</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if kpi_rejected > 0 %}#dc3545{% else %}#6c757d{% endif %};">{{ kpi_rejected }}</div>
+                <div class="kpi-label">Rejected</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Client-side Filter Bar -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center tracker-filters">
+            <div class="col-auto">
+                <i class="bi bi-funnel me-1 text-muted"></i>
+                <strong class="small text-muted">Filters:</strong>
+            </div>
+            <div class="col-auto">
+                <select class="form-select form-select-sm" id="filterStatus" onchange="applyFilters()">
+                    <option value="">All Statuses</option>
+                    {% for s in attestation_statuses %}
+                    <option value="{{ s }}">{{ attestation_status_labels.get(s, s) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select class="form-select form-select-sm" id="filterAttestor" onchange="applyFilters()">
+                    <option value="">All Attestors</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}">{{ u.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <input type="text" class="form-control form-control-sm" id="filterSearch"
+                       placeholder="Search ref or title..." oninput="applyFilters()">
+            </div>
+            <div class="col-auto ms-auto">
+                <span class="badge bg-secondary" id="rowCount">{{ attestations|length }}</span>
+                <small class="text-muted">attestations</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Attestations Table -->
+<div class="card">
+    {% if attestations %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Control Ref</th>
+                    <th>Control Title</th>
+                    <th>Attestor</th>
+                    <th>Status</th>
+                    <th>Effective?</th>
+                    <th>Requested</th>
+                    <th>Due Date</th>
+                    <th>Attested Date</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="attestationsBody">
+                {% for a in attestations %}
+                <tr data-status="{{ a.status }}"
+                    data-attestor="{{ a.attestor.id if a.attestor else '' }}"
+                    data-search="{{ a.implementation.control.control_ref|lower }} {{ a.implementation.control.title|lower }} {{ (a.attestor.display_name|lower if a.attestor else '') }}">
+                    <td>
+                        <a href="/controls/implementations/{{ a.implementation.id }}" class="text-decoration-none fw-semibold">
+                            {{ a.implementation.control.control_ref }}
+                        </a>
+                    </td>
+                    <td>{{ a.implementation.control.title }}</td>
+                    <td><small>{{ a.attestor.display_name if a.attestor else '—' }}</small></td>
+                    <td>
+                        <span class="badge" style="background-color:{{ attestation_status_colors.get(a.status, '#6c757d') }};color:#fff;">{{ attestation_status_labels.get(a.status, a.status) }}</span>
+                    </td>
+                    <td class="text-center">
+                        {% if a.is_effective is none or a.is_effective is not defined %}
+                            <span class="text-muted">—</span>
+                        {% elif a.is_effective %}
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                        {% else %}
+                            <i class="bi bi-x-circle-fill text-danger"></i>
+                        {% endif %}
+                    </td>
+                    <td><small>{{ a.requested_date.strftime('%Y-%m-%d') if a.requested_date else '—' }}</small></td>
+                    <td>{{ a.due_date.strftime('%Y-%m-%d') if a.due_date else '—' }}</td>
+                    <td><small>{{ a.attested_date.strftime('%Y-%m-%d') if a.attested_date else '—' }}</small></td>
+                    <td class="text-end">
+                        <a href="/controls/implementations/{{ a.implementation.id }}" class="btn btn-sm btn-outline-secondary" title="View implementation">
+                            <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-5">
+        <i class="bi bi-patch-check" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No attestations found</h5>
+        <p class="text-muted mb-0">Attestations will appear here once they are requested from control owners.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function applyFilters() {
+    var statusVal = document.getElementById('filterStatus').value;
+    var attestorVal = document.getElementById('filterAttestor').value;
+    var searchVal = document.getElementById('filterSearch').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('#attestationsBody tr');
+    var visible = 0;
+
+    rows.forEach(function(row) {
+        var show = true;
+        if (statusVal && row.dataset.status !== statusVal) show = false;
+        if (attestorVal && row.dataset.attestor !== attestorVal) show = false;
+        if (searchVal && row.dataset.search.indexOf(searchVal) === -1) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('rowCount').textContent = visible;
+}
+</script>
+{% endblock %}

@@ -41,6 +41,9 @@
         <p>Central hub for all control testing activity &mdash; schedule, overdue items, and completed tests</p>
     </div>
     <div class="d-flex gap-2">
+        <a href="/controls/testing/export.csv" class="btn btn-outline-success btn-sm">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
+        </a>
         <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#scheduleTestModal">
             <i class="bi bi-calendar-plus me-1"></i>Schedule Test
         </button>
@@ -102,6 +105,29 @@
                 <div class="kpi-label">Pass Rate YTD</div>
             </div>
         </div>
+    </div>
+</div>
+
+{# Bulk Schedule Floating Bar #}
+<div id="bulkScheduleBar" class="card border-primary mb-3" style="display:none;position:sticky;top:60px;z-index:100;">
+    <div class="card-body py-2">
+        <form method="post" action="/controls/testing/bulk-schedule" id="bulkScheduleForm" class="d-flex align-items-center gap-3 flex-wrap">
+            <span class="fw-semibold"><span id="schSelectedCount">0</span> selected</span>
+            <input type="date" name="scheduled_date" class="form-control form-control-sm" style="width:160px;" required>
+            <select name="test_type" class="form-select form-select-sm" style="width:140px;">
+                {% for t in test_types %}
+                <option value="{{ t }}">{{ test_type_labels[t] }}</option>
+                {% endfor %}
+            </select>
+            <select name="tester_user_id" class="form-select form-select-sm" style="width:160px;">
+                <option value="">-- Unassigned --</option>
+                {% for u in users %}
+                <option value="{{ u.id }}">{{ u.display_name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-calendar-plus me-1"></i>Schedule All</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearScheduleSelection()">Clear</button>
+        </form>
     </div>
 </div>
 
@@ -229,9 +255,11 @@
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
+                            <th style="width:36px;"><input type="checkbox" class="form-check-input" id="schSelectAll" onchange="toggleScheduleAll(this)"></th>
                             <th>Ref</th>
                             <th>Title</th>
                             <th>Domain</th>
+                            <th>Criticality</th>
                             <th>Frequency</th>
                             <th>Last Tested</th>
                             <th>Next Due</th>
@@ -245,7 +273,9 @@
                         <tr data-status="{{ row.testing_status }}"
                             data-domain="{{ row.impl.control.domain }}"
                             data-owner="{{ row.impl.owner_user_id or '' }}"
-                            data-search="{{ row.impl.control.control_ref|lower }} {{ row.impl.control.title|lower }}">
+                            data-search="{{ row.impl.control.control_ref|lower }} {{ row.impl.control.title|lower }}"
+                            data-criticality="{{ row.impl.control.criticality }}">
+                            <td><input type="checkbox" class="form-check-input sch-checkbox" value="{{ row.impl.id }}" onchange="updateScheduleBulkBar()"></td>
                             <td>
                                 <a href="/controls/{{ row.impl.control.id }}" class="text-decoration-none fw-semibold">
                                     {{ row.impl.control.control_ref }}
@@ -253,6 +283,9 @@
                             </td>
                             <td>{{ row.impl.control.title }}</td>
                             <td><small>{{ row.impl.control.domain }}</small></td>
+                            <td>
+                                <span class="badge bg-{% if row.impl.control.criticality == 'CRITICAL' %}danger{% elif row.impl.control.criticality == 'HIGH' %}warning text-dark{% elif row.impl.control.criticality == 'MEDIUM' %}info{% else %}secondary{% endif %}" style="font-size:0.65rem;">{{ row.impl.control.criticality }}</span>
+                            </td>
                             <td><small>{{ frequency_labels.get(row.impl.control.test_frequency, row.impl.control.test_frequency) }}</small></td>
                             <td>
                                 {% if row.last_tested %}
@@ -327,12 +360,54 @@
     <!-- ==================== IN PROGRESS TAB ==================== -->
     <div class="tab-pane fade" id="inProgressPane" role="tabpanel">
         <div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+            <!-- In Progress Filters -->
+            <div class="card-body py-2 border-bottom">
+                <div class="row g-2 align-items-center tracker-filters">
+                    <div class="col-auto">
+                        <i class="bi bi-funnel me-1 text-muted"></i>
+                        <strong class="small text-muted">Filters:</strong>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="ipFilterDomain" onchange="applyInProgressFilters()">
+                            <option value="">All Domains</option>
+                            {% for d in domains %}
+                            <option value="{{ d }}">{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="ipFilterTester" onchange="applyInProgressFilters()">
+                            <option value="">All Testers</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select class="form-select form-select-sm" id="ipFilterType" onchange="applyInProgressFilters()">
+                            <option value="">All Types</option>
+                            {% for key, label in test_type_labels.items() %}
+                            <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <input type="text" class="form-control form-control-sm" id="ipFilterSearch"
+                               placeholder="Search ref or title..." oninput="applyInProgressFilters()">
+                    </div>
+                    <div class="col-auto ms-auto">
+                        <span class="badge bg-secondary" id="ipRowCount">{{ in_progress_tests|length }}</span>
+                        <small class="text-muted">tests</small>
+                    </div>
+                </div>
+            </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
                             <th>Control Ref</th>
                             <th>Title</th>
+                            <th>Domain</th>
                             <th>Type</th>
                             <th>Result</th>
                             <th>Tester</th>
@@ -341,9 +416,12 @@
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="inProgressBody">
                         {% for t in in_progress_tests %}
-                        <tr>
+                        <tr data-domain="{{ t.implementation.control.domain if t.implementation and t.implementation.control else '' }}"
+                            data-tester="{{ t.tester_user_id or '' }}"
+                            data-type="{{ t.test_type }}"
+                            data-search="{{ t.implementation.control.control_ref|lower if t.implementation and t.implementation.control else '' }} {{ t.implementation.control.title|lower if t.implementation and t.implementation.control else '' }}">
                             <td>
                                 {% if t.implementation and t.implementation.control %}
                                 <a href="/controls/{{ t.implementation.control.id }}" class="text-decoration-none fw-semibold">
@@ -356,6 +434,7 @@
                                 {{ t.implementation.control.title }}
                                 {% endif %}
                             </td>
+                            <td><small>{{ t.implementation.control.domain if t.implementation and t.implementation.control else '' }}</small></td>
                             <td><small>{{ test_type_labels.get(t.test_type, t.test_type) }}</small></td>
                             <td>
                                 <span class="badge" style="background:{{ test_result_colors.get(t.result, '#6c757d') }};color:#fff;">
@@ -614,6 +693,27 @@ function applyScheduleFilters() {
     document.getElementById('schRowCount').textContent = visible;
 }
 
+function applyInProgressFilters() {
+    var domainVal = document.getElementById('ipFilterDomain').value;
+    var testerVal = document.getElementById('ipFilterTester').value;
+    var typeVal = document.getElementById('ipFilterType').value;
+    var searchVal = document.getElementById('ipFilterSearch').value.toLowerCase().trim();
+    var rows = document.querySelectorAll('#inProgressBody tr');
+    var visible = 0;
+
+    rows.forEach(function(row) {
+        var show = true;
+        if (domainVal && row.dataset.domain !== domainVal) show = false;
+        if (testerVal && row.dataset.tester !== testerVal) show = false;
+        if (typeVal && row.dataset.type !== typeVal) show = false;
+        if (searchVal && row.dataset.search.indexOf(searchVal) === -1) show = false;
+
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    document.getElementById('ipRowCount').textContent = visible;
+}
+
 function applyHistoryFilters() {
     var resultVal = document.getElementById('histFilterResult').value;
     var typeVal = document.getElementById('histFilterType').value;
@@ -637,7 +737,43 @@ function applyHistoryFilters() {
     document.getElementById('histRowCount').textContent = visible;
 }
 
-// URL param handling: ?status=OVERDUE pre-selects filter, ?tab=history switches tab, ?schedule=<id> opens modal
+// Bulk schedule selection
+function updateScheduleBulkBar() {
+    var checked = document.querySelectorAll('.sch-checkbox:checked');
+    var bar = document.getElementById('bulkScheduleBar');
+    var count = document.getElementById('schSelectedCount');
+    if (checked.length > 0) {
+        bar.style.display = '';
+        count.textContent = checked.length;
+        var form = document.getElementById('bulkScheduleForm');
+        form.querySelectorAll('input[name="impl_ids"]').forEach(function(el) { el.remove(); });
+        checked.forEach(function(cb) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'impl_ids';
+            inp.value = cb.value;
+            form.appendChild(inp);
+        });
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+function toggleScheduleAll(el) {
+    document.querySelectorAll('.sch-checkbox').forEach(function(cb) {
+        var row = cb.closest('tr');
+        if (row.style.display !== 'none') cb.checked = el.checked;
+    });
+    updateScheduleBulkBar();
+}
+
+function clearScheduleSelection() {
+    document.querySelectorAll('.sch-checkbox').forEach(function(cb) { cb.checked = false; });
+    document.getElementById('schSelectAll').checked = false;
+    updateScheduleBulkBar();
+}
+
+// URL param handling
 (function() {
     var params = new URLSearchParams(window.location.search);
 
