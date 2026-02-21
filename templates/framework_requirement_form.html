@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Requirement — {{ req.reference }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item"><a href="/controls/frameworks">Frameworks</a></li>
+<li class="breadcrumb-item"><a href="/controls/frameworks/{{ req.framework }}">{{ framework_display.get(req.framework, req.framework) }}</a></li>
+<li class="breadcrumb-item active">{{ req.reference }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h4 class="mb-4"><i class="bi bi-pencil me-2"></i>Edit Requirement: {{ req.reference }}</h4>
+
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+
+        <form method="post">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Reference</label>
+                            <input type="text" class="form-control" value="{{ req.reference }}" disabled>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Title</label>
+                            <input type="text" name="title" class="form-control" value="{{ req.title }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-control" rows="3">{{ req.description or '' }}</textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Guidance</label>
+                            <textarea name="guidance" class="form-control" rows="3">{{ req.guidance or '' }}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Category</label>
+                            <input type="text" name="category" class="form-control" value="{{ req.category or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Subcategory</label>
+                            <input type="text" name="subcategory" class="form-control" value="{{ req.subcategory or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Suggested Domain</label>
+                            <select name="suggested_domain" class="form-select">
+                                <option value="">— None —</option>
+                                {% for d in domains %}
+                                <option value="{{ d }}" {% if req.suggested_domain == d %}selected{% endif %}>{{ d }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Suggested Control Type</label>
+                            <select name="suggested_control_type" class="form-select">
+                                <option value="">— None —</option>
+                                {% for ct in control_types %}
+                                <option value="{{ ct }}" {% if req.suggested_control_type == ct %}selected{% endif %}>{{ control_type_labels.get(ct, ct) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Sort Order</label>
+                            <input type="number" name="sort_order" class="form-control" value="{{ req.sort_order }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+                <a href="/controls/frameworks/{{ req.framework }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

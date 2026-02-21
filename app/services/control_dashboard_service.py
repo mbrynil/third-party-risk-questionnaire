@@ -6,7 +6,8 @@ from sqlalchemy import func
 
 from models import (
     Control, ControlFrameworkMapping, ControlImplementation, ControlTest,
-    AVAILABLE_FRAMEWORKS, FRAMEWORK_DISPLAY, VALID_CONTROL_DOMAINS,
+    FrameworkRequirement,
+    AVAILABLE_FRAMEWORKS, FRAMEWORK_DISPLAY, VALID_CONTROL_DOMAINS, SEEDED_FRAMEWORKS,
     IMPL_STATUS_IMPLEMENTED, IMPL_STATUS_PARTIAL, IMPL_STATUS_NOT_APPLICABLE,
     EFFECTIVENESS_EFFECTIVE, EFFECTIVENESS_LARGELY_EFFECTIVE,
     TEST_RESULT_PASS, TEST_RESULT_FAIL,
@@ -14,36 +15,55 @@ from models import (
 
 
 def get_framework_coverage(db: Session, vendor_id: int | None = None) -> dict:
-    """Per-framework coverage stats: total controls mapped, how many implemented, effective."""
+    """Per-framework coverage stats.
+    For seeded frameworks: total = requirement count (canonical catalog).
+    For others: total = mapped controls (legacy behavior).
+    """
     result = {}
     for fw_key, fw_label in AVAILABLE_FRAMEWORKS:
+        # Check if this framework has seeded requirements
+        req_count = 0
+        if fw_key in SEEDED_FRAMEWORKS:
+            req_count = db.query(FrameworkRequirement).filter(
+                FrameworkRequirement.framework == fw_key,
+                FrameworkRequirement.is_active == True,
+            ).count()
+
         mappings = db.query(ControlFrameworkMapping).filter(
             ControlFrameworkMapping.framework == fw_key
         ).all()
         control_ids = list({m.control_id for m in mappings})
-        if not control_ids:
+        if not control_ids and req_count == 0:
             continue
 
-        # Filter to active controls only
+        # Use requirement count as total for seeded frameworks, else mapped controls
+        if req_count > 0:
+            total = req_count
+        else:
+            active_controls = db.query(Control).filter(
+                Control.id.in_(control_ids), Control.is_active == True
+            ).all()
+            active_ids = [c.id for c in active_controls]
+            total = len(active_ids)
+            if total == 0:
+                continue
+
+        # Get active control IDs for implementation stats
         active_controls = db.query(Control).filter(
             Control.id.in_(control_ids), Control.is_active == True
-        ).all()
+        ).all() if control_ids else []
         active_ids = [c.id for c in active_controls]
-        total = len(active_ids)
-        if total == 0:
-            continue
 
         if vendor_id:
             impls = db.query(ControlImplementation).filter(
                 ControlImplementation.vendor_id == vendor_id,
                 ControlImplementation.control_id.in_(active_ids),
-            ).all()
+            ).all() if active_ids else []
         else:
-            # Org-level: only count org implementations (vendor_id IS NULL)
             impls = db.query(ControlImplementation).filter(
                 ControlImplementation.control_id.in_(active_ids),
                 ControlImplementation.vendor_id == None,
-            ).all()
+            ).all() if active_ids else []
 
         impl_control_ids = set()
         effective_control_ids = set()

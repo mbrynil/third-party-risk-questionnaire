@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Cross-Framework Mapping{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item"><a href="/controls/frameworks">Frameworks</a></li>
+<li class="breadcrumb-item active">Cross-Framework Map</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Cross-Framework Mapping</h3>
+        <p class="text-muted mb-0">Controls mapped to multiple frameworks, showing shared coverage.</p>
+    </div>
+    <a href="/controls/frameworks" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back to Frameworks</a>
+</div>
+
+{% if cross_mappings %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">{{ cross_mappings|length }} controls mapped to 2+ frameworks</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Control Ref</th>
+                    <th>Title</th>
+                    <th>Domain</th>
+                    {% for fw_key, fw_label in frameworks %}
+                    {% if fw_key in seeded_frameworks %}
+                    <th class="text-center" style="min-width:100px;">{{ fw_label }}</th>
+                    {% endif %}
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in cross_mappings %}
+                <tr>
+                    <td><a href="/controls/{{ item.control.id }}" class="text-decoration-none fw-semibold">{{ item.control.control_ref }}</a></td>
+                    <td class="small">{{ item.control.title }}</td>
+                    <td><small class="text-muted">{{ item.control.domain }}</small></td>
+                    {% for fw_key, fw_label in frameworks %}
+                    {% if fw_key in seeded_frameworks %}
+                    <td class="text-center">
+                        {% if fw_key in item.framework_refs %}
+                        {% for ref in item.framework_refs[fw_key] %}
+                        <span class="badge bg-primary-subtle text-primary mb-1">{{ ref }}</span>
+                        {% endfor %}
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-diagram-3" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3">No cross-framework mappings yet</h5>
+        <p>Controls mapped to multiple frameworks will appear here. Start by <a href="/controls/frameworks">adopting a framework</a>.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

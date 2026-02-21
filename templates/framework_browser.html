@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Regulatory Framework Library{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item active">Frameworks</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-journal-bookmark me-2"></i>Regulatory Framework Library</h3>
+        <p class="text-muted mb-0">Canonical requirements from industry frameworks. Adopt a framework to auto-create controls and track compliance.</p>
+    </div>
+    <a href="/controls/frameworks/cross-map" class="btn btn-outline-primary"><i class="bi bi-diagram-3 me-1"></i>Cross-Framework Map</a>
+</div>
+
+<div class="row g-4">
+    {% for fw in framework_stats %}
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="card-title mb-1">{{ fw.label }}</h5>
+                        <span class="badge bg-secondary">{{ fw.total }} requirements</span>
+                    </div>
+                    {% if fw.framework == 'SOC_2' %}
+                    <i class="bi bi-shield-check" style="font-size:2rem;color:#2563eb;"></i>
+                    {% elif fw.framework == 'ISO_27001' %}
+                    <i class="bi bi-globe2" style="font-size:2rem;color:#059669;"></i>
+                    {% elif fw.framework == 'NIST_CSF_2' %}
+                    <i class="bi bi-building-gear" style="font-size:2rem;color:#7c3aed;"></i>
+                    {% else %}
+                    <i class="bi bi-journal-bookmark" style="font-size:2rem;color:#6c757d;"></i>
+                    {% endif %}
+                </div>
+
+                {# Coverage stats #}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span>Addressed</span>
+                        <span class="fw-semibold">{{ fw.mapped + fw.na }} / {{ fw.total }} ({{ fw.addressed_pct }}%)</span>
+                    </div>
+                    <div class="progress" style="height:8px;">
+                        <div class="progress-bar bg-success" style="width:{{ fw.mapped_pct }}%;" title="Mapped: {{ fw.mapped }}"></div>
+                        <div class="progress-bar bg-secondary" style="width:{{ ((fw.na / fw.total * 100) if fw.total > 0 else 0)|round|int }}%;" title="N/A: {{ fw.na }}"></div>
+                    </div>
+                </div>
+
+                <div class="row text-center mb-3">
+                    <div class="col-4">
+                        <div class="fw-bold text-success">{{ fw.mapped }}</div>
+                        <div class="text-muted" style="font-size:0.7rem;">Mapped</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold text-muted">{{ fw.na }}</div>
+                        <div class="text-muted" style="font-size:0.7rem;">N/A</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold text-danger">{{ fw.not_addressed }}</div>
+                        <div class="text-muted" style="font-size:0.7rem;">Gaps</div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between small text-muted mb-3">
+                    <span><i class="bi bi-check-circle me-1"></i>{{ fw.implemented }} implemented</span>
+                    <span>{{ fw.implemented_pct }}% coverage</span>
+                </div>
+
+                <a href="/controls/frameworks/{{ fw.framework }}" class="btn btn-primary w-100">
+                    <i class="bi bi-arrow-right me-1"></i>Browse Requirements
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not framework_stats %}
+<div class="card">
+    <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-journal-bookmark" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3">No framework data loaded</h5>
+        <p>Framework requirements will appear here once seed data is loaded.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

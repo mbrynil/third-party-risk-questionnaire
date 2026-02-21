@@ -289,6 +289,270 @@ async def control_dashboard(request: Request, db: Session = Depends(get_db), cur
     })
 
 
+# ==================== FRAMEWORK BROWSER ====================
+
+@router.get("/controls/frameworks", response_class=HTMLResponse)
+async def framework_browser(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    framework_stats = fw_svc.get_framework_stats(db)
+    return templates.TemplateResponse("framework_browser.html", {
+        "request": request,
+        "framework_stats": framework_stats,
+    })
+
+
+@router.get("/controls/frameworks/cross-map", response_class=HTMLResponse)
+async def framework_cross_map(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    from models import SEEDED_FRAMEWORKS
+    cross_mappings = fw_svc.get_cross_framework_mappings(db)
+    return templates.TemplateResponse("framework_cross_map.html", {
+        "request": request,
+        "cross_mappings": cross_mappings,
+        "frameworks": AVAILABLE_FRAMEWORKS,
+        "seeded_frameworks": SEEDED_FRAMEWORKS,
+    })
+
+
+@router.get("/controls/frameworks/{framework_key}", response_class=HTMLResponse)
+async def framework_detail(
+    request: Request,
+    framework_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    from models import ADOPTION_STATUS_MAPPED, ADOPTION_STATUS_NOT_APPLICABLE, IMPL_STATUS_IMPLEMENTED
+
+    fw_label = FRAMEWORK_DISPLAY.get(framework_key, framework_key)
+    grouped = fw_svc.get_requirements_grouped(db, framework_key)
+    coverage = fw_svc.get_requirement_coverage(db, framework_key)
+    category_stats = fw_svc.get_category_coverage_stats(db, framework_key)
+    all_controls = svc.get_all_controls(db, active_only=True)
+
+    # Build coverage map keyed by reference
+    coverage_map = {}
+    mapped_count = 0
+    na_count = 0
+    implemented_count = 0
+    for item in coverage:
+        req = item["requirement"]
+        coverage_map[req.reference] = item
+        if item["status"] == ADOPTION_STATUS_MAPPED:
+            mapped_count += 1
+            if item["impl_status"] == IMPL_STATUS_IMPLEMENTED:
+                implemented_count += 1
+        elif item["status"] == ADOPTION_STATUS_NOT_APPLICABLE:
+            na_count += 1
+
+    total_reqs = len(coverage)
+    gap_count = total_reqs - mapped_count - na_count
+
+    return templates.TemplateResponse("framework_detail.html", {
+        "request": request,
+        "framework_key": framework_key,
+        "fw_label": fw_label,
+        "grouped": grouped,
+        "coverage_map": coverage_map,
+        "category_stats": category_stats,
+        "all_controls": all_controls,
+        "total_reqs": total_reqs,
+        "mapped_count": mapped_count,
+        "na_count": na_count,
+        "gap_count": gap_count,
+        "implemented_count": implemented_count,
+        "framework_display": FRAMEWORK_DISPLAY,
+    })
+
+
+@router.get("/controls/frameworks/{framework_key}/requirements/{req_id}/edit", response_class=HTMLResponse)
+async def framework_requirement_edit(
+    request: Request,
+    framework_key: str,
+    req_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    req = fw_svc.get_requirement_by_id(db, req_id)
+    if not req or req.framework != framework_key:
+        raise HTTPException(status_code=404)
+    return templates.TemplateResponse("framework_requirement_form.html", {
+        "request": request,
+        "req": req,
+        "framework_display": FRAMEWORK_DISPLAY,
+        "domains": VALID_CONTROL_DOMAINS,
+        "control_types": VALID_CONTROL_TYPES,
+        "control_type_labels": CONTROL_TYPE_LABELS,
+    })
+
+
+@router.post("/controls/frameworks/{framework_key}/requirements/{req_id}/edit", response_class=HTMLResponse)
+async def framework_requirement_save(
+    request: Request,
+    framework_key: str,
+    req_id: int,
+    title: str = Form(...),
+    description: str = Form(""),
+    guidance: str = Form(""),
+    category: str = Form(""),
+    subcategory: str = Form(""),
+    suggested_domain: str = Form(""),
+    suggested_control_type: str = Form(""),
+    sort_order: int = Form(0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    fw_svc.update_requirement(db, req_id,
+        title=title.strip(),
+        description=description.strip() or None,
+        guidance=guidance.strip() or None,
+        category=category.strip() or None,
+        subcategory=subcategory.strip() or None,
+        suggested_domain=suggested_domain or None,
+        suggested_control_type=suggested_control_type or None,
+        sort_order=sort_order,
+    )
+    db.commit()
+    return RedirectResponse(
+        url=f"/controls/frameworks/{framework_key}?message={quote('Requirement updated')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/frameworks/{framework_key}/requirements/{req_id}/toggle", response_class=HTMLResponse)
+async def framework_requirement_toggle(
+    request: Request,
+    framework_key: str,
+    req_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from app.services import framework_service as fw_svc
+    req = fw_svc.get_requirement_by_id(db, req_id)
+    if not req:
+        raise HTTPException(status_code=404)
+    fw_svc.update_requirement(db, req_id, is_active=not req.is_active)
+    db.commit()
+    status = "activated" if not req.is_active else "deactivated"
+    return RedirectResponse(
+        url=f"/controls/frameworks/{framework_key}?message={quote(f'Requirement {status}')}&message_type=success",
+        status_code=303,
+    )
+
+
+# ==================== ADOPTION WORKFLOW ====================
+
+@router.post("/controls/frameworks/{framework_key}/requirements/{req_id}/link-control", response_class=HTMLResponse)
+async def framework_link_control(
+    request: Request,
+    framework_key: str,
+    req_id: int,
+    control_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    req = fw_svc.get_requirement_by_id(db, req_id)
+    if not req or req.framework != framework_key:
+        raise HTTPException(status_code=404)
+    fw_svc.adopt_requirement_mapped(db, framework_key, req.reference, control_id, current_user.id)
+    db.commit()
+    return RedirectResponse(
+        url=f"/controls/frameworks/{framework_key}?message={quote(f'{req.reference} linked to control')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/frameworks/{framework_key}/requirements/{req_id}/auto-create", response_class=HTMLResponse)
+async def framework_auto_create(
+    request: Request,
+    framework_key: str,
+    req_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    req = fw_svc.get_requirement_by_id(db, req_id)
+    if not req or req.framework != framework_key:
+        raise HTTPException(status_code=404)
+    ctrl = fw_svc.auto_create_control_from_requirement(db, req, current_user.id)
+    db.commit()
+    return RedirectResponse(
+        url=f"/controls/frameworks/{framework_key}?message={quote(f'Created {ctrl.control_ref} for {req.reference}')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/frameworks/{framework_key}/requirements/{req_id}/mark-na", response_class=HTMLResponse)
+async def framework_mark_na(
+    request: Request,
+    framework_key: str,
+    req_id: int,
+    notes: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    req = fw_svc.get_requirement_by_id(db, req_id)
+    if not req or req.framework != framework_key:
+        raise HTTPException(status_code=404)
+    fw_svc.adopt_requirement_as_na(db, framework_key, req.reference, current_user.id, notes.strip())
+    db.commit()
+    return RedirectResponse(
+        url=f"/controls/frameworks/{framework_key}?message={quote(f'{req.reference} marked N/A')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/frameworks/{framework_key}/requirements/{req_id}/unlink", response_class=HTMLResponse)
+async def framework_unlink(
+    request: Request,
+    framework_key: str,
+    req_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    req = fw_svc.get_requirement_by_id(db, req_id)
+    if not req or req.framework != framework_key:
+        raise HTTPException(status_code=404)
+    fw_svc.unadopt_requirement(db, framework_key, req.reference)
+    db.commit()
+    return RedirectResponse(
+        url=f"/controls/frameworks/{framework_key}?message={quote(f'{req.reference} reset to Not Addressed')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.post("/controls/frameworks/{framework_key}/adopt-all", response_class=HTMLResponse)
+async def framework_adopt_all(
+    request: Request,
+    framework_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    from app.services import framework_service as fw_svc
+    result = fw_svc.bulk_adopt_unmapped(db, framework_key, current_user.id)
+    db.commit()
+    msg = f"Created {result['created']} controls ({result['skipped']} already addressed)"
+    return RedirectResponse(
+        url=f"/controls/frameworks/{framework_key}?message={quote(msg)}&message_type=success",
+        status_code=303,
+    )
+
+
+# ==================== GAP ANALYSIS (ENHANCED) ====================
+
 @router.get("/controls/gap-analysis", response_class=HTMLResponse)
 async def gap_analysis(
     request: Request,
@@ -297,33 +561,87 @@ async def gap_analysis(
     current_user: User = Depends(_analyst_dep),
 ):
     from app.services.control_dashboard_service import get_framework_coverage
+    from app.services import framework_service as fw_svc
+    from models import FrameworkRequirement, SEEDED_FRAMEWORKS, ADOPTION_STATUS_MAPPED, ADOPTION_STATUS_NOT_APPLICABLE
+
     fw_coverage = get_framework_coverage(db)
 
-    gaps = []
+    # Check if selected framework has seeded requirements
+    has_seeded_reqs = False
+    coverage_data = []
+    category_stats = []
+    legacy_gaps = []
+    kpis = {}
+
     if framework:
-        controls_with_refs = svc.get_controls_by_framework(db, framework)
-        for ctrl, ref in controls_with_refs:
-            org_impl = db.query(ControlImplementation).filter(
-                ControlImplementation.control_id == ctrl.id,
-                ControlImplementation.vendor_id == None,
-            ).first()
-            gaps.append({
-                "control": ctrl,
-                "reference": ref,
-                "implementation": org_impl,
-                "status": org_impl.status if org_impl else "NOT_TRACKED",
-            })
+        req_count = fw_svc.get_requirement_count(db, framework)
+        has_seeded_reqs = req_count > 0
+
+        if has_seeded_reqs:
+            coverage_data = fw_svc.get_requirement_coverage(db, framework)
+            category_stats = fw_svc.get_category_coverage_stats(db, framework)
+            mapped = sum(1 for c in coverage_data if c["status"] == ADOPTION_STATUS_MAPPED)
+            na = sum(1 for c in coverage_data if c["status"] == ADOPTION_STATUS_NOT_APPLICABLE)
+            impl = sum(1 for c in coverage_data if c["status"] == ADOPTION_STATUS_MAPPED and c["impl_status"] == "IMPLEMENTED")
+            kpis = {
+                "total": len(coverage_data),
+                "mapped": mapped,
+                "na": na,
+                "gaps": len(coverage_data) - mapped - na,
+                "implemented": impl,
+                "mapped_pct": round(mapped / len(coverage_data) * 100) if coverage_data else 0,
+                "impl_pct": round(impl / len(coverage_data) * 100) if coverage_data else 0,
+            }
+        else:
+            # Legacy fallback for non-seeded frameworks
+            controls_with_refs = svc.get_controls_by_framework(db, framework)
+            for ctrl, ref in controls_with_refs:
+                org_impl = db.query(ControlImplementation).filter(
+                    ControlImplementation.control_id == ctrl.id,
+                    ControlImplementation.vendor_id == None,
+                ).first()
+                legacy_gaps.append({
+                    "control": ctrl,
+                    "reference": ref,
+                    "implementation": org_impl,
+                    "status": org_impl.status if org_impl else "NOT_TRACKED",
+                })
 
     return templates.TemplateResponse("gap_analysis.html", {
         "request": request,
-        "gaps": gaps,
+        "framework": framework,
+        "f_framework": framework,
+        "has_seeded_reqs": has_seeded_reqs,
+        "coverage_data": coverage_data,
+        "category_stats": category_stats,
+        "kpis": kpis,
+        "gaps": legacy_gaps,
         "fw_coverage": fw_coverage,
         "frameworks": AVAILABLE_FRAMEWORKS,
         "framework_display": FRAMEWORK_DISPLAY,
-        "f_framework": framework,
         "impl_status_labels": IMPL_STATUS_LABELS,
         "impl_status_colors": IMPL_STATUS_COLORS,
+        "seeded_frameworks": SEEDED_FRAMEWORKS,
     })
+
+
+@router.get("/controls/gap-analysis/export", response_class=Response)
+async def gap_analysis_export(
+    request: Request,
+    framework: str = "",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    if not framework:
+        raise HTTPException(status_code=400, detail="Framework parameter required")
+    from app.services import framework_service as fw_svc
+    csv_content = fw_svc.export_gap_analysis_csv(db, framework)
+    fw_label = FRAMEWORK_DISPLAY.get(framework, framework).replace(" ", "_")
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=gap_analysis_{fw_label}.csv"},
+    )
 
 
 @router.get("/controls/testing", response_class=HTMLResponse)

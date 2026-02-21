@@ -11,6 +11,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>Framework Gap Analysis</h3>
+    {% if f_framework and has_seeded_reqs %}
+    <a href="/controls/gap-analysis/export?framework={{ f_framework }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>Export CSV</a>
+    {% endif %}
 </div>
 
 {# Framework Selector #}
@@ -22,12 +25,17 @@
                 <select name="framework" class="form-select form-select-sm">
                     <option value="">Select a framework...</option>
                     {% for key, label in frameworks %}
-                    <option value="{{ key }}" {% if f_framework == key %}selected{% endif %}>{{ label }}</option>
+                    <option value="{{ key }}" {% if f_framework == key %}selected{% endif %}>
+                        {{ label }}{% if key in seeded_frameworks %} *{% endif %}
+                    </option>
                     {% endfor %}
                 </select>
             </div>
             <div class="col-md-2">
                 <button type="submit" class="btn btn-sm btn-primary">Analyze</button>
+            </div>
+            <div class="col-md-6 text-end">
+                <small class="text-muted">* = Full requirement catalog available</small>
             </div>
         </form>
     </div>
@@ -65,8 +73,138 @@
 </div>
 {% endif %}
 
-{# Gap Detail Table #}
-{% if f_framework and gaps %}
+{# ==================== REQUIREMENT-CENTRIC VIEW (seeded frameworks) ==================== #}
+{% if f_framework and has_seeded_reqs %}
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+            <div class="fw-bold fs-5 text-primary">{{ kpis.total }}</div>
+            <div class="text-muted" style="font-size:0.7rem;">Total Requirements</div>
+        </div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+            <div class="fw-bold fs-5 text-success">{{ kpis.mapped }}</div>
+            <div class="text-muted" style="font-size:0.7rem;">Mapped ({{ kpis.mapped_pct }}%)</div>
+        </div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+            <div class="fw-bold fs-5 text-info">{{ kpis.implemented }}</div>
+            <div class="text-muted" style="font-size:0.7rem;">Implemented ({{ kpis.impl_pct }}%)</div>
+        </div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+            <div class="fw-bold fs-5 text-secondary">{{ kpis.na }}</div>
+            <div class="text-muted" style="font-size:0.7rem;">N/A</div>
+        </div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card text-center"><div class="card-body py-2">
+            <div class="fw-bold fs-5 text-danger">{{ kpis.gaps }}</div>
+            <div class="text-muted" style="font-size:0.7rem;">Gaps Remaining</div>
+        </div></div>
+    </div>
+    <div class="col-md-2 d-flex align-items-center justify-content-center">
+        <a href="/controls/frameworks/{{ f_framework }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-journal-bookmark me-1"></i>Browse & Adopt</a>
+    </div>
+</div>
+
+{# Per-category coverage bars #}
+{% if category_stats %}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Coverage by Category</h6></div>
+    <div class="card-body">
+        {% for cs in category_stats %}
+        <div class="d-flex align-items-center mb-2">
+            <div style="width:220px;" class="text-truncate small fw-semibold me-3" title="{{ cs.category }}">{{ cs.category }}</div>
+            <div class="flex-grow-1">
+                <div class="progress" style="height:14px;">
+                    <div class="progress-bar bg-success" style="width:{{ (cs.mapped / cs.total * 100) if cs.total > 0 else 0 }}%;" title="Mapped: {{ cs.mapped }}"></div>
+                    <div class="progress-bar bg-secondary" style="width:{{ (cs.na / cs.total * 100) if cs.total > 0 else 0 }}%;" title="N/A: {{ cs.na }}"></div>
+                </div>
+            </div>
+            <div class="ms-2 small text-muted" style="width:80px;text-align:right;">{{ cs.mapped }}/{{ cs.total }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# Requirement table #}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">{{ framework_display.get(f_framework, f_framework) }} — All Requirements</h6>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" style="width:auto;" onchange="filterGapStatus(this.value)">
+                <option value="all">All statuses</option>
+                <option value="NOT_ADDRESSED">Gaps only</option>
+                <option value="MAPPED">Mapped only</option>
+                <option value="NOT_APPLICABLE">N/A only</option>
+            </select>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Ref</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Mapped Control</th>
+                    <th>Adoption</th>
+                    <th>Impl Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in coverage_data %}
+                <tr class="gap-row {% if item.status == 'NOT_ADDRESSED' %}table-danger{% elif item.status == 'NOT_APPLICABLE' %}{% endif %}" data-gap-status="{{ item.status }}">
+                    <td><code class="fw-semibold">{{ item.requirement.reference }}</code></td>
+                    <td class="small">{{ item.requirement.title }}</td>
+                    <td><small class="text-muted">{{ item.requirement.category or '' }}</small></td>
+                    <td>
+                        {% if item.control %}
+                        <a href="/controls/{{ item.control.id }}" class="text-decoration-none small fw-semibold">{{ item.control.control_ref }}</a>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.status == 'MAPPED' %}
+                        <span class="badge bg-success">Mapped</span>
+                        {% elif item.status == 'NOT_APPLICABLE' %}
+                        <span class="badge bg-secondary">N/A</span>
+                        {% else %}
+                        <span class="badge bg-danger">Gap</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.implementation %}
+                        <span class="badge" style="background-color:{{ impl_status_colors.get(item.impl_status, '#6c757d') }}">{{ impl_status_labels.get(item.impl_status, item.impl_status) }}</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# ==================== LEGACY VIEW (non-seeded frameworks) ==================== #}
+{% elif f_framework and not has_seeded_reqs %}
+
+<div class="alert alert-info mb-3">
+    <i class="bi bi-info-circle me-1"></i>
+    This framework does not have a canonical requirement catalog. Showing controls currently mapped to it.
+    <a href="/controls/frameworks" class="alert-link">Browse frameworks with full catalogs</a>.
+</div>
+
+{% if gaps %}
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h6 class="mb-0">{{ framework_display.get(f_framework, f_framework) }} — Control Gaps</h6>
@@ -100,10 +238,10 @@
                     </td>
                     <td class="text-end">
                         {% if g.implementation %}
-                        <a href="/controls/implementations/{{ g.implementation.id }}" class="btn btn-sm btn-outline-secondary" title="View Implementation"><i class="bi bi-eye"></i></a>
+                        <a href="/controls/implementations/{{ g.implementation.id }}" class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></a>
                         {% else %}
                         <form method="post" action="/controls/{{ g.control.id }}/implement" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-outline-primary" title="Implement this control"><i class="bi bi-plus-lg me-1"></i>Implement</button>
+                            <button type="submit" class="btn btn-sm btn-outline-primary" title="Implement"><i class="bi bi-plus-lg me-1"></i>Implement</button>
                         </form>
                         {% endif %}
                     </td>
@@ -113,7 +251,7 @@
         </table>
     </div>
 </div>
-{% elif f_framework %}
+{% else %}
 <div class="card">
     <div class="card-body text-center py-5 text-muted">
         <i class="bi bi-check-circle" style="font-size:3rem;color:#198754;"></i>
@@ -121,13 +259,30 @@
         <p>Add framework mappings to controls in the <a href="/controls">Control Library</a>.</p>
     </div>
 </div>
+{% endif %}
+
+{# ==================== NO FRAMEWORK SELECTED ==================== #}
 {% else %}
 <div class="card">
     <div class="card-body text-center py-5 text-muted">
         <i class="bi bi-clipboard-data" style="font-size:3rem;color:#d1d5db;"></i>
         <h5 class="mt-3">Select a framework to analyze</h5>
-        <p>Choose a framework above to see gap analysis.</p>
+        <p>Choose a framework above to see gap analysis. Frameworks marked with * have full requirement catalogs.</p>
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function filterGapStatus(status) {
+    document.querySelectorAll('.gap-row').forEach(function(row) {
+        if (status === 'all') {
+            row.style.display = '';
+        } else {
+            row.style.display = row.dataset.gapStatus === status ? '' : 'none';
+        }
+    });
+}
+</script>
 {% endblock %}

@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}{{ fw_label }} Requirements{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/controls">Controls</a></li>
+<li class="breadcrumb-item"><a href="/controls/frameworks">Frameworks</a></li>
+<li class="breadcrumb-item active">{{ fw_label }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-journal-bookmark me-2"></i>{{ fw_label }}</h3>
+        <p class="text-muted mb-0">{{ total_reqs }} requirements &middot; {{ mapped_count }} mapped &middot; {{ na_count }} N/A &middot; {{ gap_count }} gaps</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/controls/gap-analysis?framework={{ framework_key }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-clipboard-data me-1"></i>Gap Analysis</a>
+        {% if gap_count > 0 %}
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#bulkAdoptModal">
+            <i class="bi bi-lightning me-1"></i>Adopt All Unmapped ({{ gap_count }})
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fw-bold fs-4 text-primary">{{ total_reqs }}</div>
+                <div class="text-muted small">Total Requirements</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fw-bold fs-4 text-success">{{ mapped_count }}</div>
+                <div class="text-muted small">Mapped to Controls</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fw-bold fs-4 text-info">{{ implemented_count }}</div>
+                <div class="text-muted small">Implemented</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body py-3">
+                <div class="fw-bold fs-4 text-danger">{{ gap_count }}</div>
+                <div class="text-muted small">Gaps Remaining</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Category Coverage Bars #}
+{% if category_stats %}
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Coverage by Category</h6></div>
+    <div class="card-body">
+        {% for cs in category_stats %}
+        <div class="d-flex align-items-center mb-2">
+            <div style="width:220px;" class="text-truncate small fw-semibold me-3" title="{{ cs.category }}">{{ cs.category }}</div>
+            <div class="flex-grow-1">
+                <div class="progress" style="height:16px;">
+                    <div class="progress-bar bg-success" style="width:{{ (cs.mapped / cs.total * 100) if cs.total > 0 else 0 }}%;" title="Mapped: {{ cs.mapped }}"></div>
+                    <div class="progress-bar bg-secondary" style="width:{{ (cs.na / cs.total * 100) if cs.total > 0 else 0 }}%;" title="N/A: {{ cs.na }}"></div>
+                </div>
+            </div>
+            <div class="ms-2 small text-muted" style="width:60px;text-align:right;">{{ cs.pct }}%</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# Filter bar #}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <span class="small fw-semibold text-muted">Filter:</span>
+            <button class="btn btn-sm btn-outline-secondary active" onclick="filterReqs('all')">All</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="filterReqs('NOT_ADDRESSED')">Gaps</button>
+            <button class="btn btn-sm btn-outline-success" onclick="filterReqs('MAPPED')">Mapped</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="filterReqs('NOT_APPLICABLE')">N/A</button>
+            <input type="text" class="form-control form-control-sm ms-auto" style="max-width:250px;" placeholder="Search requirements..." id="reqSearch" oninput="searchReqs(this.value)">
+        </div>
+    </div>
+</div>
+
+{# Requirements grouped by category #}
+{% for cat, subcats in grouped.items() %}
+<div class="card mb-3 req-category-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">{{ cat }}</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:110px;">Reference</th>
+                    <th>Title</th>
+                    <th style="width:180px;">Subcategory</th>
+                    <th style="width:120px;">Status</th>
+                    <th style="width:140px;">Mapped Control</th>
+                    <th style="width:180px;" class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sub, reqs in subcats.items() %}
+                {% for req in reqs %}
+                {% set cov = coverage_map.get(req.reference, {}) %}
+                {% set status = cov.get('status', 'NOT_ADDRESSED') %}
+                <tr class="req-row" data-status="{{ status }}" data-search="{{ req.reference|lower }} {{ req.title|lower }}">
+                    <td><code class="fw-semibold">{{ req.reference }}</code></td>
+                    <td>
+                        <span class="small">{{ req.title }}</span>
+                        {% if req.description %}
+                        <i class="bi bi-info-circle text-muted ms-1" style="cursor:pointer;font-size:0.75rem;" data-bs-toggle="tooltip" title="{{ req.description[:200] }}"></i>
+                        {% endif %}
+                    </td>
+                    <td><small class="text-muted">{{ sub }}</small></td>
+                    <td>
+                        {% if status == 'MAPPED' %}
+                        <span class="badge bg-success">Mapped</span>
+                        {% elif status == 'NOT_APPLICABLE' %}
+                        <span class="badge bg-secondary">N/A</span>
+                        {% else %}
+                        <span class="badge bg-danger">Not Addressed</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if cov.get('control') %}
+                        <a href="/controls/{{ cov.control.id }}" class="text-decoration-none small fw-semibold">{{ cov.control.control_ref }}</a>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if status == 'NOT_ADDRESSED' %}
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-primary" onclick="openLinkModal('{{ req.framework }}', '{{ req.reference }}', {{ req.id }}, '{{ req.suggested_domain or '' }}')" title="Link to existing control">
+                                <i class="bi bi-link-45deg"></i>
+                            </button>
+                            <form method="post" action="/controls/frameworks/{{ framework_key }}/requirements/{{ req.id }}/auto-create" class="d-inline">
+                                <button type="submit" class="btn btn-outline-success" title="Auto-create control"><i class="bi bi-plus-lg"></i></button>
+                            </form>
+                            <button type="button" class="btn btn-outline-secondary" onclick="openNaModal('{{ req.framework }}', '{{ req.reference }}', {{ req.id }})" title="Mark N/A">
+                                <i class="bi bi-dash-circle"></i>
+                            </button>
+                        </div>
+                        {% elif status == 'MAPPED' %}
+                        <form method="post" action="/controls/frameworks/{{ framework_key }}/requirements/{{ req.id }}/unlink" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-warning" title="Unlink" onclick="return confirm('Remove mapping?')"><i class="bi bi-x-lg"></i> Unlink</button>
+                        </form>
+                        {% elif status == 'NOT_APPLICABLE' %}
+                        <form method="post" action="/controls/frameworks/{{ framework_key }}/requirements/{{ req.id }}/unlink" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Reopen"><i class="bi bi-arrow-counterclockwise"></i> Reopen</button>
+                        </form>
+                        {% if cov.get('adoption') and cov.adoption.notes %}
+                        <i class="bi bi-chat-left-text ms-1" style="cursor:pointer;" data-bs-toggle="tooltip" title="{{ cov.adoption.notes }}"></i>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+{# Link Control Modal #}
+<div class="modal fade" id="linkControlModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" id="linkControlForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Link Requirement to Control</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Linking <strong id="linkReqRef"></strong> to an existing control.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Search Controls</label>
+                        <input type="text" class="form-control" id="controlSearchInput" placeholder="Type to filter..." oninput="filterControlList(this.value)">
+                    </div>
+                    <div id="controlListContainer" style="max-height:300px;overflow-y:auto;">
+                        {% for c in all_controls %}
+                        <div class="control-option form-check border-bottom py-2" data-domain="{{ c.domain }}" data-text="{{ c.control_ref|lower }} {{ c.title|lower }} {{ c.domain|lower }}">
+                            <input class="form-check-input" type="radio" name="control_id" value="{{ c.id }}" id="ctrl_{{ c.id }}">
+                            <label class="form-check-label w-100" for="ctrl_{{ c.id }}">
+                                <span class="fw-semibold">{{ c.control_ref }}</span> — {{ c.title }}
+                                <br><small class="text-muted">{{ c.domain }}</small>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Link Control</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Mark N/A Modal #}
+<div class="modal fade" id="naModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" id="naForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Mark as Not Applicable</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Marking <strong id="naReqRef"></strong> as N/A.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Justification Notes</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Explain why this requirement is not applicable..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Mark N/A</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Bulk Adopt Modal #}
+{% if gap_count > 0 %}
+<div class="modal fade" id="bulkAdoptModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/controls/frameworks/{{ framework_key }}/adopt-all">
+                <div class="modal-header">
+                    <h5 class="modal-title">Adopt All Unmapped Requirements</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning mb-3">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        This will auto-create <strong>{{ gap_count }}</strong> new controls in the library, one per unmapped requirement. Each control will be assigned a domain based on the requirement's suggested mapping.
+                    </div>
+                    <p class="small text-muted mb-0">You can always unlink or modify individual controls afterwards.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-lightning me-1"></i>Adopt All</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Initialize tooltips
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el);
+});
+
+function filterReqs(status) {
+    document.querySelectorAll('.req-row').forEach(function(row) {
+        if (status === 'all') {
+            row.style.display = '';
+        } else {
+            row.style.display = row.dataset.status === status ? '' : 'none';
+        }
+    });
+    // Update active button
+    document.querySelectorAll('.card-body .btn-group-sm, .card-body .btn').forEach(function(btn) {
+        // handled by click
+    });
+}
+
+function searchReqs(query) {
+    var q = query.toLowerCase();
+    document.querySelectorAll('.req-row').forEach(function(row) {
+        row.style.display = row.dataset.search.indexOf(q) >= 0 ? '' : 'none';
+    });
+}
+
+function openLinkModal(framework, reference, reqId, suggestedDomain) {
+    document.getElementById('linkReqRef').textContent = reference;
+    document.getElementById('linkControlForm').action = '/controls/frameworks/' + framework + '/requirements/' + reqId + '/link-control';
+    // Scroll suggested domain controls to top
+    if (suggestedDomain) {
+        document.querySelectorAll('.control-option').forEach(function(opt) {
+            opt.style.order = opt.dataset.domain === suggestedDomain ? '0' : '1';
+        });
+    }
+    new bootstrap.Modal(document.getElementById('linkControlModal')).show();
+}
+
+function openNaModal(framework, reference, reqId) {
+    document.getElementById('naReqRef').textContent = reference;
+    document.getElementById('naForm').action = '/controls/frameworks/' + framework + '/requirements/' + reqId + '/mark-na';
+    new bootstrap.Modal(document.getElementById('naModal')).show();
+}
+
+function filterControlList(query) {
+    var q = query.toLowerCase();
+    document.querySelectorAll('.control-option').forEach(function(opt) {
+        opt.style.display = opt.dataset.text.indexOf(q) >= 0 ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}

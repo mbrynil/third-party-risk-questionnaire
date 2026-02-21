@@ -23,6 +23,8 @@ from models import (
     backfill_sla_columns, ensure_sla_configs,
     backfill_onboarding_column,
     backfill_controls_tables, seed_default_controls,
+    backfill_framework_tables, seed_framework_requirements,
+    sync_adoptions_from_existing_mappings, update_control_enrichments,
     SessionLocal,
     Assessment, Response, User, ensure_reminder_config,
     RESPONSE_STATUS_SUBMITTED,
@@ -42,12 +44,16 @@ backfill_approval_columns()
 backfill_sla_columns()
 backfill_onboarding_column()
 backfill_controls_tables()
+backfill_framework_tables()
 seed_question_bank()
 seed_risk_statements()
 seed_default_templates()
 seed_default_admin()
 seed_default_tiering_rules()
 seed_default_controls()
+seed_framework_requirements()
+sync_adoptions_from_existing_mappings()
+update_control_enrichments()
 backfill_question_categories()
 backfill_question_bank_item_ids()
 backfill_decision_scores()

@@ -2569,6 +2569,417 @@ def seed_default_controls():
         db.close()
 
 
+def update_control_enrichments():
+    """Backfill objective, procedure, default_test_procedure on existing controls.
+    Also updates framework mapping references from 2013/1.1 numbering to 2022/2.0."""
+    db = SessionLocal()
+    try:
+        # Enrichment data keyed by control_ref
+        enrichments = {
+            "CTL-AC-001": {
+                "objective": "Ensure user access rights remain appropriate and aligned with job responsibilities.",
+                "procedure": "Review all user accounts quarterly; validate access levels with managers; remove stale accounts.",
+                "default_test_procedure": "Select sample of users; confirm access matches current role; verify terminated users removed.",
+            },
+            "CTL-AC-002": {
+                "objective": "Prevent unauthorized access through strong multi-factor authentication.",
+                "procedure": "Enforce MFA for all privileged and remote access; monitor MFA enrollment compliance.",
+                "default_test_procedure": "Attempt login without MFA; verify enforcement on privileged accounts; check enrollment rates.",
+            },
+            "CTL-AC-003": {
+                "objective": "Limit access to the minimum necessary for each role.",
+                "procedure": "Define role-based access profiles; review and adjust permissions quarterly.",
+                "default_test_procedure": "Compare user permissions to role definitions; identify over-provisioned accounts.",
+            },
+            "CTL-CR-001": {
+                "objective": "Protect sensitive data at rest from unauthorized disclosure.",
+                "procedure": "Encrypt all databases and storage volumes using AES-256; verify encryption status monthly.",
+                "default_test_procedure": "Verify encryption enabled on all production databases and storage; check key strength.",
+            },
+            "CTL-CR-002": {
+                "objective": "Protect data in transit from interception or tampering.",
+                "procedure": "Enforce TLS 1.2+ on all endpoints; disable weak cipher suites; scan for plaintext transmissions.",
+                "default_test_procedure": "Scan endpoints for TLS configuration; verify no plaintext data channels exist.",
+            },
+            "CTL-CR-003": {
+                "objective": "Ensure cryptographic keys are managed securely throughout their lifecycle.",
+                "procedure": "Use HSM or KMS for key storage; rotate keys per schedule; revoke compromised keys immediately.",
+                "default_test_procedure": "Review key rotation logs; verify key storage in HSM/KMS; check revocation procedures.",
+            },
+            "CTL-IR-001": {
+                "objective": "Ensure the organization can respond effectively to security incidents.",
+                "procedure": "Maintain documented IRP; conduct tabletop exercises annually; update after incidents.",
+                "default_test_procedure": "Review IRP document currency; verify annual tabletop exercise; check post-incident updates.",
+            },
+            "CTL-IR-002": {
+                "objective": "Detect security incidents promptly through automated monitoring.",
+                "procedure": "Configure SIEM alerts for critical events; tune detection rules; review alert volume weekly.",
+                "default_test_procedure": "Inject test events; verify alerts fire within SLA; review false positive rates.",
+            },
+            "CTL-IR-003": {
+                "objective": "Learn from incidents to prevent recurrence.",
+                "procedure": "Conduct post-incident review within 5 business days; document lessons learned; track remediation actions.",
+                "default_test_procedure": "Review post-incident reports; verify action items completed; check trend analysis.",
+            },
+            "CTL-VM-001": {
+                "objective": "Identify vulnerabilities in production systems before exploitation.",
+                "procedure": "Run authenticated vulnerability scans monthly; prioritize by CVSS score; track remediation.",
+                "default_test_procedure": "Review scan coverage and frequency; verify critical findings remediated within SLA.",
+            },
+            "CTL-VM-002": {
+                "objective": "Validate security controls through independent adversarial testing.",
+                "procedure": "Engage third-party penetration testers annually; scope all critical systems; remediate findings.",
+                "default_test_procedure": "Review pentest report; verify scope coverage; confirm critical findings remediated.",
+            },
+            "CTL-VM-003": {
+                "objective": "Maintain systems at current patch levels to reduce attack surface.",
+                "procedure": "Apply critical patches within 72 hours; high within 30 days; standard within 90 days.",
+                "default_test_procedure": "Sample systems for patch currency; verify patching SLAs met; check exception approvals.",
+            },
+            "CTL-BC-001": {
+                "objective": "Ensure critical business functions can continue during disruption.",
+                "procedure": "Maintain BCP covering all critical functions; review annually; update after organizational changes.",
+                "default_test_procedure": "Review BCP document; verify coverage of critical functions; check review dates.",
+            },
+            "CTL-BC-002": {
+                "objective": "Validate disaster recovery capabilities meet RTO/RPO targets.",
+                "procedure": "Conduct DR test annually; measure actual RTO/RPO; document results and gaps.",
+                "default_test_procedure": "Review DR test results; compare actual vs target RTO/RPO; verify gap remediation.",
+            },
+            "CTL-BC-003": {
+                "objective": "Ensure data can be recovered from backups when needed.",
+                "procedure": "Perform encrypted backups with geographic separation; test restoration monthly.",
+                "default_test_procedure": "Verify backup completion logs; perform test restoration; check geographic separation.",
+            },
+            "CTL-GV-001": {
+                "objective": "Establish security governance through documented policies.",
+                "procedure": "Publish security policies; obtain management approval; communicate to all personnel annually.",
+                "default_test_procedure": "Review policy documents; verify management approval signatures; check acknowledgment records.",
+            },
+            "CTL-GV-002": {
+                "objective": "Understand organizational risk through formal assessment.",
+                "procedure": "Conduct risk assessment annually; align with recognized framework; report to management.",
+                "default_test_procedure": "Review risk assessment report; verify methodology alignment; check management review.",
+            },
+            "CTL-GV-003": {
+                "objective": "Build security awareness across the organization.",
+                "procedure": "Deliver annual security awareness training; track completion; conduct phishing simulations.",
+                "default_test_procedure": "Review training completion rates; verify content currency; check phishing simulation results.",
+            },
+            "CTL-DP-001": {
+                "objective": "Classify data appropriately to apply correct handling controls.",
+                "procedure": "Maintain data classification scheme; label all data repositories; review classifications annually.",
+                "default_test_procedure": "Review classification scheme; sample repositories for correct labeling; verify handling procedures.",
+            },
+            "CTL-DP-002": {
+                "objective": "Prevent unauthorized data exfiltration.",
+                "procedure": "Deploy DLP on endpoints and network egress; configure policies for sensitive data patterns; review alerts.",
+                "default_test_procedure": "Test DLP detection with sample sensitive data; review alert logs; verify policy coverage.",
+            },
+            "CTL-DP-003": {
+                "objective": "Ensure data is retained appropriately and disposed of securely.",
+                "procedure": "Maintain retention schedule; automate retention enforcement; use secure disposal for expired data.",
+                "default_test_procedure": "Review retention schedule; verify automated enforcement; check secure disposal certificates.",
+            },
+            "CTL-SM-001": {
+                "objective": "Provide centralized security event visibility and correlation.",
+                "procedure": "Aggregate logs from all critical systems; configure correlation rules; review dashboards daily.",
+                "default_test_procedure": "Verify log source coverage; test correlation rules; review analyst response times.",
+            },
+            "CTL-SM-002": {
+                "objective": "Ensure audit logs cannot be tampered with.",
+                "procedure": "Write logs to immutable storage; restrict access to log infrastructure; monitor for gaps.",
+                "default_test_procedure": "Verify immutable storage configuration; test access restrictions; check for log gaps.",
+            },
+            "CTL-NS-001": {
+                "objective": "Reduce lateral movement risk through network segmentation.",
+                "procedure": "Segment production from corporate and development; maintain network diagrams; review annually.",
+                "default_test_procedure": "Review network diagrams; test segmentation boundaries; verify firewall rules enforce separation.",
+            },
+            "CTL-NS-002": {
+                "objective": "Maintain secure and documented firewall configurations.",
+                "procedure": "Review firewall rules quarterly; remove unused rules; document change justifications.",
+                "default_test_procedure": "Review firewall rule sets; verify quarterly review evidence; check for overly permissive rules.",
+            },
+            "CTL-CM-001": {
+                "objective": "Prevent unauthorized changes to production environments.",
+                "procedure": "Require change requests with approval; test in staging; maintain rollback plans.",
+                "default_test_procedure": "Review change records; verify approval workflow; check for unauthorized changes.",
+            },
+            "CTL-CM-002": {
+                "objective": "Maintain known-good configuration baselines.",
+                "procedure": "Document baselines for critical systems; scan for drift quarterly; remediate deviations.",
+                "default_test_procedure": "Review baseline documents; verify drift scanning; check deviation remediation.",
+            },
+            "CTL-TP-001": {
+                "objective": "Assess risk from third-party service providers.",
+                "procedure": "Conduct risk assessments for all vendors; tier by criticality; reassess per schedule.",
+                "default_test_procedure": "Review vendor risk assessments; verify tiering methodology; check reassessment compliance.",
+            },
+            "CTL-TP-002": {
+                "objective": "Embed security requirements in vendor contracts.",
+                "procedure": "Include security clauses in all vendor contracts; review during renewals.",
+                "default_test_procedure": "Review sample vendor contracts; verify security clauses present; check renewal reviews.",
+            },
+            "CTL-PS-001": {
+                "objective": "Control physical access to secure areas.",
+                "procedure": "Implement badge access for secure areas; manage visitor logs; review access lists quarterly.",
+                "default_test_procedure": "Review badge access logs; verify visitor management; check quarterly access reviews.",
+            },
+            "CTL-PS-002": {
+                "objective": "Protect facilities from environmental threats.",
+                "procedure": "Maintain fire suppression, HVAC, and UPS systems; test annually; document maintenance.",
+                "default_test_procedure": "Review maintenance records; verify annual testing; check alarm functionality.",
+            },
+            "CTL-SD-001": {
+                "objective": "Integrate security into the software development lifecycle.",
+                "procedure": "Require security reviews at each SDLC phase; maintain secure coding standards; track security defects.",
+                "default_test_procedure": "Review SDLC documentation; verify security gate compliance; check defect tracking.",
+            },
+            "CTL-SD-002": {
+                "objective": "Identify security defects before production deployment.",
+                "procedure": "Require code reviews and SAST scans for all changes; block deployment on critical findings.",
+                "default_test_procedure": "Review code review records; verify SAST scan coverage; check deployment gate enforcement.",
+            },
+            "CTL-AM-001": {
+                "objective": "Maintain comprehensive awareness of all IT assets.",
+                "procedure": "Maintain hardware and software inventory; reconcile quarterly; tag all assets.",
+                "default_test_procedure": "Review asset inventory; verify quarterly reconciliation; sample physical assets against records.",
+            },
+            "CTL-AM-002": {
+                "objective": "Protect endpoints from malware and unauthorized access.",
+                "procedure": "Deploy EDR/antivirus on all endpoints; ensure central management; review detections weekly.",
+                "default_test_procedure": "Verify endpoint coverage rates; review detection logs; test with EICAR samples.",
+            },
+        }
+
+        # Updated framework reference mappings (old → new)
+        ref_updates = {
+            # ISO 27001: 2013 → 2022 numbering
+            ("ISO_27001", "A.9.2.5"): "A.5.18",   # Access rights
+            ("ISO_27001", "A.9.4.2"): "A.8.5",    # Secure authentication
+            ("ISO_27001", "A.9.1.2"): "A.5.15",   # Access control policy
+            ("ISO_27001", "A.10.1.1"): "A.8.24",  # Use of cryptography
+            ("ISO_27001", "A.10.1.2"): "A.8.24",  # Key management
+            ("ISO_27001", "A.16.1.1"): "A.5.24",  # Incident management planning
+            ("ISO_27001", "A.16.1.2"): "A.6.8",   # Reporting security events
+            ("ISO_27001", "A.16.1.6"): "A.5.27",  # Learning from incidents
+            ("ISO_27001", "A.12.6.1"): "A.8.8",   # Management of technical vulnerabilities
+            ("ISO_27001", "A.18.2.3"): "A.5.35",  # Independent review
+            ("ISO_27001", "A.17.1.1"): "A.5.29",  # Info security during disruption
+            ("ISO_27001", "A.17.1.3"): "A.5.30",  # ICT readiness for BC
+            ("ISO_27001", "A.12.3.1"): "A.8.13",  # Information backup
+            ("ISO_27001", "A.5.1.1"): "A.5.1",    # Policies for info security
+            ("ISO_27001", "A.8.2.1"): "A.5.12",   # Classification of information
+            ("ISO_27001", "A.7.2.2"): "A.6.3",    # Security awareness training
+            ("ISO_27001", "A.13.2.1"): "A.5.14",  # Information transfer
+            ("ISO_27001", "A.8.3.2"): "A.7.10",   # Storage media
+            ("ISO_27001", "A.12.4.1"): "A.8.15",  # Logging
+            ("ISO_27001", "A.12.4.2"): "A.8.15",  # Logging (protection)
+            ("ISO_27001", "A.13.1.3"): "A.8.22",  # Segregation of networks
+            ("ISO_27001", "A.13.1.1"): "A.8.20",  # Network security
+            ("ISO_27001", "A.12.1.2"): "A.8.32",  # Change management
+            ("ISO_27001", "A.12.1.1"): "A.8.9",   # Configuration management
+            ("ISO_27001", "A.15.1.1"): "A.5.19",  # Supplier relationships
+            ("ISO_27001", "A.15.1.2"): "A.5.20",  # Supplier agreements
+            ("ISO_27001", "A.11.1.2"): "A.7.2",   # Physical entry
+            ("ISO_27001", "A.11.1.4"): "A.7.5",   # Protecting against threats
+            ("ISO_27001", "A.14.2.1"): "A.8.25",  # Secure development lifecycle
+            ("ISO_27001", "A.14.2.5"): "A.8.29",  # Security testing
+            ("ISO_27001", "A.8.1.1"): "A.5.9",    # Inventory of assets
+            ("ISO_27001", "A.12.2.1"): "A.8.7",   # Protection against malware
+            # NIST CSF: 1.1 → 2.0 numbering
+            ("NIST_CSF_2", "PR.AC-1"): "PR.AA-01",
+            ("NIST_CSF_2", "PR.AC-7"): "PR.AA-03",
+            ("NIST_CSF_2", "PR.AC-4"): "PR.AA-05",
+            ("NIST_CSF_2", "PR.DS-1"): "PR.DS-01",
+            ("NIST_CSF_2", "PR.DS-2"): "PR.DS-02",
+            ("NIST_CSF_2", "PR.DS-5"): "PR.DS-10",
+            ("NIST_CSF_2", "RS.RP-1"): "RS.MA-01",
+            ("NIST_CSF_2", "DE.AE-5"): "DE.AE-07",
+            ("NIST_CSF_2", "RS.IM-1"): "RS.MA-05",
+            ("NIST_CSF_2", "DE.CM-8"): "DE.CM-09",
+            ("NIST_CSF_2", "DE.CM-4"): "DE.CM-01",
+            ("NIST_CSF_2", "PR.IP-12"): "PR.PS-02",
+            ("NIST_CSF_2", "RC.RP-1"): "RC.RP-01",
+            ("NIST_CSF_2", "GV.PO-1"): "GV.PO-01",
+            ("NIST_CSF_2", "ID.RA-1"): "ID.RA-01",
+            ("NIST_CSF_2", "PR.AT-1"): "PR.AT-01",
+            ("NIST_CSF_2", "ID.AM-5"): "ID.AM-05",
+            ("NIST_CSF_2", "PR.IP-6"): "PR.DS-11",
+            ("NIST_CSF_2", "DE.AE-3"): "DE.AE-03",
+            ("NIST_CSF_2", "PR.PT-1"): "PR.PS-01",
+            ("NIST_CSF_2", "PR.AC-5"): "PR.AA-06",
+            ("NIST_CSF_2", "PR.PT-4"): "PR.IR-01",
+            ("NIST_CSF_2", "PR.IP-3"): "PR.PS-04",
+            ("NIST_CSF_2", "PR.IP-1"): "PR.PS-01",
+            ("NIST_CSF_2", "ID.SC-1"): "GV.SC-01",
+            ("NIST_CSF_2", "ID.SC-3"): "GV.SC-05",
+            ("NIST_CSF_2", "PR.AC-2"): "PR.AA-02",
+            ("NIST_CSF_2", "PR.IP-5"): "PR.PS-05",
+            ("NIST_CSF_2", "PR.IP-2"): "PR.PS-06",
+            ("NIST_CSF_2", "PR.IP-4"): "PR.DS-11",
+            ("NIST_CSF_2", "ID.AM-1"): "ID.AM-01",
+        }
+
+        for ctrl in db.query(Control).all():
+            enrich = enrichments.get(ctrl.control_ref)
+            if enrich:
+                if not ctrl.objective:
+                    ctrl.objective = enrich.get("objective")
+                if not ctrl.procedure:
+                    ctrl.procedure = enrich.get("procedure")
+                if not ctrl.default_test_procedure:
+                    ctrl.default_test_procedure = enrich.get("default_test_procedure")
+
+        # Update framework mapping references
+        for mapping in db.query(ControlFrameworkMapping).all():
+            key = (mapping.framework, mapping.reference)
+            if key in ref_updates:
+                mapping.reference = ref_updates[key]
+
+        db.commit()
+    finally:
+        db.close()
+
+
+# ==================== FRAMEWORK REQUIREMENT LIBRARY ====================
+
+ADOPTION_STATUS_NOT_ADDRESSED = "NOT_ADDRESSED"
+ADOPTION_STATUS_MAPPED = "MAPPED"
+ADOPTION_STATUS_NOT_APPLICABLE = "NOT_APPLICABLE"
+VALID_ADOPTION_STATUSES = [ADOPTION_STATUS_NOT_ADDRESSED, ADOPTION_STATUS_MAPPED, ADOPTION_STATUS_NOT_APPLICABLE]
+ADOPTION_STATUS_LABELS = {
+    ADOPTION_STATUS_NOT_ADDRESSED: "Not Addressed",
+    ADOPTION_STATUS_MAPPED: "Mapped",
+    ADOPTION_STATUS_NOT_APPLICABLE: "N/A",
+}
+ADOPTION_STATUS_COLORS = {
+    ADOPTION_STATUS_NOT_ADDRESSED: "#dc3545",
+    ADOPTION_STATUS_MAPPED: "#198754",
+    ADOPTION_STATUS_NOT_APPLICABLE: "#6c757d",
+}
+
+# Frameworks with seeded canonical requirements
+SEEDED_FRAMEWORKS = ["SOC_2", "ISO_27001", "NIST_CSF_2"]
+
+
+class FrameworkRequirement(Base):
+    """Canonical requirement from a regulatory/compliance framework."""
+    __tablename__ = "framework_requirements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    framework = Column(String(50), nullable=False, index=True)
+    reference = Column(String(100), nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    guidance = Column(Text, nullable=True)
+    category = Column(String(200), nullable=True, index=True)
+    subcategory = Column(String(200), nullable=True)
+    suggested_domain = Column(String(100), nullable=True)
+    suggested_control_type = Column(String(20), nullable=True)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        # Unique constraint on (framework, reference)
+        {"sqlite_autoincrement": True},
+    )
+
+
+class FrameworkAdoption(Base):
+    """Organization's adoption decision for each framework requirement."""
+    __tablename__ = "framework_adoptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    framework = Column(String(50), nullable=False, index=True)
+    requirement_reference = Column(String(100), nullable=False, index=True)
+    status = Column(String(30), default=ADOPTION_STATUS_NOT_ADDRESSED, nullable=False)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=True)
+    notes = Column(Text, nullable=True)
+    adopted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    adopted_at = Column(DateTime, nullable=True)
+
+    control = relationship("Control")
+    adopted_by = relationship("User", foreign_keys=[adopted_by_user_id])
+
+    __table_args__ = (
+        {"sqlite_autoincrement": True},
+    )
+
+
+def backfill_framework_tables():
+    """Create framework_requirements and framework_adoptions tables if missing."""
+    db = SessionLocal()
+    try:
+        existing_tables = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        if "framework_requirements" not in existing_tables:
+            FrameworkRequirement.__table__.create(engine, checkfirst=True)
+        if "framework_adoptions" not in existing_tables:
+            FrameworkAdoption.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def seed_framework_requirements():
+    """Load canonical framework requirements from seed data, skipping if already populated."""
+    db = SessionLocal()
+    try:
+        if db.query(FrameworkRequirement).count() > 0:
+            return
+
+        from app.services.framework_seeds import get_all_framework_seeds
+        seeds = get_all_framework_seeds()
+        for s in seeds:
+            db.add(FrameworkRequirement(
+                framework=s["framework"],
+                reference=s["reference"],
+                title=s["title"],
+                description=s.get("description", ""),
+                guidance=s.get("guidance"),
+                category=s.get("category"),
+                subcategory=s.get("subcategory"),
+                suggested_domain=s.get("suggested_domain"),
+                suggested_control_type=s.get("suggested_control_type"),
+                sort_order=s.get("sort_order", 0),
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def sync_adoptions_from_existing_mappings():
+    """Create FrameworkAdoption records for existing ControlFrameworkMapping rows
+    that match seeded requirements (one-time sync for existing databases)."""
+    db = SessionLocal()
+    try:
+        # Only sync if we have requirements but no adoptions yet
+        if db.query(FrameworkAdoption).count() > 0:
+            return
+        if db.query(FrameworkRequirement).count() == 0:
+            return
+
+        # Build lookup of seeded requirements
+        reqs = db.query(FrameworkRequirement).all()
+        req_set = {(r.framework, r.reference) for r in reqs}
+
+        # Find existing mappings that match
+        mappings = db.query(ControlFrameworkMapping).all()
+        for m in mappings:
+            if (m.framework, m.reference) in req_set:
+                db.add(FrameworkAdoption(
+                    framework=m.framework,
+                    requirement_reference=m.reference,
+                    status=ADOPTION_STATUS_MAPPED,
+                    control_id=m.control_id,
+                    adopted_at=datetime.utcnow(),
+                ))
+        db.commit()
+    finally:
+        db.close()
+
+
 def get_db():
     db = SessionLocal()
     try:
