@@ -1,7 +1,7 @@
 """Controls module — library, implementations, testing, dashboard, gap analysis."""
 
 from fastapi import APIRouter, Request, Form, Depends, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, Response
 from sqlalchemy.orm import Session
 from urllib.parse import quote
 from datetime import datetime
@@ -20,6 +20,7 @@ from models import (
     VALID_TEST_RESULTS, TEST_RESULT_LABELS, TEST_RESULT_COLORS,
     TEST_STATUS_SCHEDULED,
     IMPL_STATUS_IMPLEMENTED,
+    VALID_FINDING_RISK_RATINGS, FINDING_RISK_LABELS, FINDING_RISK_COLORS,
     AUDIT_ACTION_CREATE, AUDIT_ACTION_UPDATE, AUDIT_ACTION_DELETE,
     AUDIT_ENTITY_CONTROL, AUDIT_ENTITY_CONTROL_IMPL,
 )
@@ -27,6 +28,7 @@ from app.services.auth_service import require_role, require_login
 from app.services.audit_service import log_audit
 from app.services import control_service as svc
 from app.services import control_dashboard_service as dash_svc
+from app.services.export_service import generate_control_test_pdf
 
 router = APIRouter()
 _analyst_dep = require_role("admin", "analyst")
@@ -389,6 +391,8 @@ async def control_test_complete_form(
         "test_type_labels": TEST_TYPE_LABELS,
         "test_results": VALID_TEST_RESULTS,
         "test_result_labels": TEST_RESULT_LABELS,
+        "finding_risk_ratings": VALID_FINDING_RISK_RATINGS,
+        "finding_risk_labels": FINDING_RISK_LABELS,
         "framework_display": FRAMEWORK_DISPLAY,
     })
 
@@ -401,6 +405,14 @@ async def control_test_complete(
     test_procedure: str = Form(""),
     findings: str = Form(""),
     recommendations: str = Form(""),
+    test_period_start: str = Form(""),
+    test_period_end: str = Form(""),
+    sample_size: str = Form(""),
+    population_size: str = Form(""),
+    exceptions_count: str = Form(""),
+    exception_details: str = Form(""),
+    conclusion: str = Form(""),
+    finding_risk_rating: str = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
@@ -408,9 +420,14 @@ async def control_test_complete(
     if not test or test.status != TEST_STATUS_SCHEDULED:
         raise HTTPException(status_code=404, detail="Scheduled test not found")
 
+    extra = _parse_enhanced_test_fields(
+        test_period_start, test_period_end, sample_size, population_size,
+        exceptions_count, exception_details, conclusion, finding_risk_rating,
+    )
+
     svc.complete_scheduled_test(
         db, test_id, result, test_procedure.strip(),
-        findings.strip(), recommendations.strip(),
+        findings.strip(), recommendations.strip(), **extra,
     )
 
     # Handle file uploads
@@ -851,6 +868,8 @@ async def control_test_new(request: Request, impl_id: int, db: Session = Depends
         "test_type_labels": TEST_TYPE_LABELS,
         "test_results": VALID_TEST_RESULTS,
         "test_result_labels": TEST_RESULT_LABELS,
+        "finding_risk_ratings": VALID_FINDING_RISK_RATINGS,
+        "finding_risk_labels": FINDING_RISK_LABELS,
         "framework_display": FRAMEWORK_DISPLAY,
     })
 
@@ -864,6 +883,14 @@ async def control_test_create(
     result: str = Form(...),
     findings: str = Form(""),
     recommendations: str = Form(""),
+    test_period_start: str = Form(""),
+    test_period_end: str = Form(""),
+    sample_size: str = Form(""),
+    population_size: str = Form(""),
+    exceptions_count: str = Form(""),
+    exception_details: str = Form(""),
+    conclusion: str = Form(""),
+    finding_risk_rating: str = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
@@ -871,9 +898,14 @@ async def control_test_create(
     if not impl:
         raise HTTPException(status_code=404, detail="Implementation not found")
 
+    extra = _parse_enhanced_test_fields(
+        test_period_start, test_period_end, sample_size, population_size,
+        exceptions_count, exception_details, conclusion, finding_risk_rating,
+    )
+
     test = svc.create_test(
         db, impl_id, test_type, test_procedure.strip(),
-        current_user.id, result, findings.strip(), recommendations.strip(),
+        current_user.id, result, findings.strip(), recommendations.strip(), **extra,
     )
 
     # Handle file uploads
@@ -903,14 +935,86 @@ async def control_test_detail(request: Request, test_id: int, db: Session = Depe
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
 
+    users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
+
     return templates.TemplateResponse("control_test_detail.html", {
         "request": request,
         "test": test,
+        "current_user": current_user,
+        "users": users,
         "test_type_labels": TEST_TYPE_LABELS,
         "test_result_labels": TEST_RESULT_LABELS,
         "test_result_colors": TEST_RESULT_COLORS,
+        "finding_risk_labels": FINDING_RISK_LABELS,
+        "finding_risk_colors": FINDING_RISK_COLORS,
         "framework_display": FRAMEWORK_DISPLAY,
     })
+
+
+@router.post("/controls/tests/{test_id}/review", response_class=HTMLResponse)
+async def control_test_review(
+    request: Request,
+    test_id: int,
+    review_notes: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    test = svc.get_test(db, test_id)
+    if not test:
+        raise HTTPException(status_code=404, detail="Test not found")
+
+    svc.submit_test_review(db, test_id, current_user.id, review_notes.strip())
+
+    # SoD note in audit if reviewer == tester
+    sod_note = ""
+    if test.tester_user_id and test.tester_user_id == current_user.id:
+        sod_note = " (SoD note: reviewer is same as tester)"
+
+    log_audit(db, AUDIT_ACTION_UPDATE, "control_test",
+              entity_id=test.id,
+              entity_label=f"Reviewed test for {test.implementation.control.control_ref}",
+              description=f"Reviewer sign-off by {current_user.display_name}{sod_note}",
+              actor_user=current_user)
+    db.commit()
+
+    return RedirectResponse(
+        url=f"/controls/tests/{test_id}?message={quote('Review sign-off recorded')}&message_type=success",
+        status_code=303,
+    )
+
+
+@router.get("/controls/tests/{test_id}/export.pdf")
+async def control_test_export_pdf(
+    test_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    test = svc.get_test(db, test_id)
+    if not test:
+        raise HTTPException(status_code=404, detail="Test not found")
+
+    context = {
+        "test": test,
+        "control": test.implementation.control,
+        "impl": test.implementation,
+        "test_type_labels": TEST_TYPE_LABELS,
+        "test_result_labels": TEST_RESULT_LABELS,
+        "test_result_colors": TEST_RESULT_COLORS,
+        "finding_risk_labels": FINDING_RISK_LABELS,
+        "finding_risk_colors": FINDING_RISK_COLORS,
+        "framework_display": FRAMEWORK_DISPLAY,
+        "generated_at": datetime.utcnow(),
+    }
+
+    pdf_bytes = generate_control_test_pdf(context)
+    ctrl_ref = test.implementation.control.control_ref.replace(" ", "_")
+    filename = f"Workpaper_{ctrl_ref}_Test_{test.id}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/controls/tests/{test_id}/evidence", response_class=HTMLResponse)
@@ -1075,3 +1179,30 @@ def _save_mappings(db: Session, control_id: int, form):
     # Risk mappings
     r_ids = [int(v) for k, v in form.multi_items() if k == "risk_ids"]
     svc.set_risk_mappings(db, control_id, r_ids)
+
+
+def _parse_enhanced_test_fields(
+    test_period_start: str, test_period_end: str,
+    sample_size: str, population_size: str,
+    exceptions_count: str, exception_details: str,
+    conclusion: str, finding_risk_rating: str,
+) -> dict:
+    """Parse enhanced test workpaper fields from form strings into typed values."""
+    result = {}
+    if test_period_start.strip():
+        result["test_period_start"] = datetime.strptime(test_period_start.strip(), "%Y-%m-%d")
+    if test_period_end.strip():
+        result["test_period_end"] = datetime.strptime(test_period_end.strip(), "%Y-%m-%d")
+    if sample_size.strip():
+        result["sample_size"] = int(sample_size)
+    if population_size.strip():
+        result["population_size"] = int(population_size)
+    if exceptions_count.strip():
+        result["exceptions_count"] = int(exceptions_count)
+    if exception_details.strip():
+        result["exception_details"] = exception_details.strip()
+    if conclusion.strip():
+        result["conclusion"] = conclusion.strip()
+    if finding_risk_rating.strip():
+        result["finding_risk_rating"] = finding_risk_rating.strip()
+    return result

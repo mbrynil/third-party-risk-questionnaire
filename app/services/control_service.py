@@ -297,7 +297,11 @@ def get_org_control_stats(db: Session) -> dict:
 # ==================== CONTROL TESTING ====================
 
 def create_test(db: Session, impl_id: int, test_type: str, procedure: str,
-                tester_id: int | None, result: str, findings: str, recommendations: str) -> ControlTest:
+                tester_id: int | None, result: str, findings: str, recommendations: str,
+                test_period_start=None, test_period_end=None,
+                sample_size: int | None = None, population_size: int | None = None,
+                exceptions_count: int | None = None, exception_details: str | None = None,
+                conclusion: str | None = None, finding_risk_rating: str | None = None) -> ControlTest:
     test = ControlTest(
         implementation_id=impl_id,
         test_type=test_type,
@@ -307,6 +311,14 @@ def create_test(db: Session, impl_id: int, test_type: str, procedure: str,
         findings=findings,
         recommendations=recommendations,
         test_date=datetime.utcnow(),
+        test_period_start=test_period_start,
+        test_period_end=test_period_end,
+        sample_size=sample_size,
+        population_size=population_size,
+        exceptions_count=exceptions_count,
+        exception_details=exception_details,
+        conclusion=conclusion,
+        finding_risk_rating=finding_risk_rating,
     )
     db.add(test)
     db.flush()
@@ -327,8 +339,9 @@ def get_implementation_tests(db: Session, impl_id: int):
 def get_test(db: Session, test_id: int):
     return db.query(ControlTest).options(
         joinedload(ControlTest.tester),
+        joinedload(ControlTest.reviewer),
         joinedload(ControlTest.evidence_files),
-        joinedload(ControlTest.implementation).joinedload(ControlImplementation.control),
+        joinedload(ControlTest.implementation).joinedload(ControlImplementation.control).joinedload(Control.owner),
         joinedload(ControlTest.implementation).joinedload(ControlImplementation.vendor),
     ).filter(ControlTest.id == test_id).first()
 
@@ -417,7 +430,11 @@ def create_scheduled_test(db: Session, impl_id: int, test_type: str,
 
 
 def complete_scheduled_test(db: Session, test_id: int, result: str,
-                            procedure: str, findings: str, recommendations: str) -> ControlTest | None:
+                            procedure: str, findings: str, recommendations: str,
+                            test_period_start=None, test_period_end=None,
+                            sample_size: int | None = None, population_size: int | None = None,
+                            exceptions_count: int | None = None, exception_details: str | None = None,
+                            conclusion: str | None = None, finding_risk_rating: str | None = None) -> ControlTest | None:
     """Complete a previously scheduled test."""
     test = db.query(ControlTest).filter(ControlTest.id == test_id).first()
     if not test:
@@ -428,6 +445,14 @@ def complete_scheduled_test(db: Session, test_id: int, result: str,
     test.test_procedure = procedure
     test.findings = findings
     test.recommendations = recommendations
+    test.test_period_start = test_period_start
+    test.test_period_end = test_period_end
+    test.sample_size = sample_size
+    test.population_size = population_size
+    test.exceptions_count = exceptions_count
+    test.exception_details = exception_details
+    test.conclusion = conclusion
+    test.finding_risk_rating = finding_risk_rating
     db.flush()
     impl = db.query(ControlImplementation).filter(
         ControlImplementation.id == test.implementation_id
@@ -457,6 +482,18 @@ def set_implementation_next_test_date(db: Session, impl_id: int, date: datetime 
         impl.next_test_date = date
         return impl
     return None
+
+
+def submit_test_review(db: Session, test_id: int, reviewer_user_id: int, review_notes: str = "") -> ControlTest | None:
+    """Sign off on a test as a reviewer."""
+    test = db.query(ControlTest).filter(ControlTest.id == test_id).first()
+    if not test:
+        return None
+    test.reviewer_user_id = reviewer_user_id
+    test.review_date = datetime.utcnow()
+    test.review_notes = review_notes
+    db.flush()
+    return test
 
 
 # ==================== CONTROL EVIDENCE ====================

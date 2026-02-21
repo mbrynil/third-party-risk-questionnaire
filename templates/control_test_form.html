@@ -14,7 +14,7 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-8">
+    <div class="col-lg-9">
         <h3 class="mb-2"><i class="bi bi-clipboard-check me-2"></i>{% if completing_test %}Complete Scheduled Test{% else %}Record Test{% endif %}</h3>
         <p class="text-muted mb-4">{{ impl.control.control_ref }} — {{ impl.control.title }}{% if impl.vendor %} ({{ impl.vendor.name }}){% endif %}</p>
 
@@ -31,7 +31,12 @@
         <form method="post"
               action="{% if completing_test %}/controls/tests/{{ completing_test.id }}/complete{% else %}/controls/implementations/{{ impl.id }}/tests{% endif %}"
               enctype="multipart/form-data">
-            <div class="card mb-4">
+
+            {# ===== Section 1: Test Setup ===== #}
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">1</span>Test Setup</h6>
+                </div>
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -53,24 +58,107 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label">Test Procedure</label>
-                            <textarea name="test_procedure" class="form-control" rows="3" placeholder="Describe the test procedure performed..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            {# ===== Section 2: Scope & Sampling ===== #}
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">2</span>Scope & Sampling</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Test Period Start</label>
+                            <input type="date" name="test_period_start" class="form-control">
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Test Period End</label>
+                            <input type="date" name="test_period_end" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Population Size</label>
+                            <input type="number" name="population_size" class="form-control" min="0" placeholder="Total items in population">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Sample Size</label>
+                            <input type="number" name="sample_size" class="form-control" min="0" placeholder="Items tested">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ===== Section 3: Test Procedure ===== #}
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">3</span>Test Procedure</h6>
+                </div>
+                <div class="card-body">
+                    <textarea name="test_procedure" class="form-control" rows="5" placeholder="Describe the test procedure performed — steps taken, criteria evaluated, tools used..."></textarea>
+                </div>
+            </div>
+
+            {# ===== Section 4: Results ===== #}
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">4</span>Results</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Exceptions Found</label>
+                            <input type="number" name="exceptions_count" id="exceptions_count" class="form-control" min="0" value="0" onchange="toggleExceptionDetails()">
+                        </div>
+                        <div class="col-md-6">&nbsp;</div>
+                        <div class="col-12" id="exception_details_group">
+                            <label class="form-label">Exception Details</label>
+                            <textarea name="exception_details" class="form-control" rows="3" placeholder="Describe each exception — item reference, nature of deviation, root cause..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ===== Section 5: Findings & Conclusion ===== #}
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">5</span>Findings & Conclusion</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
                         <div class="col-12">
                             <label class="form-label">Findings</label>
-                            <textarea name="findings" class="form-control" rows="3" placeholder="Document findings..."></textarea>
+                            <textarea name="findings" class="form-control" rows="3" placeholder="Document findings from the test..."></textarea>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Recommendations</label>
-                            <textarea name="recommendations" class="form-control" rows="2" placeholder="Recommendations for improvement..."></textarea>
+                            <textarea name="recommendations" class="form-control" rows="2" placeholder="Recommendations for improvement or remediation..."></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Finding Risk Rating</label>
+                            <select name="finding_risk_rating" class="form-select">
+                                <option value="">— Select —</option>
+                                {% for fr in finding_risk_ratings %}
+                                <option value="{{ fr }}">{{ finding_risk_labels[fr] }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Evidence Files</label>
-                            <input type="file" name="evidence_files" class="form-control" multiple>
-                            <small class="text-muted">Upload supporting evidence (screenshots, reports, etc.)</small>
+                            <label class="form-label">Conclusion</label>
+                            <textarea name="conclusion" class="form-control" rows="3" placeholder="Overall test conclusion — summarize whether the control is operating effectively..."></textarea>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {# ===== Section 6: Evidence ===== #}
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><span class="badge bg-primary rounded-pill me-2">6</span>Evidence</h6>
+                </div>
+                <div class="card-body">
+                    <input type="file" name="evidence_files" class="form-control" multiple>
+                    <small class="text-muted">Upload supporting evidence (screenshots, reports, exports, etc.)</small>
                 </div>
             </div>
 
@@ -85,4 +173,12 @@
         </form>
     </div>
 </div>
+
+<script>
+function toggleExceptionDetails() {
+    var count = parseInt(document.getElementById('exceptions_count').value) || 0;
+    document.getElementById('exception_details_group').style.display = count > 0 ? 'block' : 'none';
+}
+toggleExceptionDetails();
+</script>
 {% endblock %}

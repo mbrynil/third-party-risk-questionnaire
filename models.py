@@ -2055,6 +2055,24 @@ TEST_STATUS_SCHEDULED = "SCHEDULED"
 TEST_STATUS_COMPLETED = "COMPLETED"
 VALID_TEST_STATUSES = [TEST_STATUS_SCHEDULED, TEST_STATUS_COMPLETED]
 
+# Finding risk rating (for control tests)
+FINDING_RISK_LOW = "LOW"
+FINDING_RISK_MEDIUM = "MEDIUM"
+FINDING_RISK_HIGH = "HIGH"
+FINDING_RISK_CRITICAL = "CRITICAL"
+FINDING_RISK_NONE = "NONE"
+VALID_FINDING_RISK_RATINGS = [FINDING_RISK_NONE, FINDING_RISK_LOW, FINDING_RISK_MEDIUM, FINDING_RISK_HIGH, FINDING_RISK_CRITICAL]
+FINDING_RISK_LABELS = {
+    FINDING_RISK_NONE: "No Finding", FINDING_RISK_LOW: "Low",
+    FINDING_RISK_MEDIUM: "Medium", FINDING_RISK_HIGH: "High",
+    FINDING_RISK_CRITICAL: "Critical",
+}
+FINDING_RISK_COLORS = {
+    FINDING_RISK_NONE: "#198754", FINDING_RISK_LOW: "#0dcaf0",
+    FINDING_RISK_MEDIUM: "#fd7e14", FINDING_RISK_HIGH: "#ffc107",
+    FINDING_RISK_CRITICAL: "#dc3545",
+}
+
 # Activity / notification constants for controls
 ACTIVITY_CONTROL_IMPL_UPDATED = "CONTROL_IMPL_UPDATED"
 ACTIVITY_ICONS[ACTIVITY_CONTROL_IMPL_UPDATED] = "bi-shield-lock"
@@ -2160,10 +2178,22 @@ class ControlTest(Base):
     scheduled_date = Column(DateTime, nullable=True)
     findings = Column(Text, nullable=True)
     recommendations = Column(Text, nullable=True)
+    test_period_start = Column(DateTime, nullable=True)
+    test_period_end = Column(DateTime, nullable=True)
+    sample_size = Column(Integer, nullable=True)
+    population_size = Column(Integer, nullable=True)
+    exceptions_count = Column(Integer, nullable=True, default=0)
+    exception_details = Column(Text, nullable=True)
+    conclusion = Column(Text, nullable=True)
+    finding_risk_rating = Column(String(20), nullable=True)
+    reviewer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_date = Column(DateTime, nullable=True)
+    review_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     implementation = relationship("ControlImplementation", back_populates="tests")
     tester = relationship("User", foreign_keys=[tester_user_id])
+    reviewer = relationship("User", foreign_keys=[reviewer_user_id])
     evidence_files = relationship("ControlEvidence", back_populates="test", cascade="all, delete-orphan")
 
 
@@ -2191,6 +2221,18 @@ def backfill_controls_tables():
         ("controls", "objective", "ALTER TABLE controls ADD COLUMN objective TEXT"),
         ("controls", "procedure", "ALTER TABLE controls ADD COLUMN procedure TEXT"),
         ("controls", "operation_frequency", "ALTER TABLE controls ADD COLUMN operation_frequency VARCHAR(20)"),
+        # Enhanced testing workpaper columns
+        ("control_tests", "test_period_start", "ALTER TABLE control_tests ADD COLUMN test_period_start DATETIME"),
+        ("control_tests", "test_period_end", "ALTER TABLE control_tests ADD COLUMN test_period_end DATETIME"),
+        ("control_tests", "sample_size", "ALTER TABLE control_tests ADD COLUMN sample_size INTEGER"),
+        ("control_tests", "population_size", "ALTER TABLE control_tests ADD COLUMN population_size INTEGER"),
+        ("control_tests", "exceptions_count", "ALTER TABLE control_tests ADD COLUMN exceptions_count INTEGER DEFAULT 0"),
+        ("control_tests", "exception_details", "ALTER TABLE control_tests ADD COLUMN exception_details TEXT"),
+        ("control_tests", "conclusion", "ALTER TABLE control_tests ADD COLUMN conclusion TEXT"),
+        ("control_tests", "finding_risk_rating", "ALTER TABLE control_tests ADD COLUMN finding_risk_rating VARCHAR(20)"),
+        ("control_tests", "reviewer_user_id", "ALTER TABLE control_tests ADD COLUMN reviewer_user_id INTEGER"),
+        ("control_tests", "review_date", "ALTER TABLE control_tests ADD COLUMN review_date DATETIME"),
+        ("control_tests", "review_notes", "ALTER TABLE control_tests ADD COLUMN review_notes TEXT"),
     ]
     for table, col, sql in migrations:
         db = SessionLocal()

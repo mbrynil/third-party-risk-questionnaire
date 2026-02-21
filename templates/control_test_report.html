@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Test Workpaper — {{ control.control_ref }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #fff;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .report-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .report-banner {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        .report-banner h1 {
+            font-weight: 700;
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .report-banner .subtitle {
+            opacity: 0.85;
+            font-size: 0.9rem;
+        }
+        .banner-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            margin-top: 0.75rem;
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+        .banner-meta span { white-space: nowrap; }
+        .result-pill {
+            display: inline-block;
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            background: rgba(255,255,255,0.2);
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .meta-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+        .meta-value {
+            font-size: 0.9rem;
+            color: #111827;
+            font-weight: 500;
+        }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e3a5f;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+            margin-top: 2rem;
+        }
+        .content-block {
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            white-space: pre-wrap;
+            font-size: 0.9rem;
+        }
+        .badge-result {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: #fff;
+        }
+        .sign-off-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .sign-off-item {
+            border-left: 3px solid #2563eb;
+            padding-left: 1rem;
+        }
+        .sign-off-item.reviewer {
+            border-left-color: #198754;
+        }
+        .sign-off-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            font-weight: 600;
+        }
+        .sign-off-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .sign-off-date {
+            color: #6b7280;
+            font-size: 0.8rem;
+        }
+        .evidence-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .evidence-list li {
+            padding: 0.4rem 0;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 0.85rem;
+        }
+        .evidence-list li:last-child { border-bottom: none; }
+        .report-footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 0.75rem;
+        }
+        @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+<div class="report-container">
+
+    {# ===== Banner ===== #}
+    <div class="report-banner">
+        <h1>Control Test Workpaper</h1>
+        <div class="subtitle">{{ control.control_ref }} — {{ control.title }}</div>
+        <div class="banner-meta">
+            <span>Test Date: {{ test.test_date.strftime('%Y-%m-%d') if test.test_date else 'N/A' }}</span>
+            <span>Type: {{ test_type_labels.get(test.test_type, test.test_type) }}</span>
+            <span>
+                Result:
+                <span class="result-pill" style="background-color:{{ test_result_colors.get(test.result, '#6c757d') }};">
+                    {{ test_result_labels.get(test.result, test.result) }}
+                </span>
+            </span>
+            {% if test.finding_risk_rating %}
+            <span>
+                Finding:
+                <span class="result-pill" style="background-color:{{ finding_risk_colors.get(test.finding_risk_rating, '#6c757d') }};">
+                    {{ finding_risk_labels.get(test.finding_risk_rating, test.finding_risk_rating) }}
+                </span>
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ===== Meta Grid ===== #}
+    <div class="meta-grid">
+        <div class="meta-item">
+            <span class="meta-label">Test Period</span>
+            <span class="meta-value">
+                {% if test.test_period_start or test.test_period_end %}
+                {{ test.test_period_start.strftime('%Y-%m-%d') if test.test_period_start else '?' }} — {{ test.test_period_end.strftime('%Y-%m-%d') if test.test_period_end else '?' }}
+                {% else %}N/A{% endif %}
+            </span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Sample / Population</span>
+            <span class="meta-value">
+                {% if test.sample_size is not none or test.population_size is not none %}
+                {{ test.sample_size if test.sample_size is not none else '?' }} of {{ test.population_size if test.population_size is not none else '?' }}
+                {% else %}N/A{% endif %}
+            </span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Exceptions</span>
+            <span class="meta-value">{{ test.exceptions_count if test.exceptions_count is not none else 'N/A' }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">Tester</span>
+            <span class="meta-value">{{ test.tester.display_name if test.tester else 'N/A' }}</span>
+        </div>
+    </div>
+
+    {# ===== Framework Mappings ===== #}
+    {% if control.framework_mappings %}
+    <div style="margin-bottom:1.5rem;">
+        {% for m in control.framework_mappings %}
+        <span class="badge-result" style="background-color:#e5e7eb;color:#374151;font-size:0.75rem;margin-right:0.25rem;">
+            {{ framework_display.get(m.framework, m.framework) }}: {{ m.reference }}
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ===== Test Procedure ===== #}
+    {% if test.test_procedure %}
+    <h3 class="section-title">Test Procedure</h3>
+    <div class="content-block">{{ test.test_procedure }}</div>
+    {% endif %}
+
+    {# ===== Findings ===== #}
+    {% if test.findings %}
+    <h3 class="section-title">Findings
+        {% if test.finding_risk_rating %}
+        <span class="badge-result" style="background-color:{{ finding_risk_colors.get(test.finding_risk_rating, '#6c757d') }};font-size:0.75rem;margin-left:0.5rem;">
+            {{ finding_risk_labels.get(test.finding_risk_rating, test.finding_risk_rating) }}
+        </span>
+        {% endif %}
+    </h3>
+    <div class="content-block">{{ test.findings }}</div>
+    {% endif %}
+
+    {# ===== Exception Details ===== #}
+    {% if test.exceptions_count and test.exceptions_count > 0 and test.exception_details %}
+    <h3 class="section-title">Exception Details ({{ test.exceptions_count }})</h3>
+    <div class="content-block">{{ test.exception_details }}</div>
+    {% endif %}
+
+    {# ===== Recommendations ===== #}
+    {% if test.recommendations %}
+    <h3 class="section-title">Recommendations</h3>
+    <div class="content-block">{{ test.recommendations }}</div>
+    {% endif %}
+
+    {# ===== Conclusion ===== #}
+    {% if test.conclusion %}
+    <h3 class="section-title">Conclusion</h3>
+    <div class="content-block">{{ test.conclusion }}</div>
+    {% endif %}
+
+    {# ===== Evidence ===== #}
+    {% if test.evidence_files %}
+    <h3 class="section-title">Evidence Files ({{ test.evidence_files|length }})</h3>
+    <ul class="evidence-list">
+        {% for ev in test.evidence_files %}
+        <li>{{ ev.original_filename }}{% if ev.size_bytes %} — {{ (ev.size_bytes / 1024)|round(1) }} KB{% endif %}{% if ev.uploaded_at %} — uploaded {{ ev.uploaded_at.strftime('%Y-%m-%d') }}{% endif %}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {# ===== Sign-Off ===== #}
+    <h3 class="section-title">Sign-Off</h3>
+    <div class="sign-off-grid">
+        <div class="sign-off-item">
+            <div class="sign-off-label">Tester</div>
+            <div class="sign-off-name">{{ test.tester.display_name if test.tester else 'N/A' }}</div>
+            <div class="sign-off-date">{{ test.test_date.strftime('%Y-%m-%d %H:%M') if test.test_date else '' }}</div>
+        </div>
+        <div class="sign-off-item reviewer">
+            <div class="sign-off-label">Reviewer</div>
+            {% if test.reviewer %}
+            <div class="sign-off-name">{{ test.reviewer.display_name }}</div>
+            <div class="sign-off-date">{{ test.review_date.strftime('%Y-%m-%d %H:%M') if test.review_date else '' }}</div>
+            {% if test.review_notes %}
+            <div style="margin-top:0.5rem;font-size:0.8rem;color:#374151;">{{ test.review_notes }}</div>
+            {% endif %}
+            {% else %}
+            <div class="sign-off-name" style="color:#9ca3af;">Pending</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ===== Footer ===== #}
+    <div class="report-footer">
+        Generated on {{ generated_at.strftime('%Y-%m-%d %H:%M UTC') }} &bull; Control Test Workpaper &bull; Confidential
+    </div>
+
+</div>
+</body>
+</html>

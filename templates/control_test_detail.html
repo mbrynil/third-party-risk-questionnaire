@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Test Result — {{ test.implementation.control.control_ref }}{% endblock %}
+{% block title %}Test Workpaper — {{ test.implementation.control.control_ref }}{% endblock %}
 
 {% block breadcrumbs %}
 <li class="breadcrumb-item"><a href="/">Home</a></li>
@@ -9,7 +9,7 @@
 <li class="breadcrumb-item"><a href="/vendors/{{ test.implementation.vendor.id }}/controls">Controls</a></li>
 {% endif %}
 <li class="breadcrumb-item"><a href="/controls/implementations/{{ test.implementation.id }}">{{ test.implementation.control.control_ref }}</a></li>
-<li class="breadcrumb-item active">Test Result</li>
+<li class="breadcrumb-item active">Test Workpaper</li>
 {% endblock %}
 
 {% block content %}
@@ -21,59 +21,151 @@
 </div>
 {% endif %}
 
-<h3 class="mb-4"><i class="bi bi-clipboard-check me-2"></i>Test Result — {{ test.implementation.control.control_ref }}</h3>
+{# ===== Header ===== #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <i class="bi bi-clipboard-check me-2"></i>
+            {{ test.implementation.control.control_ref }} — {{ test.implementation.control.title }}
+        </h3>
+        <div class="d-flex gap-2 align-items-center mt-2">
+            <span class="badge bg-secondary" style="font-size:0.85rem;">{{ test_type_labels.get(test.test_type, test.test_type) }}</span>
+            <span class="badge" style="background-color:{{ test_result_colors.get(test.result, '#6c757d') }};font-size:0.85rem;">{{ test_result_labels.get(test.result, test.result) }}</span>
+            {% if test.finding_risk_rating %}
+            <span class="badge" style="background-color:{{ finding_risk_colors.get(test.finding_risk_rating, '#6c757d') }};font-size:0.85rem;">Finding: {{ finding_risk_labels.get(test.finding_risk_rating, test.finding_risk_rating) }}</span>
+            {% endif %}
+            {% if test.reviewer %}
+            <span class="badge bg-success" style="font-size:0.85rem;"><i class="bi bi-check-circle me-1"></i>Reviewed</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/controls/tests/{{ test.id }}/export.pdf" class="btn btn-outline-primary"><i class="bi bi-file-earmark-pdf me-1"></i>Export PDF</a>
+        <a href="/controls/implementations/{{ test.implementation.id }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
 
-<div class="row g-4">
-    <div class="col-lg-8">
-        <div class="card mb-4">
-            <div class="card-header"><h6 class="mb-0">Test Details</h6></div>
-            <div class="card-body">
-                <div class="row g-3 mb-3">
-                    <div class="col-md-3">
-                        <label class="text-muted small">Date</label>
-                        <p class="fw-semibold mb-0">{{ test.test_date.strftime('%Y-%m-%d %H:%M') if test.test_date else '—' }}</p>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-muted small">Type</label>
-                        <p class="mb-0"><span class="badge bg-secondary">{{ test_type_labels.get(test.test_type, test.test_type) }}</span></p>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-muted small">Result</label>
-                        <p class="mb-0"><span class="badge" style="background-color:{{ test_result_colors.get(test.result, '#6c757d') }};font-size:0.9rem;">{{ test_result_labels.get(test.result, test.result) }}</span></p>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="text-muted small">Tester</label>
-                        <p class="mb-0">{{ test.tester.display_name if test.tester else '—' }}</p>
-                    </div>
-                </div>
+{# SoD Warning: tester == control owner #}
+{% if test.tester and test.implementation.control.owner and test.tester.id == test.implementation.control.owner.id %}
+<div class="alert alert-warning d-flex align-items-center mb-3">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    <strong>Separation of Duties:</strong>&nbsp;The tester ({{ test.tester.display_name }}) is also the control owner.
+</div>
+{% endif %}
 
-                {% if test.test_procedure %}
-                <div class="mb-3">
-                    <label class="text-muted small">Test Procedure</label>
-                    <div class="bg-light p-3 rounded">{{ test.test_procedure }}</div>
-                </div>
-                {% endif %}
-
-                {% if test.findings %}
-                <div class="mb-3">
-                    <label class="text-muted small">Findings</label>
-                    <div class="bg-light p-3 rounded">{{ test.findings }}</div>
-                </div>
-                {% endif %}
-
-                {% if test.recommendations %}
-                <div>
-                    <label class="text-muted small">Recommendations</label>
-                    <div class="bg-light p-3 rounded">{{ test.recommendations }}</div>
-                </div>
-                {% endif %}
+{# ===== Metadata Grid ===== #}
+<div class="card mb-4">
+    <div class="card-body p-3">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="text-muted small text-uppercase">Test Date</label>
+                <p class="fw-semibold mb-0">{{ test.test_date.strftime('%Y-%m-%d %H:%M') if test.test_date else '—' }}</p>
+            </div>
+            <div class="col-md-3">
+                <label class="text-muted small text-uppercase">Test Type</label>
+                <p class="mb-0"><span class="badge bg-secondary">{{ test_type_labels.get(test.test_type, test.test_type) }}</span></p>
+            </div>
+            <div class="col-md-3">
+                <label class="text-muted small text-uppercase">Result</label>
+                <p class="mb-0"><span class="badge" style="background-color:{{ test_result_colors.get(test.result, '#6c757d') }};">{{ test_result_labels.get(test.result, test.result) }}</span></p>
+            </div>
+            <div class="col-md-3">
+                <label class="text-muted small text-uppercase">Finding Risk</label>
+                <p class="mb-0">
+                    {% if test.finding_risk_rating %}
+                    <span class="badge" style="background-color:{{ finding_risk_colors.get(test.finding_risk_rating, '#6c757d') }};">{{ finding_risk_labels.get(test.finding_risk_rating, test.finding_risk_rating) }}</span>
+                    {% else %}—{% endif %}
+                </p>
             </div>
         </div>
+        <hr class="my-3">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="text-muted small text-uppercase">Test Period</label>
+                <p class="fw-semibold mb-0">
+                    {% if test.test_period_start or test.test_period_end %}
+                    {{ test.test_period_start.strftime('%Y-%m-%d') if test.test_period_start else '?' }} — {{ test.test_period_end.strftime('%Y-%m-%d') if test.test_period_end else '?' }}
+                    {% else %}—{% endif %}
+                </p>
+            </div>
+            <div class="col-md-3">
+                <label class="text-muted small text-uppercase">Sample</label>
+                <p class="fw-semibold mb-0">
+                    {% if test.sample_size is not none or test.population_size is not none %}
+                    {{ test.sample_size if test.sample_size is not none else '?' }} of {{ test.population_size if test.population_size is not none else '?' }}
+                    {% else %}—{% endif %}
+                </p>
+            </div>
+            <div class="col-md-3">
+                <label class="text-muted small text-uppercase">Exceptions</label>
+                <p class="fw-semibold mb-0">{{ test.exceptions_count if test.exceptions_count is not none else '—' }}</p>
+            </div>
+            <div class="col-md-3">
+                <label class="text-muted small text-uppercase">Tester</label>
+                <p class="fw-semibold mb-0">{{ test.tester.display_name if test.tester else '—' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
 
-        {# Evidence Files #}
-        <div class="card">
+{# ===== Long-form Sections ===== #}
+<div class="row g-4">
+    <div class="col-lg-8">
+
+        {% if test.test_procedure %}
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-list-check me-2"></i>Test Procedure</h6></div>
+            <div class="card-body">
+                <div class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ test.test_procedure }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if test.findings %}
+        <div class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">Evidence Files <span class="badge bg-secondary ms-1">{{ test.evidence_files|length }}</span></h6>
+                <h6 class="mb-0"><i class="bi bi-search me-2"></i>Findings</h6>
+                {% if test.finding_risk_rating %}
+                <span class="badge" style="background-color:{{ finding_risk_colors.get(test.finding_risk_rating, '#6c757d') }};">{{ finding_risk_labels.get(test.finding_risk_rating, test.finding_risk_rating) }}</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <div class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ test.findings }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if test.exceptions_count and test.exceptions_count > 0 and test.exception_details %}
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-exclamation-circle me-2"></i>Exception Details <span class="badge bg-danger ms-1">{{ test.exceptions_count }}</span></h6></div>
+            <div class="card-body">
+                <div class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ test.exception_details }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if test.recommendations %}
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Recommendations</h6></div>
+            <div class="card-body">
+                <div class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ test.recommendations }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if test.conclusion %}
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-check2-square me-2"></i>Conclusion</h6></div>
+            <div class="card-body">
+                <div class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ test.conclusion }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# ===== Evidence Files ===== #}
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-paperclip me-2"></i>Evidence Files <span class="badge bg-secondary ms-1">{{ test.evidence_files|length }}</span></h6>
             </div>
             {% if test.evidence_files %}
             <div class="table-responsive">
@@ -108,18 +200,64 @@
         </div>
     </div>
 
+    {# ===== Sidebar ===== #}
     <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header"><h6 class="mb-0">Control</h6></div>
+
+        {# Control Info #}
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-shield-check me-2"></i>Control</h6></div>
             <div class="card-body">
                 <p class="fw-semibold mb-1">{{ test.implementation.control.control_ref }}</p>
                 <p class="mb-2">{{ test.implementation.control.title }}</p>
                 {% if test.implementation.vendor %}
                 <p class="text-muted mb-1"><small>Vendor: {{ test.implementation.vendor.name }}</small></p>
                 {% endif %}
-                {% for m in test.implementation.control.framework_mappings %}
-                <span class="badge bg-light text-dark border" style="font-size:0.7rem;">{{ framework_display.get(m.framework, m.framework) }}: {{ m.reference }}</span>
-                {% endfor %}
+                {% if test.implementation.control.owner %}
+                <p class="text-muted mb-1"><small>Owner: {{ test.implementation.control.owner.display_name }}</small></p>
+                {% endif %}
+                <div class="mt-2">
+                    {% for m in test.implementation.control.framework_mappings %}
+                    <span class="badge bg-light text-dark border" style="font-size:0.7rem;">{{ framework_display.get(m.framework, m.framework) }}: {{ m.reference }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Reviewer Sign-Off #}
+        <div class="card mb-3">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-pen me-2"></i>Reviewer Sign-Off</h6></div>
+            <div class="card-body">
+                {% if test.reviewer %}
+                <div class="mb-2">
+                    <label class="text-muted small text-uppercase">Reviewer</label>
+                    <p class="fw-semibold mb-0">{{ test.reviewer.display_name }}</p>
+                </div>
+                <div class="mb-2">
+                    <label class="text-muted small text-uppercase">Review Date</label>
+                    <p class="fw-semibold mb-0">{{ test.review_date.strftime('%Y-%m-%d %H:%M') if test.review_date else '—' }}</p>
+                </div>
+                {% if test.review_notes %}
+                <div>
+                    <label class="text-muted small text-uppercase">Review Notes</label>
+                    <div class="bg-light p-2 rounded small" style="white-space: pre-wrap;">{{ test.review_notes }}</div>
+                </div>
+                {% endif %}
+                {% else %}
+                {# SoD Warning #}
+                {% if test.tester and current_user and test.tester.id == current_user.id %}
+                <div class="alert alert-warning py-2 px-3 mb-3 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    You are the tester for this workpaper. A different reviewer is recommended for separation of duties.
+                </div>
+                {% endif %}
+                <form method="post" action="/controls/tests/{{ test.id }}/review">
+                    <div class="mb-3">
+                        <label class="form-label small">Review Notes</label>
+                        <textarea name="review_notes" class="form-control form-control-sm" rows="3" placeholder="Optional review notes..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-success w-100"><i class="bi bi-check-circle me-1"></i>Sign Off</button>
+                </form>
+                {% endif %}
             </div>
         </div>
     </div>

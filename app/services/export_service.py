@@ -70,6 +70,12 @@ def generate_report_card_pdf(context: dict) -> bytes:
     return render_html_to_pdf(html)
 
 
+def generate_control_test_pdf(context: dict) -> bytes:
+    """Render control_test_report.html → PDF."""
+    html = render_template_to_html("control_test_report.html", context)
+    return render_html_to_pdf(html)
+
+
 # ---------------------------------------------------------------------------
 # CSV helpers
 # ---------------------------------------------------------------------------
