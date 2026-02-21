@@ -158,7 +158,7 @@
                         <a href="/controls/implementations/{{ impl.id }}" class="btn btn-sm btn-outline-secondary" title="View Details"><i class="bi bi-eye"></i></a>
                         {% if impl.status == IMPL_STATUS_IMPLEMENTED %}
                         <a href="/controls/implementations/{{ impl.id }}/tests/new" class="btn btn-sm btn-outline-primary" title="Record Test"><i class="bi bi-plus-circle me-1"></i>Test</a>
-                        <a href="/controls/testing?schedule={{ impl.id }}" class="btn btn-sm btn-outline-secondary" title="Schedule Test"><i class="bi bi-calendar-plus"></i></a>
+                        <a href="/controls/testing?schedule={{ control.id }}" class="btn btn-sm btn-outline-secondary" title="Schedule Test"><i class="bi bi-calendar-plus"></i></a>
                         {% endif %}
                     </td>
                 </tr>

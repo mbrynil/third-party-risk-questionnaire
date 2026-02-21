@@ -285,7 +285,7 @@
                                         <i class="bi bi-plus-circle"></i>
                                     </a>
                                     <button type="button" class="btn btn-sm btn-outline-secondary" title="Schedule Test"
-                                            onclick="openScheduleModal('{{ row.impl.id }}')">
+                                            onclick="openScheduleModal('{{ row.impl.control.id }}')">
                                         <i class="bi bi-calendar-plus"></i>
                                     </button>
                                 </div>
@@ -447,11 +447,11 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Implementation <span class="text-danger">*</span></label>
-                        <select name="implementation_id" id="scheduleImplSelect" class="form-select" required>
-                            <option value="">Select a control implementation...</option>
-                            {% for impl in all_implementations %}
-                            <option value="{{ impl.id }}">{{ impl.control.control_ref }} &mdash; {{ impl.control.title }}</option>
+                        <label class="form-label">Control <span class="text-danger">*</span></label>
+                        <select name="control_id" id="scheduleControlSelect" class="form-select" required>
+                            <option value="">Select a control...</option>
+                            {% for ctrl in all_controls %}
+                            <option value="{{ ctrl.id }}">{{ ctrl.control_ref }} &mdash; {{ ctrl.title }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -489,10 +489,10 @@
 
 {% block extra_scripts %}
 <script>
-function openScheduleModal(implId) {
-    var select = document.getElementById('scheduleImplSelect');
-    if (select && implId) {
-        select.value = implId;
+function openScheduleModal(controlId) {
+    var select = document.getElementById('scheduleControlSelect');
+    if (select && controlId) {
+        select.value = controlId;
     }
     var modal = new bootstrap.Modal(document.getElementById('scheduleTestModal'));
     modal.show();

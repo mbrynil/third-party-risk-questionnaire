@@ -299,6 +299,10 @@ async def control_testing_tracker(
 
     # Filter reference data
     users = db.query(User).filter(User.is_active == True).order_by(User.display_name).all()
+
+    # All active controls for the schedule modal (user picks any control)
+    all_controls = svc.get_all_controls(db, active_only=True)
+
     # Pre-select implementation for schedule modal (from ?schedule=<impl_id>)
     pre_select_impl = request.query_params.get("schedule", "")
 
@@ -315,6 +319,7 @@ async def control_testing_tracker(
         "kpi_pass_rate": pass_rate_ytd,
         "domains": VALID_CONTROL_DOMAINS,
         "users": users,
+        "all_controls": all_controls,
         "all_implementations": schedule_impls,
         "test_types": VALID_TEST_TYPES,
         "test_type_labels": TEST_TYPE_LABELS,
@@ -329,24 +334,34 @@ async def control_testing_tracker(
 @router.post("/controls/testing/schedule", response_class=HTMLResponse)
 async def control_test_schedule(
     request: Request,
-    implementation_id: int = Form(...),
+    control_id: int = Form(...),
     test_type: str = Form(...),
     scheduled_date: str = Form(...),
     tester_user_id: str = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(_analyst_dep),
 ):
-    impl = svc.get_implementation(db, implementation_id)
+    ctrl = db.query(Control).filter(Control.id == control_id).first()
+    if not ctrl:
+        raise HTTPException(status_code=404, detail="Control not found")
+
+    # Find or create org-level implementation
+    impl = db.query(ControlImplementation).filter(
+        ControlImplementation.control_id == control_id,
+        ControlImplementation.vendor_id == None,
+    ).first()
     if not impl:
-        raise HTTPException(status_code=404, detail="Implementation not found")
+        impl = svc.create_implementation(db, control_id)
+        impl.status = IMPL_STATUS_IMPLEMENTED
+        db.flush()
 
     sched_dt = datetime.strptime(scheduled_date.strip(), "%Y-%m-%d")
     tester_id = int(tester_user_id) if tester_user_id.strip() else None
-    test = svc.create_scheduled_test(db, implementation_id, test_type, sched_dt, tester_id)
+    test = svc.create_scheduled_test(db, impl.id, test_type, sched_dt, tester_id)
 
     log_audit(db, AUDIT_ACTION_CREATE, "control_test",
               entity_id=test.id,
-              entity_label=f"Scheduled test for {impl.control.control_ref}",
+              entity_label=f"Scheduled test for {ctrl.control_ref}",
               description=f"Scheduled {test_type} test for {scheduled_date}",
               actor_user=current_user)
     db.commit()
