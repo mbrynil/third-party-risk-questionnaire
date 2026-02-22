@@ -3815,6 +3815,28 @@ INTAKE_SEVERITY_COLORS = {"LOW": "#198754", "MEDIUM": "#ffc107", "HIGH": "#fd7e1
 LIKELIHOOD_DESCRIPTORS = {1: "Rare", 2: "Unlikely", 3: "Possible", 4: "Likely", 5: "Almost Certain"}
 IMPACT_DESCRIPTORS = {1: "Negligible", 2: "Minor", 3: "Moderate", 4: "Major", 5: "Severe"}
 
+# Simulation distribution types
+VALID_SIMULATION_DISTRIBUTIONS = ["PERT", "TRIANGULAR"]
+SIMULATION_DISTRIBUTION_LABELS = {"PERT": "PERT (Beta)", "TRIANGULAR": "Triangular"}
+
+# Effectiveness to numeric mapping for Monte Carlo
+EFFECTIVENESS_NUMERIC = {
+    "NONE": 0.0,
+    "INEFFECTIVE": 0.10,
+    "PARTIALLY_EFFECTIVE": 0.40,
+    "LARGELY_EFFECTIVE": 0.70,
+    "EFFECTIVE": 0.90,
+}
+
+# Treatment decisions for FAIR analysis
+VALID_TREATMENT_DECISIONS = ["MITIGATE", "ACCEPT", "TRANSFER", "AVOID"]
+TREATMENT_DECISION_LABELS = {
+    "MITIGATE": "Mitigate",
+    "ACCEPT": "Accept",
+    "TRANSFER": "Transfer",
+    "AVOID": "Avoid",
+}
+
 
 class RiskAssessment(Base):
     """A formal risk assessment campaign/cycle."""
@@ -3885,10 +3907,86 @@ class RiskAssessmentItem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # FAIR Factor Inputs — min/likely/max for distribution sampling
+    tef_min = Column(Float, nullable=True)      # Threat Event Frequency (events/year)
+    tef_likely = Column(Float, nullable=True)
+    tef_max = Column(Float, nullable=True)
+    vuln_min = Column(Float, nullable=True)     # Vulnerability (0-1 probability)
+    vuln_likely = Column(Float, nullable=True)
+    vuln_max = Column(Float, nullable=True)
+    plm_min = Column(Float, nullable=True)      # Primary Loss Magnitude ($)
+    plm_likely = Column(Float, nullable=True)
+    plm_max = Column(Float, nullable=True)
+    slm_min = Column(Float, nullable=True)      # Secondary Loss Magnitude ($)
+    slm_likely = Column(Float, nullable=True)
+    slm_max = Column(Float, nullable=True)
+
+    # Scenario context links
+    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=True)
+    vendor_link_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+
+    # Treatment decision after simulation
+    treatment_decision = Column(String(20), nullable=True)
+    treatment_decision_rationale = Column(Text, nullable=True)
+
     assessment = relationship("RiskAssessment", back_populates="items")
     risk = relationship("Risk")
     assessor = relationship("User", foreign_keys=[assessor_user_id])
     reviewer = relationship("User", foreign_keys=[reviewed_by_user_id])
+    control_links = relationship("ScenarioControlLink", backref="item", cascade="all, delete-orphan")
+    simulation_runs = relationship("RiskSimulationRun", backref="item", cascade="all, delete-orphan",
+                                   order_by="RiskSimulationRun.run_at.desc()")
+    asset = relationship("Asset", foreign_keys=[asset_id])
+    vendor_link = relationship("Vendor", foreign_keys=[vendor_link_id])
+
+
+class ScenarioControlLink(Base):
+    """Links assessment items to org-level ControlImplementations for simulation."""
+    __tablename__ = "scenario_control_links"
+
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, ForeignKey("risk_assessment_items.id"), nullable=False)
+    implementation_id = Column(Integer, ForeignKey("control_implementations.id"), nullable=False)
+    effectiveness_at_assessment = Column(String(30), nullable=True)
+    weight = Column(Float, default=1.0)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    implementation = relationship("ControlImplementation")
+
+
+class RiskSimulationRun(Base):
+    """Stores metadata and results for each Monte Carlo simulation run."""
+    __tablename__ = "risk_simulation_runs"
+
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, ForeignKey("risk_assessment_items.id"), nullable=False)
+    iterations = Column(Integer, default=10000)
+    seed = Column(Integer, nullable=True)
+    distribution_type = Column(String(20), default="PERT")
+
+    # Summary statistics
+    mean_ale = Column(Float, nullable=True)
+    median_ale = Column(Float, nullable=True)
+    p5_ale = Column(Float, nullable=True)
+    p10_ale = Column(Float, nullable=True)
+    p90_ale = Column(Float, nullable=True)
+    p95_ale = Column(Float, nullable=True)
+    std_dev = Column(Float, nullable=True)
+    min_ale = Column(Float, nullable=True)
+    max_ale = Column(Float, nullable=True)
+
+    combined_control_effectiveness = Column(Float, nullable=True)
+
+    # JSON blobs for chart data
+    sensitivity_json = Column(Text, nullable=True)
+    histogram_json = Column(Text, nullable=True)
+    exceedance_json = Column(Text, nullable=True)
+
+    run_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    run_at = Column(DateTime, default=datetime.utcnow)
+
+    run_by = relationship("User", foreign_keys=[run_by_user_id])
 
 
 class RiskIntake(Base):
@@ -3976,7 +4074,7 @@ def backfill_asset_tables():
 
 
 def backfill_risk_assessment_tables():
-    """Create risk assessment tables if missing."""
+    """Create risk assessment tables if missing, and add FAIR/simulation columns."""
     db = SessionLocal()
     try:
         existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
@@ -3985,9 +4083,27 @@ def backfill_risk_assessment_tables():
             ("risk_assessment_items", RiskAssessmentItem),
             ("risk_intakes", RiskIntake),
             ("risk_assessment_templates", RiskAssessmentTemplate),
+            ("scenario_control_links", ScenarioControlLink),
+            ("risk_simulation_runs", RiskSimulationRun),
         ]:
             if tbl_name not in existing:
                 model.__table__.create(engine, checkfirst=True)
+
+        # ALTER TABLE: add FAIR factor columns to risk_assessment_items
+        fair_columns = [
+            ("tef_min", "FLOAT"), ("tef_likely", "FLOAT"), ("tef_max", "FLOAT"),
+            ("vuln_min", "FLOAT"), ("vuln_likely", "FLOAT"), ("vuln_max", "FLOAT"),
+            ("plm_min", "FLOAT"), ("plm_likely", "FLOAT"), ("plm_max", "FLOAT"),
+            ("slm_min", "FLOAT"), ("slm_likely", "FLOAT"), ("slm_max", "FLOAT"),
+            ("asset_id", "INTEGER"), ("vendor_link_id", "INTEGER"),
+            ("treatment_decision", "VARCHAR(20)"), ("treatment_decision_rationale", "TEXT"),
+        ]
+        for col_name, col_type in fair_columns:
+            try:
+                db.execute(text(f"ALTER TABLE risk_assessment_items ADD COLUMN {col_name} {col_type}"))
+                db.commit()
+            except Exception:
+                db.rollback()
     finally:
         db.close()
 

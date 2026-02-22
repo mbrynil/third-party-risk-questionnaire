@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Executive Summary — {{ assessment.assessment_ref }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; padding: 1rem; }
+    .kpi-card .kpi-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+    @media print {
+        .no-print { display: none !important; }
+        .card { break-inside: avoid; }
+        body { font-size: 11pt; }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments/{{ assessment.id }}">{{ assessment.assessment_ref }}</a></li>
+<li class="breadcrumb-item active">Executive Summary</li>
+{% endblock %}
+
+{% block content %}
+{# Header #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <i class="bi bi-file-earmark-bar-graph me-2"></i>Executive Summary
+        </h3>
+        <div class="d-flex gap-2 mt-1">
+            <span class="badge bg-primary">{{ assessment.assessment_ref }}</span>
+            <span class="badge bg-light text-dark">{{ ASSESSMENT_METHODOLOGY_LABELS.get(assessment.methodology, assessment.methodology) }}</span>
+            <span class="badge" style="background:{{ RA_STATUS_COLORS.get(assessment.status, '#6c757d') }};">{{ RA_STATUS_LABELS.get(assessment.status, assessment.status) }}</span>
+        </div>
+        <p class="text-muted mt-2 mb-0">{{ assessment.title }}</p>
+    </div>
+    <div class="d-flex gap-2 no-print">
+        <button onclick="window.print()" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>Print</button>
+        <a href="/risk-assessments/{{ assessment.id }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
+
+{# Assessment Metadata #}
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3"><strong>Lead:</strong> {{ assessment.lead.display_name if assessment.lead else '—' }}</div>
+            <div class="col-md-3"><strong>Period:</strong>
+                {% if assessment.assessment_period_start %}{{ assessment.assessment_period_start.strftime('%Y-%m-%d') }}{% endif %}
+                {% if assessment.assessment_period_end %} — {{ assessment.assessment_period_end.strftime('%Y-%m-%d') }}{% endif %}
+                {% if not assessment.assessment_period_start %}—{% endif %}
+            </div>
+            <div class="col-md-3"><strong>Risk Appetite:</strong> {{ assessment.risk_appetite_threshold }}</div>
+            <div class="col-md-3"><strong>Items:</strong> {{ summary.total_items }} ({{ summary.simulated_count }} simulated)</div>
+        </div>
+    </div>
+</div>
+
+{# Portfolio KPIs #}
+{% if summary.simulated_count > 0 %}
+<div class="row g-3 mb-4">
+    <div class="col">
+        <div class="card kpi-card">
+            <div class="kpi-value text-primary">${{ "{:,.0f}".format(summary.total_mean_ale) }}</div>
+            <div class="kpi-label">Total Expected Annual Loss (Mean)</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card kpi-card">
+            <div class="kpi-value text-danger">${{ "{:,.0f}".format(summary.total_p90_ale) }}</div>
+            <div class="kpi-label">Total P90 Annual Loss</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card kpi-card">
+            <div class="kpi-value">{{ summary.simulated_count }}</div>
+            <div class="kpi-label">Risks Simulated</div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card kpi-card">
+            <div class="kpi-value">{{ summary.total_items }}</div>
+            <div class="kpi-label">Total Risks</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# Items Summary Table #}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-table me-1"></i>Risk Assessment Items</strong></div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Risk Ref</th>
+                        <th>Title</th>
+                        <th class="text-center">Inherent Score</th>
+                        <th class="text-end">Point ALE</th>
+                        <th class="text-end">Sim Mean ALE</th>
+                        <th class="text-end">Sim P90</th>
+                        <th class="text-center">Treatment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in summary.items_data %}
+                    <tr>
+                        <td><code>{{ d.risk.risk_ref if d.risk else '—' }}</code></td>
+                        <td>{{ d.risk.title if d.risk else '—' }}</td>
+                        <td class="text-center">
+                            {% if d.item.inherent_score %}
+                            <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(d.item.inherent_score)] }};">
+                                {{ get_risk_level_label(d.item.inherent_score) }} ({{ d.item.inherent_score }})
+                            </span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if d.item.annualized_loss_expectancy is not none %}
+                            ${{ "{:,.0f}".format(d.item.annualized_loss_expectancy) }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if d.has_simulation %}
+                            <strong>${{ "{:,.0f}".format(d.latest_run.mean_ale) }}</strong>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if d.has_simulation %}
+                            <strong class="text-danger">${{ "{:,.0f}".format(d.latest_run.p90_ale) }}</strong>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if d.item.treatment_decision %}
+                            <span class="badge bg-secondary">{{ TREATMENT_DECISION_LABELS.get(d.item.treatment_decision, d.item.treatment_decision) }}</span>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if summary.simulated_count > 0 %}
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="4" class="text-end">Portfolio Total:</td>
+                        <td class="text-end text-primary">${{ "{:,.0f}".format(summary.total_mean_ale) }}</td>
+                        <td class="text-end text-danger">${{ "{:,.0f}".format(summary.total_p90_ale) }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+</div>
+
+{# Top 5 Risks by P90 #}
+{% if summary.top_risks_by_p90 %}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-exclamation-triangle me-1"></i>Top {{ summary.top_risks_by_p90|length }} Risks by P90 (Worst-Case Exposure)</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Risk</th>
+                    <th class="text-end">Mean ALE</th>
+                    <th class="text-end">P90 ALE</th>
+                    <th class="text-end">P95 ALE</th>
+                    <th class="text-end">Std Dev</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in summary.top_risks_by_p90 %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><code>{{ d.risk.risk_ref }}</code> {{ d.risk.title }}</td>
+                    <td class="text-end">${{ "{:,.0f}".format(d.latest_run.mean_ale) }}</td>
+                    <td class="text-end text-danger fw-bold">${{ "{:,.0f}".format(d.latest_run.p90_ale) }}</td>
+                    <td class="text-end">${{ "{:,.0f}".format(d.latest_run.p95_ale) }}</td>
+                    <td class="text-end">${{ "{:,.0f}".format(d.latest_run.std_dev) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# Risk Appetite Comparison #}
+{% set appetite = assessment.risk_appetite_threshold or 10 %}
+{% set above_appetite = [] %}
+{% for d in summary.items_data %}
+    {% if d.item.inherent_score is not none and d.item.inherent_score >= appetite %}
+        {% if above_appetite.append(d) %}{% endif %}
+    {% endif %}
+{% endfor %}
+{% if above_appetite %}
+<div class="card mb-4 border-danger">
+    <div class="card-header bg-danger bg-opacity-10"><strong><i class="bi bi-exclamation-circle me-1"></i>Risks Exceeding Appetite Threshold ({{ appetite }})</strong></div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr><th>Risk</th><th class="text-center">Score</th><th class="text-end">Sim P90</th><th>Treatment</th></tr>
+            </thead>
+            <tbody>
+                {% for d in above_appetite %}
+                <tr>
+                    <td><code>{{ d.risk.risk_ref }}</code> {{ d.risk.title }}</td>
+                    <td class="text-center">
+                        <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(d.item.inherent_score)] }};">{{ d.item.inherent_score }}</span>
+                    </td>
+                    <td class="text-end">
+                        {% if d.has_simulation %}<strong>${{ "{:,.0f}".format(d.latest_run.p90_ale) }}</strong>{% else %}—{% endif %}
+                    </td>
+                    <td>{{ TREATMENT_DECISION_LABELS.get(d.item.treatment_decision, '—') if d.item.treatment_decision else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

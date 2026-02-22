@@ -440,4 +440,75 @@
 </div>
 {% endif %}
 
+{# Simulation Results Summary — only if any items have been simulated #}
+{% set all_items_list = [] %}
+{% for level in ['Critical', 'High', 'Medium', 'Low', 'Very Low'] %}
+{% for item in items_by_level.get(level, []) %}
+{% set _ = all_items_list.append(item) %}
+{% endfor %}
+{% endfor %}
+
+{% set sim_items = [] %}
+{% for item in all_items_list %}
+{% if item.simulation_runs is defined and item.simulation_runs %}
+{% set _ = sim_items.append(item) %}
+{% endif %}
+{% endfor %}
+
+{% if sim_items %}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-dice-5 me-1"></i>Monte Carlo Simulation Results</strong> <span class="badge bg-secondary">{{ sim_items|length }} simulated</span></div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">Probabilistic loss estimates from FAIR-based Monte Carlo simulation. Values represent annualized loss expectancy distributions.</p>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Risk</th>
+                        <th class="text-end">Mean ALE</th>
+                        <th class="text-end">Median ALE</th>
+                        <th class="text-end">P90 ALE</th>
+                        <th class="text-end">P95 ALE</th>
+                        <th class="text-end">Std Dev</th>
+                        <th class="text-center">Iterations</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sim_items %}
+                    {% set run = item.simulation_runs[0] %}
+                    <tr>
+                        <td>
+                            {% if item.risk %}
+                            <strong>{{ item.risk.risk_ref }}</strong> — {{ item.risk.title }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-end fw-bold">${{ "{:,.0f}".format(run.mean_ale) }}</td>
+                        <td class="text-end">${{ "{:,.0f}".format(run.median_ale) }}</td>
+                        <td class="text-end text-warning fw-bold">${{ "{:,.0f}".format(run.p90_ale) }}</td>
+                        <td class="text-end text-danger fw-bold">${{ "{:,.0f}".format(run.p95_ale) }}</td>
+                        <td class="text-end">${{ "{:,.0f}".format(run.std_dev) }}</td>
+                        <td class="text-center">{{ "{:,}".format(run.iterations) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    {% set ns = namespace(total_mean=0, total_p90=0) %}
+                    {% for item in sim_items %}
+                    {% set ns.total_mean = ns.total_mean + (item.simulation_runs[0].mean_ale or 0) %}
+                    {% set ns.total_p90 = ns.total_p90 + (item.simulation_runs[0].p90_ale or 0) %}
+                    {% endfor %}
+                    <tr class="fw-bold">
+                        <td>Portfolio Total</td>
+                        <td class="text-end text-primary">${{ "{:,.0f}".format(ns.total_mean) }}</td>
+                        <td></td>
+                        <td class="text-end text-danger">${{ "{:,.0f}".format(ns.total_p90) }}</td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}

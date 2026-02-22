@@ -29,6 +29,7 @@
         </div>
     </div>
     <div class="d-flex gap-2">
+        <a href="/risk-assessments/{{ assessment.id }}/executive-summary" class="btn btn-outline-info btn-sm"><i class="bi bi-file-earmark-bar-graph me-1"></i>Executive Summary</a>
         {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
         <a href="/risk-assessments/{{ assessment.id }}/edit" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
         {% endif %}
@@ -127,6 +128,7 @@
                                 <th style="width:110px;">Status</th>
                                 <th style="width:120px;">Inherent Score</th>
                                 <th style="width:100px;">Residual Score</th>
+                                <th style="width:40px;" title="Simulation">Sim</th>
                                 <th class="text-end" style="width:120px;">Actions</th>
                             </tr>
                         </thead>
@@ -165,6 +167,13 @@
                                 <td>
                                     {% if item.residual_score %}
                                     <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(item.residual_score)] }};font-size:0.7rem;">{{ item.residual_score }}</span>
+                                    {% else %}
+                                    <small class="text-muted">—</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if item.simulation_runs is defined and item.simulation_runs %}
+                                    <a href="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}/simulation/{{ item.simulation_runs[0].id }}" title="View simulation results"><i class="bi bi-bar-chart-fill text-primary"></i></a>
                                     {% else %}
                                     <small class="text-muted">—</small>
                                     {% endif %}

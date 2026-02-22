@@ -25,8 +25,8 @@
             <i class="bi bi-pencil-square me-2"></i>Score Risk: <code class="me-2">{{ item.risk.risk_ref if item.risk else '—' }}</code>{{ item.risk.title if item.risk else 'Unknown Risk' }}
         </h3>
         <div class="d-flex gap-2 mt-1">
-            <span class="badge bg-light text-dark">{{ METHODOLOGY_LABELS.get(assessment.methodology, assessment.methodology) }}</span>
-            <span class="badge" style="background:{{ RA_ITEM_STATUS_COLORS.get(item.status, '#6c757d') }};">{{ RA_ITEM_STATUS_LABELS.get(item.status, item.status) }}</span>
+            <span class="badge bg-light text-dark">{{ METHODOLOGY_LABELS.get(assessment.methodology, assessment.methodology) if METHODOLOGY_LABELS is defined else assessment.methodology }}</span>
+            <span class="badge" style="background:{{ RA_ITEM_STATUS_COLORS.get(item.status, '#6c757d') if RA_ITEM_STATUS_COLORS is defined else '#6c757d' }};">{{ RA_ITEM_STATUS_LABELS.get(item.status, item.status) if RA_ITEM_STATUS_LABELS is defined else item.status }}</span>
         </div>
     </div>
     <a href="/risk-assessments/{{ assessment.id }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Assessment</a>
@@ -85,19 +85,19 @@
                     <div class="row g-3">
                         <div class="col-md-5">
                             <label class="form-label fw-semibold">Likelihood (1-5) <span class="text-danger">*</span></label>
-                            <select name="inherent_likelihood" id="inherentLikelihood" class="form-select" required>
+                            <select name="likelihood" id="inherentLikelihood" class="form-select" required>
                                 <option value="">-- Select --</option>
                                 {% for v in [1,2,3,4,5] %}
-                                <option value="{{ v }}" {{ 'selected' if item.inherent_likelihood == v }}>{{ v }} — {{ LIKELIHOOD_DESCRIPTORS[v] }}</option>
+                                <option value="{{ v }}" {{ 'selected' if item.likelihood == v }}>{{ v }} — {{ LIKELIHOOD_DESCRIPTORS[v] }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label fw-semibold">Impact (1-5) <span class="text-danger">*</span></label>
-                            <select name="inherent_impact" id="inherentImpact" class="form-select" required>
+                            <select name="impact" id="inherentImpact" class="form-select" required>
                                 <option value="">-- Select --</option>
                                 {% for v in [1,2,3,4,5] %}
-                                <option value="{{ v }}" {{ 'selected' if item.inherent_impact == v }}>{{ v }} — {{ IMPACT_DESCRIPTORS[v] }}</option>
+                                <option value="{{ v }}" {{ 'selected' if item.impact == v }}>{{ v }} — {{ IMPACT_DESCRIPTORS[v] }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -201,6 +201,180 @@
                     </div>
                 </div>
             </div>
+
+            {# ── FAIR Factor Analysis (Monte Carlo inputs) ── #}
+            <div class="card mb-3 border-primary">
+                <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#fairFactors" role="button">
+                    <strong><i class="bi bi-dice-5 me-1"></i>FAIR Factor Analysis (Monte Carlo)</strong>
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="collapse {{ 'show' if item.tef_min is not none }}" id="fairFactors">
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">Define ranges (min / most-likely / max) for each FAIR factor to enable probabilistic simulation. All fields required for simulation.</p>
+
+                        {# TEF Row #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Threat Event Frequency (TEF) <small class="text-muted fw-normal">— events attempted per year</small></label>
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Min</span>
+                                        <input type="number" name="tef_min" class="form-control" min="0" step="0.1"
+                                               value="{{ item.tef_min if item.tef_min is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Likely</span>
+                                        <input type="number" name="tef_likely" class="form-control" min="0" step="0.1"
+                                               value="{{ item.tef_likely if item.tef_likely is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Max</span>
+                                        <input type="number" name="tef_max" class="form-control" min="0" step="0.1"
+                                               value="{{ item.tef_max if item.tef_max is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# VULN Row #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Vulnerability (VULN) <small class="text-muted fw-normal">— probability an event results in loss (0-1)</small></label>
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Min</span>
+                                        <input type="number" name="vuln_min" class="form-control" min="0" max="1" step="0.01"
+                                               value="{{ item.vuln_min if item.vuln_min is not none else '' }}" placeholder="0.00">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Likely</span>
+                                        <input type="number" name="vuln_likely" class="form-control" min="0" max="1" step="0.01"
+                                               value="{{ item.vuln_likely if item.vuln_likely is not none else '' }}" placeholder="0.00">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Max</span>
+                                        <input type="number" name="vuln_max" class="form-control" min="0" max="1" step="0.01"
+                                               value="{{ item.vuln_max if item.vuln_max is not none else '' }}" placeholder="0.00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# PLM Row #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Primary Loss Magnitude (PLM) <small class="text-muted fw-normal">— direct financial impact per incident ($)</small></label>
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$ Min</span>
+                                        <input type="number" name="plm_min" class="form-control" min="0" step="100"
+                                               value="{{ item.plm_min|int if item.plm_min is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$ Likely</span>
+                                        <input type="number" name="plm_likely" class="form-control" min="0" step="100"
+                                               value="{{ item.plm_likely|int if item.plm_likely is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$ Max</span>
+                                        <input type="number" name="plm_max" class="form-control" min="0" step="100"
+                                               value="{{ item.plm_max|int if item.plm_max is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# SLM Row #}
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Secondary Loss Magnitude (SLM) <small class="text-muted fw-normal">— indirect costs: reputation, regulatory, legal ($)</small></label>
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$ Min</span>
+                                        <input type="number" name="slm_min" class="form-control" min="0" step="100"
+                                               value="{{ item.slm_min|int if item.slm_min is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$ Likely</span>
+                                        <input type="number" name="slm_likely" class="form-control" min="0" step="100"
+                                               value="{{ item.slm_likely|int if item.slm_likely is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">$ Max</span>
+                                        <input type="number" name="slm_max" class="form-control" min="0" step="100"
+                                               value="{{ item.slm_max|int if item.slm_max is not none else '' }}" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Scenario Context ── #}
+            <div class="card mb-3">
+                <div class="card-header"><strong><i class="bi bi-link-45deg me-1"></i>Scenario Context</strong></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Linked Asset</label>
+                            <select name="asset_id" class="form-select">
+                                <option value="">-- None --</option>
+                                {% for a in assets %}
+                                <option value="{{ a.id }}" {{ 'selected' if item.asset_id == a.id }}>{{ a.asset_ref }} — {{ a.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Linked Vendor</label>
+                            <select name="vendor_link_id" class="form-select">
+                                <option value="">-- None --</option>
+                                {% for v in vendors %}
+                                <option value="{{ v.id }}" {{ 'selected' if item.vendor_link_id == v.id }}>{{ v.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Treatment Decision ── #}
+            <div class="card mb-3">
+                <div class="card-header"><strong><i class="bi bi-shield-check me-1"></i>Treatment Decision</strong></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Treatment Type</label>
+                            <select name="treatment_decision" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for td in VALID_TREATMENT_DECISIONS %}
+                                <option value="{{ td }}" {{ 'selected' if item.treatment_decision == td }}>{{ TREATMENT_DECISION_LABELS.get(td, td) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">Rationale</label>
+                            <textarea name="treatment_decision_rationale" class="form-control" rows="2" placeholder="Justify treatment decision...">{{ item.treatment_decision_rationale if item.treatment_decision_rationale else '' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
             {% endif %}
 
             {# Common Fields #}
@@ -223,7 +397,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Existing Controls</label>
-                        <textarea name="existing_controls" class="form-control" rows="3" placeholder="Note current controls mitigating this risk...">{{ item.existing_controls if item.existing_controls else '' }}</textarea>
+                        <textarea name="existing_controls_notes" class="form-control" rows="3" placeholder="Note current controls mitigating this risk...">{{ item.existing_controls_notes if item.existing_controls_notes else '' }}</textarea>
                         <div class="form-text">Note current controls mitigating this risk (used to inform residual scoring).</div>
                     </div>
                     <div class="mb-3">
@@ -246,6 +420,105 @@
 
         {# Right sidebar with scoring reference #}
         <div class="col-lg-4">
+            {# Simulation Summary (if exists) #}
+            {% if latest_sim %}
+            <div class="card mb-3 border-primary">
+                <div class="card-header bg-primary bg-opacity-10"><strong><i class="bi bi-dice-5 me-1"></i>Latest Simulation</strong></div>
+                <div class="card-body small">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Mean ALE</span>
+                        <span class="fw-bold">${{ "{:,.0f}".format(latest_sim.mean_ale) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">90th Percentile</span>
+                        <span class="fw-bold text-danger">${{ "{:,.0f}".format(latest_sim.p90_ale) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">95th Percentile</span>
+                        <span class="fw-bold text-danger">${{ "{:,.0f}".format(latest_sim.p95_ale) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">Iterations</span>
+                        <span>{{ "{:,}".format(latest_sim.iterations) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted">Distribution</span>
+                        <span>{{ SIMULATION_DISTRIBUTION_LABELS.get(latest_sim.distribution_type, latest_sim.distribution_type) }}</span>
+                    </div>
+                    <a href="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}/simulation/{{ latest_sim.id }}" class="btn btn-outline-primary btn-sm w-100"><i class="bi bi-bar-chart me-1"></i>View Full Results</a>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Run Simulation Card #}
+            {% if assessment.methodology in ['QUANTITATIVE', 'SEMI_QUANTITATIVE'] %}
+            <div class="card mb-3 border-success">
+                <div class="card-header bg-success bg-opacity-10"><strong><i class="bi bi-play-circle me-1"></i>Run Monte Carlo Simulation</strong></div>
+                <div class="card-body small">
+                    <p class="text-muted mb-2">Fill FAIR factor inputs (TEF, VULN, PLM, SLM) and save, then run simulation.</p>
+                    <form method="post" action="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}/simulate">
+                        <div class="mb-2">
+                            <label class="form-label">Iterations</label>
+                            <select name="iterations" class="form-select form-select-sm">
+                                <option value="1000">1,000 (fast)</option>
+                                <option value="5000">5,000</option>
+                                <option value="10000" selected>10,000 (recommended)</option>
+                                <option value="25000">25,000</option>
+                                <option value="50000">50,000 (slow)</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Distribution</label>
+                            <select name="distribution" class="form-select form-select-sm">
+                                {% for d in VALID_SIMULATION_DISTRIBUTIONS %}
+                                <option value="{{ d }}">{{ SIMULATION_DISTRIBUTION_LABELS.get(d, d) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Seed (optional)</label>
+                            <input type="number" name="seed" class="form-control form-control-sm" placeholder="For reproducibility">
+                        </div>
+                        <button type="submit" class="btn btn-success btn-sm w-100" id="runSimBtn"
+                                {% if item.tef_min is none or item.vuln_min is none or item.plm_min is none or item.slm_min is none %}disabled{% endif %}>
+                            <i class="bi bi-lightning me-1"></i>Run Simulation
+                        </button>
+                        {% if item.tef_min is none or item.vuln_min is none or item.plm_min is none or item.slm_min is none %}
+                        <div class="form-text text-warning mt-1"><i class="bi bi-exclamation-triangle me-1"></i>Save FAIR factors first</div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+
+            {# Control Links Card #}
+            <div class="card mb-3">
+                <div class="card-header"><strong><i class="bi bi-diagram-3 me-1"></i>Scenario Controls</strong></div>
+                <div class="card-body small">
+                    <form method="post" action="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}/control-links">
+                        {% set linked_impl_ids = item.control_links|map(attribute='implementation_id')|list if item.control_links else [] %}
+                        {% for ci in control_implementations %}
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="implementation_ids" value="{{ ci.id }}"
+                                   id="ci_{{ ci.id }}" {{ 'checked' if ci.id in linked_impl_ids }}>
+                            <label class="form-check-label" for="ci_{{ ci.id }}">
+                                {{ ci.control.control_ref if ci.control else '' }} — {{ ci.control.name if ci.control else 'Unknown' }}
+                                <br><small class="text-muted">{{ EFFECTIVENESS_LABELS.get(ci.effectiveness, ci.effectiveness) }}{% if ci.vendor %} ({{ ci.vendor.name }}){% endif %}</small>
+                            </label>
+                            <input type="number" name="weight_{{ ci.id }}" class="form-control form-control-sm mt-1" min="0" max="1" step="0.1"
+                                   value="{% for cl in item.control_links if cl.implementation_id == ci.id %}{{ cl.weight }}{% endfor %}{{ '1.0' if ci.id not in linked_impl_ids }}"
+                                   placeholder="Weight (0-1)" style="width:120px;{{ 'display:none' if ci.id not in linked_impl_ids }}" id="weight_{{ ci.id }}">
+                        </div>
+                        {% endfor %}
+                        {% if not control_implementations %}
+                        <p class="text-muted fst-italic">No control implementations available.</p>
+                        {% else %}
+                        <button type="submit" class="btn btn-outline-primary btn-sm mt-2 w-100"><i class="bi bi-save me-1"></i>Save Control Links</button>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="card mb-3">
                 <div class="card-header"><strong>Scoring Reference</strong></div>
                 <div class="card-body small">
@@ -431,6 +704,16 @@
     if (assetValue) assetValue.addEventListener('input', updateFinancials);
     if (exposureFactor) exposureFactor.addEventListener('input', updateFinancials);
     if (aroValue) aroValue.addEventListener('input', updateFinancials);
+
+    // Control links: toggle weight inputs
+    document.querySelectorAll('[name="implementation_ids"]').forEach(function(cb) {
+        var weightInput = document.getElementById('weight_' + cb.value);
+        if (weightInput) {
+            cb.addEventListener('change', function() {
+                weightInput.style.display = cb.checked ? '' : 'none';
+            });
+        }
+    });
 
     // Initialize on load
     updateInherentScore();

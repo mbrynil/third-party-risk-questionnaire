@@ -8,6 +8,7 @@ from datetime import datetime
 from app import templates
 from models import (
     get_db, User, Risk, RiskAssessment, RiskAssessmentItem, RiskIntake, RiskAssessmentTemplate,
+    ControlImplementation, Control, Asset, Vendor, ScenarioControlLink, RiskSimulationRun,
     VALID_RA_STATUSES, RA_STATUS_LABELS, RA_STATUS_COLORS,
     VALID_RAI_STATUSES, RAI_STATUS_LABELS, RAI_STATUS_COLORS,
     VALID_ASSESSMENT_METHODOLOGIES, ASSESSMENT_METHODOLOGY_LABELS,
@@ -18,6 +19,9 @@ from models import (
     LIKELIHOOD_DESCRIPTORS, IMPACT_DESCRIPTORS,
     get_risk_level_label, RISK_LEVEL_COLORS,
     VALID_CONTROL_DOMAINS,
+    VALID_SIMULATION_DISTRIBUTIONS, SIMULATION_DISTRIBUTION_LABELS,
+    VALID_TREATMENT_DECISIONS, TREATMENT_DECISION_LABELS,
+    EFFECTIVENESS_LABELS,
     AUDIT_ACTION_CREATE, AUDIT_ACTION_UPDATE, AUDIT_ACTION_DELETE, AUDIT_ACTION_STATUS_CHANGE,
     AUDIT_ENTITY_RISK_ASSESSMENT, AUDIT_ENTITY_RISK_INTAKE,
 )
@@ -25,6 +29,7 @@ from app.services.auth_service import require_role, require_login
 from app.services.audit_service import log_audit
 from app.services import risk_assessment_service as ra_svc
 from app.services import risk_intake_service as intake_svc
+from app.services import monte_carlo_service as mc_svc
 
 router = APIRouter()
 _analyst_dep = require_role("admin", "analyst")
@@ -675,12 +680,18 @@ async def assessment_item_form(
     assessment = ra_svc.get_assessment(db, assessment_id)
     if not assessment:
         raise HTTPException(status_code=404, detail="Risk assessment not found")
-    item = db.query(RiskAssessmentItem).filter(
-        RiskAssessmentItem.id == item_id,
-        RiskAssessmentItem.assessment_id == assessment_id,
-    ).first()
-    if not item:
+    item = ra_svc.get_item_with_simulation(db, item_id)
+    if not item or item.assessment_id != assessment_id:
         raise HTTPException(status_code=404, detail="Assessment item not found")
+
+    # For FAIR analysis: org-level control implementations, assets, vendors
+    control_implementations = db.query(ControlImplementation).join(Control).order_by(Control.control_ref).all()
+    assets = db.query(Asset).filter(Asset.is_active == True).order_by(Asset.name).all()
+    vendors = db.query(Vendor).filter(Vendor.status == "ACTIVE").order_by(Vendor.name).all()
+
+    # Latest simulation run
+    latest_sim = item.simulation_runs[0] if item.simulation_runs else None
+
     return templates.TemplateResponse("risk_assessment_item.html", {
         "request": request,
         "assessment": assessment,
@@ -692,6 +703,15 @@ async def assessment_item_form(
         "IMPACT_DESCRIPTORS": IMPACT_DESCRIPTORS,
         "get_risk_level_label": get_risk_level_label,
         "RISK_LEVEL_COLORS": RISK_LEVEL_COLORS,
+        "control_implementations": control_implementations,
+        "assets": assets,
+        "vendors": vendors,
+        "latest_sim": latest_sim,
+        "VALID_TREATMENT_DECISIONS": VALID_TREATMENT_DECISIONS,
+        "TREATMENT_DECISION_LABELS": TREATMENT_DECISION_LABELS,
+        "EFFECTIVENESS_LABELS": EFFECTIVENESS_LABELS,
+        "VALID_SIMULATION_DISTRIBUTIONS": VALID_SIMULATION_DISTRIBUTIONS,
+        "SIMULATION_DISTRIBUTION_LABELS": SIMULATION_DISTRIBUTION_LABELS,
     })
 
 
@@ -737,6 +757,23 @@ async def assessment_item_assess(
         scores["asset_value"] = float(asset_value) if asset_value else None
         scores["exposure_factor"] = float(exposure_factor) if exposure_factor else None
         scores["annual_rate_of_occurrence"] = float(aro) if aro else None
+
+    # FAIR factor fields (for QUANTITATIVE and SEMI_QUANTITATIVE)
+    if assessment.methodology in ("QUANTITATIVE", "SEMI_QUANTITATIVE"):
+        fair_fields = [
+            "tef_min", "tef_likely", "tef_max",
+            "vuln_min", "vuln_likely", "vuln_max",
+            "plm_min", "plm_likely", "plm_max",
+            "slm_min", "slm_likely", "slm_max",
+        ]
+        for field in fair_fields:
+            val = form.get(field)
+            scores[field] = float(val) if val else None
+
+        scores["asset_id"] = form.get("asset_id") or None
+        scores["vendor_link_id"] = form.get("vendor_link_id") or None
+        scores["treatment_decision"] = form.get("treatment_decision") or None
+        scores["treatment_decision_rationale"] = form.get("treatment_decision_rationale") or None
 
     # Common fields (all methodologies)
     scores["confidence_level"] = form.get("confidence_level") or None
@@ -929,4 +966,171 @@ async def assessment_compare(
         "ASSESSMENT_METHODOLOGY_LABELS": ASSESSMENT_METHODOLOGY_LABELS,
         "get_risk_level_label": get_risk_level_label,
         "RISK_LEVEL_COLORS": RISK_LEVEL_COLORS,
+    })
+
+
+# ==================== MONTE CARLO SIMULATION ====================
+
+@router.post("/risk-assessments/{assessment_id}/items/{item_id}/simulate", response_class=HTMLResponse)
+async def run_simulation(
+    request: Request,
+    assessment_id: int,
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    assessment = ra_svc.get_assessment(db, assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Risk assessment not found")
+    item = db.query(RiskAssessmentItem).filter(
+        RiskAssessmentItem.id == item_id,
+        RiskAssessmentItem.assessment_id == assessment_id,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Assessment item not found")
+
+    form = await request.form()
+    iterations = int(form.get("iterations", 10000))
+    iterations = max(1000, min(50000, iterations))
+    seed = form.get("seed")
+    seed = int(seed) if seed else None
+    distribution = form.get("distribution", "PERT")
+    if distribution not in VALID_SIMULATION_DISTRIBUTIONS:
+        distribution = "PERT"
+
+    run = mc_svc.run_and_store(db, item_id, user_id=current_user.id,
+                                iterations=iterations, seed=seed, distribution=distribution)
+    if not run:
+        return RedirectResponse(
+            url=f"/risk-assessments/{assessment_id}/items/{item_id}?message=Missing FAIR factor inputs — fill all min/likely/max fields before simulating&message_type=danger",
+            status_code=303,
+        )
+
+    log_audit(db, action=AUDIT_ACTION_UPDATE, entity_type=AUDIT_ENTITY_RISK_ASSESSMENT,
+              entity_id=assessment_id, entity_label=assessment.assessment_ref,
+              description=f"Ran Monte Carlo simulation ({iterations} iterations) on item {item_id}",
+              actor_user=current_user)
+    db.commit()
+    return RedirectResponse(
+        url=f"/risk-assessments/{assessment_id}/items/{item_id}/simulation/{run.id}",
+        status_code=303,
+    )
+
+
+@router.get("/risk-assessments/{assessment_id}/items/{item_id}/simulation/{run_id}", response_class=HTMLResponse)
+async def simulation_results(
+    request: Request,
+    assessment_id: int,
+    item_id: int,
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    import json as json_lib
+    assessment = ra_svc.get_assessment(db, assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Risk assessment not found")
+    item = ra_svc.get_item_with_simulation(db, item_id)
+    if not item or item.assessment_id != assessment_id:
+        raise HTTPException(status_code=404, detail="Assessment item not found")
+
+    run = db.query(RiskSimulationRun).filter(
+        RiskSimulationRun.id == run_id,
+        RiskSimulationRun.item_id == item_id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Simulation run not found")
+
+    histogram = json_lib.loads(run.histogram_json) if run.histogram_json else []
+    exceedance = json_lib.loads(run.exceedance_json) if run.exceedance_json else []
+    sensitivity = json_lib.loads(run.sensitivity_json) if run.sensitivity_json else []
+
+    return templates.TemplateResponse("risk_simulation_results.html", {
+        "request": request,
+        "assessment": assessment,
+        "item": item,
+        "run": run,
+        "histogram": histogram,
+        "exceedance": exceedance,
+        "sensitivity": sensitivity,
+        "histogram_json": run.histogram_json or "[]",
+        "exceedance_json": run.exceedance_json or "[]",
+        "sensitivity_json": run.sensitivity_json or "[]",
+        "ASSESSMENT_METHODOLOGY_LABELS": ASSESSMENT_METHODOLOGY_LABELS,
+        "SIMULATION_DISTRIBUTION_LABELS": SIMULATION_DISTRIBUTION_LABELS,
+        "EFFECTIVENESS_LABELS": EFFECTIVENESS_LABELS,
+    })
+
+
+@router.post("/risk-assessments/{assessment_id}/items/{item_id}/control-links", response_class=HTMLResponse)
+async def save_control_links(
+    request: Request,
+    assessment_id: int,
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_analyst_dep),
+):
+    assessment = ra_svc.get_assessment(db, assessment_id)
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Risk assessment not found")
+    item = db.query(RiskAssessmentItem).filter(
+        RiskAssessmentItem.id == item_id,
+        RiskAssessmentItem.assessment_id == assessment_id,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Assessment item not found")
+
+    form = await request.form()
+    impl_ids = form.getlist("implementation_ids")
+
+    # Delete existing links and recreate
+    db.query(ScenarioControlLink).filter(ScenarioControlLink.item_id == item_id).delete()
+
+    for impl_id_str in impl_ids:
+        impl_id = int(impl_id_str)
+        impl = db.query(ControlImplementation).filter(ControlImplementation.id == impl_id).first()
+        if impl:
+            weight_str = form.get(f"weight_{impl_id}", "1.0")
+            weight = float(weight_str) if weight_str else 1.0
+            weight = max(0.0, min(1.0, weight))
+            link = ScenarioControlLink(
+                item_id=item_id,
+                implementation_id=impl_id,
+                effectiveness_at_assessment=impl.effectiveness,
+                weight=weight,
+            )
+            db.add(link)
+
+    log_audit(db, action=AUDIT_ACTION_UPDATE, entity_type=AUDIT_ENTITY_RISK_ASSESSMENT,
+              entity_id=assessment_id, entity_label=assessment.assessment_ref,
+              description=f"Updated control links for item {item_id}",
+              actor_user=current_user)
+    db.commit()
+    return RedirectResponse(
+        url=f"/risk-assessments/{assessment_id}/items/{item_id}?message=Control links saved&message_type=success",
+        status_code=303,
+    )
+
+
+@router.get("/risk-assessments/{assessment_id}/executive-summary", response_class=HTMLResponse)
+async def executive_summary(
+    request: Request,
+    assessment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    summary = ra_svc.get_executive_summary_data(db, assessment_id)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Risk assessment not found")
+
+    return templates.TemplateResponse("risk_executive_summary.html", {
+        "request": request,
+        "summary": summary,
+        "assessment": summary["assessment"],
+        "ASSESSMENT_METHODOLOGY_LABELS": ASSESSMENT_METHODOLOGY_LABELS,
+        "RA_STATUS_LABELS": RA_STATUS_LABELS,
+        "RA_STATUS_COLORS": RA_STATUS_COLORS,
+        "get_risk_level_label": get_risk_level_label,
+        "RISK_LEVEL_COLORS": RISK_LEVEL_COLORS,
+        "TREATMENT_DECISION_LABELS": TREATMENT_DECISION_LABELS,
     })

@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from models import (
     RiskAssessment, RiskAssessmentItem, RiskAssessmentTemplate, Risk, User,
-    OrgRiskSnapshot,
+    OrgRiskSnapshot, ScenarioControlLink, RiskSimulationRun,
     RA_STATUS_DRAFT, RA_STATUS_IN_PROGRESS, RA_STATUS_UNDER_REVIEW,
     RA_STATUS_APPROVED, RA_STATUS_COMPLETED, RA_STATUS_CANCELLED,
     VALID_RA_STATUSES,
@@ -63,6 +63,7 @@ def get_assessment(db: Session, assessment_id: int):
         joinedload(RiskAssessment.items).joinedload(RiskAssessmentItem.risk),
         joinedload(RiskAssessment.items).joinedload(RiskAssessmentItem.assessor),
         joinedload(RiskAssessment.items).joinedload(RiskAssessmentItem.reviewer),
+        joinedload(RiskAssessment.items).joinedload(RiskAssessmentItem.simulation_runs),
     ).filter(RiskAssessment.id == assessment_id).first()
 
 
@@ -260,6 +261,31 @@ def assess_item(db: Session, item_id: int, **kwargs):
         item.annual_rate_of_occurrence = float(kwargs["annual_rate_of_occurrence"])
     if item.single_loss_expectancy is not None and item.annual_rate_of_occurrence is not None:
         item.annualized_loss_expectancy = item.single_loss_expectancy * item.annual_rate_of_occurrence
+
+    # --- FAIR factor inputs ---
+    fair_fields = [
+        "tef_min", "tef_likely", "tef_max",
+        "vuln_min", "vuln_likely", "vuln_max",
+        "plm_min", "plm_likely", "plm_max",
+        "slm_min", "slm_likely", "slm_max",
+    ]
+    for field in fair_fields:
+        if field in kwargs and kwargs[field] is not None:
+            setattr(item, field, float(kwargs[field]))
+        elif field in kwargs:
+            setattr(item, field, None)
+
+    # --- Scenario context ---
+    if "asset_id" in kwargs:
+        item.asset_id = int(kwargs["asset_id"]) if kwargs["asset_id"] else None
+    if "vendor_link_id" in kwargs:
+        item.vendor_link_id = int(kwargs["vendor_link_id"]) if kwargs["vendor_link_id"] else None
+
+    # --- Treatment decision ---
+    if "treatment_decision" in kwargs:
+        item.treatment_decision = kwargs["treatment_decision"] or None
+    if "treatment_decision_rationale" in kwargs:
+        item.treatment_decision_rationale = kwargs["treatment_decision_rationale"] or None
 
     # --- Metadata ---
     for field in ("confidence_level", "rationale", "existing_controls_notes",
@@ -533,3 +559,67 @@ def get_comparison_data(db: Session, assessment_id: int) -> dict:
         })
 
     return {"current": current, "previous": previous, "deltas": deltas}
+
+
+# ── Simulation helpers ───────────────────────────────────────────────────
+
+def get_item_with_simulation(db: Session, item_id: int):
+    """Load an assessment item with control_links, simulation_runs, asset, vendor eagerly."""
+    return db.query(RiskAssessmentItem).options(
+        joinedload(RiskAssessmentItem.risk),
+        joinedload(RiskAssessmentItem.assessor),
+        joinedload(RiskAssessmentItem.reviewer),
+        joinedload(RiskAssessmentItem.control_links).joinedload(ScenarioControlLink.implementation),
+        joinedload(RiskAssessmentItem.simulation_runs),
+        joinedload(RiskAssessmentItem.asset),
+        joinedload(RiskAssessmentItem.vendor_link),
+    ).filter(RiskAssessmentItem.id == item_id).first()
+
+
+def get_executive_summary_data(db: Session, assessment_id: int) -> dict:
+    """Aggregate simulation data across all items in an assessment for executive summary."""
+    assessment = db.query(RiskAssessment).options(
+        joinedload(RiskAssessment.lead),
+        joinedload(RiskAssessment.items).joinedload(RiskAssessmentItem.risk),
+        joinedload(RiskAssessment.items).joinedload(RiskAssessmentItem.simulation_runs),
+    ).filter(RiskAssessment.id == assessment_id).first()
+
+    if not assessment:
+        return None
+
+    items_data = []
+    total_mean = 0.0
+    total_p90 = 0.0
+    simulated_count = 0
+
+    for item in assessment.items:
+        latest_run = None
+        if item.simulation_runs:
+            latest_run = item.simulation_runs[0]  # ordered desc by run_at
+
+        item_info = {
+            "item": item,
+            "risk": item.risk,
+            "latest_run": latest_run,
+            "has_simulation": latest_run is not None,
+        }
+        items_data.append(item_info)
+
+        if latest_run:
+            total_mean += latest_run.mean_ale or 0.0
+            total_p90 += latest_run.p90_ale or 0.0
+            simulated_count += 1
+
+    # Sort by P90 descending for top risks
+    simulated_items = [d for d in items_data if d["has_simulation"]]
+    top_risks_by_p90 = sorted(simulated_items, key=lambda d: d["latest_run"].p90_ale or 0, reverse=True)[:5]
+
+    return {
+        "assessment": assessment,
+        "items_data": items_data,
+        "total_mean_ale": round(total_mean, 2),
+        "total_p90_ale": round(total_p90, 2),
+        "simulated_count": simulated_count,
+        "total_items": len(assessment.items),
+        "top_risks_by_p90": top_risks_by_p90,
+    }
