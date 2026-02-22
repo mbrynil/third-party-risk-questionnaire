@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+
+{% block title %}{{ assessment.assessment_ref }} — {{ assessment.title }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item active">{{ assessment.assessment_ref }}</li>
+{% endblock %}
+
+{% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# Header #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <code class="me-2">{{ assessment.assessment_ref }}</code>{{ assessment.title }}
+        </h3>
+        <div class="d-flex gap-2 mt-1">
+            <span class="badge bg-light text-dark">{{ ASSESSMENT_METHODOLOGY_LABELS.get(assessment.methodology, assessment.methodology) }}</span>
+            <span class="badge" style="background:{{ RA_STATUS_COLORS.get(assessment.status, '#6c757d') }};">{{ RA_STATUS_LABELS.get(assessment.status, assessment.status) }}</span>
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <a href="/risk-assessments/{{ assessment.id }}/edit" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
+        {% endif %}
+        {% if request.state.current_user and request.state.current_user.role == 'admin' %}
+        <form method="post" action="/risk-assessments/{{ assessment.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this assessment campaign? This cannot be undone.');">
+            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete</button>
+        </form>
+        {% endif %}
+        <a href="/risk-assessments" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+    </div>
+</div>
+
+{# Status Action Bar #}
+{% if assessment.status not in ['COMPLETED', 'CANCELLED'] %}
+<div class="card mb-4 border-start border-4" style="border-left-color:{{ RA_STATUS_COLORS.get(assessment.status, '#6c757d') }} !important;">
+    <div class="card-body py-2 d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-arrow-right-circle text-muted"></i>
+            <small class="text-muted fw-semibold">Status Transition</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            {% if assessment.status == 'DRAFT' %}
+            <form method="post" action="/risk-assessments/{{ assessment.id }}/status" class="d-inline">
+                <input type="hidden" name="status" value="IN_PROGRESS">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-play-fill me-1"></i>Start Assessment</button>
+            </form>
+            {% elif assessment.status == 'IN_PROGRESS' %}
+            <form method="post" action="/risk-assessments/{{ assessment.id }}/status" class="d-inline">
+                <input type="hidden" name="status" value="UNDER_REVIEW">
+                <button type="submit" class="btn btn-sm btn-warning"><i class="bi bi-send me-1"></i>Submit for Review</button>
+            </form>
+            {% elif assessment.status == 'UNDER_REVIEW' %}
+            <form method="post" action="/risk-assessments/{{ assessment.id }}/status" class="d-inline">
+                <input type="hidden" name="status" value="APPROVED">
+                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-circle me-1"></i>Approve</button>
+            </form>
+            {% elif assessment.status == 'APPROVED' %}
+            <form method="post" action="/risk-assessments/{{ assessment.id }}/status" class="d-inline">
+                <input type="hidden" name="status" value="COMPLETED">
+                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-flag-fill me-1"></i>Complete</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/risk-assessments/{{ assessment.id }}/status" class="d-inline" onsubmit="return confirm('Cancel this assessment campaign?');">
+                <input type="hidden" name="status" value="CANCELLED">
+                <button type="submit" class="btn btn-link btn-sm text-danger p-0" style="font-size:0.8rem;">Cancel Assessment</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    {# Left Column #}
+    <div class="col-lg-8">
+
+        {# Description / Scope #}
+        {% if assessment.description or assessment.scope %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Description &amp; Scope</strong></div>
+            <div class="card-body">
+                {% if assessment.description %}
+                <h6 class="text-muted mb-1">Description</h6>
+                <p style="white-space:pre-wrap;" class="mb-3">{{ assessment.description }}</p>
+                {% endif %}
+                {% if assessment.scope %}
+                <h6 class="text-muted mb-1">Scope</h6>
+                <p style="white-space:pre-wrap;" class="mb-0">{{ assessment.scope }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Assessment Items #}
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Assessment Items</strong>
+                    <span class="badge bg-secondary ms-1">{{ assessment.items|length }}</span>
+                </div>
+                {% if assessment.status in ['DRAFT', 'IN_PROGRESS'] and request.state.current_user and request.state.current_user.role != 'viewer' %}
+                <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#addRisksSection">
+                    <i class="bi bi-plus-lg me-1"></i>Add Risks
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if assessment.items %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:90px;">Risk Ref</th>
+                                <th>Risk Title</th>
+                                <th>Category</th>
+                                <th>Assessor</th>
+                                <th style="width:110px;">Status</th>
+                                <th style="width:120px;">Inherent Score</th>
+                                <th style="width:100px;">Residual Score</th>
+                                <th class="text-end" style="width:120px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in assessment.items %}
+                            <tr>
+                                <td>
+                                    {% if item.risk %}
+                                    <a href="/risks/{{ item.risk.id }}" class="text-decoration-none fw-semibold">{{ item.risk.risk_ref }}</a>
+                                    {% else %}
+                                    <small class="text-muted">—</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.risk %}
+                                    {{ item.risk.title }}
+                                    {% else %}
+                                    <small class="text-muted fst-italic">Unknown risk</small>
+                                    {% endif %}
+                                </td>
+                                <td><small class="text-muted">{{ item.risk.risk_category if item.risk and item.risk.risk_category else '—' }}</small></td>
+                                <td>
+                                    <small class="text-muted">{{ item.assessor.display_name if item.assessor else 'Unassigned' }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge" style="background:{{ RAI_STATUS_COLORS.get(item.status, '#6c757d') }};">{{ RAI_STATUS_LABELS.get(item.status, item.status) }}</span>
+                                </td>
+                                <td>
+                                    {% if item.inherent_score %}
+                                    <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(item.inherent_score)] }};">{{ get_risk_level_label(item.inherent_score) }}</span>
+                                    <small class="text-muted ms-1">({{ item.inherent_score }})</small>
+                                    {% else %}
+                                    <small class="text-muted fst-italic">Not scored</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.residual_score %}
+                                    <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(item.residual_score)] }};font-size:0.7rem;">{{ item.residual_score }}</span>
+                                    {% else %}
+                                    <small class="text-muted">—</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        {% if item.status in ['PENDING', 'IN_PROGRESS'] %}
+                                        <a href="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}" class="btn btn-sm btn-outline-primary" title="Score"><i class="bi bi-pencil-square me-1"></i>Score</a>
+                                        {% elif item.status == 'ASSESSED' %}
+                                        <a href="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}" class="btn btn-sm btn-outline-warning" title="Review"><i class="bi bi-eye-fill me-1"></i>Review</a>
+                                        {% elif item.status == 'REVIEWED' %}
+                                        <a href="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}" class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></a>
+                                        {% endif %}
+                                        {% if assessment.status == 'DRAFT' and request.state.current_user and request.state.current_user.role != 'viewer' %}
+                                        <form method="post" action="/risk-assessments/{{ assessment.id }}/remove-item/{{ item.id }}" class="d-inline" onsubmit="return confirm('Remove this risk from the assessment?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove"><i class="bi bi-x-lg"></i></button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-inbox" style="font-size:2rem;color:#d1d5db;"></i>
+                    <p class="text-muted mt-2 mb-0">No risks added yet. Use "Add Risks" to include risks in this assessment.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Add Risks Collapsible #}
+        {% if assessment.status in ['DRAFT', 'IN_PROGRESS'] and request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <div class="collapse mb-3" id="addRisksSection">
+            <div class="card border-primary">
+                <div class="card-header bg-primary bg-opacity-10">
+                    <strong><i class="bi bi-plus-circle me-1"></i>Add Risks to Assessment</strong>
+                </div>
+                <div class="card-body">
+                    {% set existing_risk_ids = assessment.items|map(attribute='risk_id')|list %}
+                    {% set addable_risks = available_risks|rejectattr('id', 'in', existing_risk_ids)|list %}
+                    {% if addable_risks %}
+                    <form method="post" action="/risk-assessments/{{ assessment.id }}/add-risks">
+                        <label class="form-label fw-semibold small">Select risks to include</label>
+                        <select name="risk_ids" class="form-select" multiple size="8">
+                            {% for r in addable_risks %}
+                            <option value="{{ r.id }}">{{ r.risk_ref }} — {{ r.title }}{% if r.risk_category %} ({{ r.risk_category }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text mb-2">Hold Ctrl/Cmd to select multiple risks.</div>
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Add Selected Risks</button>
+                    </form>
+                    {% else %}
+                    <p class="text-muted mb-0">All available risks are already included in this assessment.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Bulk Assign Assessors #}
+        {% if assessment.status in ['DRAFT', 'IN_PROGRESS'] and assessment.items and request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <strong><i class="bi bi-people me-1"></i>Bulk Assign Assessors</strong>
+                <button class="btn btn-sm btn-link float-end p-0" type="button" data-bs-toggle="collapse" data-bs-target="#bulkAssignSection">
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+            </div>
+            <div class="collapse" id="bulkAssignSection">
+                <div class="card-body">
+                    <form method="post" action="/risk-assessments/{{ assessment.id }}/assign">
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-3">
+                                <thead>
+                                    <tr>
+                                        <th style="width:100px;">Risk Ref</th>
+                                        <th>Title</th>
+                                        <th style="width:220px;">Assessor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in assessment.items %}
+                                    <tr>
+                                        <td><code>{{ item.risk.risk_ref if item.risk else '—' }}</code></td>
+                                        <td>{{ item.risk.title if item.risk else 'Unknown' }}</td>
+                                        <td>
+                                            <select name="assessor_{{ item.id }}" class="form-select form-select-sm">
+                                                <option value="">Unassigned</option>
+                                                {% for u in users %}
+                                                <option value="{{ u.id }}" {% if item.assessor_user_id == u.id %}selected{% endif %}>{{ u.display_name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>Save Assignments</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Comments #}
+        {% set comment_entity_type = "risk_assessment" %}
+        {% set comment_entity_id = assessment.id %}
+        {% include "partials/comments.html" with context %}
+    </div>
+
+    {# Right Column / Sidebar #}
+    <div class="col-lg-4">
+
+        {# Details Card #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Details</strong></div>
+            <div class="card-body small">
+                <dl class="mb-0">
+                    <dt>Methodology</dt>
+                    <dd>{{ ASSESSMENT_METHODOLOGY_LABELS.get(assessment.methodology, assessment.methodology) }}</dd>
+                    <dt>Lead Assessor</dt>
+                    <dd>{{ assessment.lead.display_name if assessment.lead else '—' }}</dd>
+                    <dt>Assessment Period</dt>
+                    <dd>
+                        {% if assessment.assessment_period_start and assessment.assessment_period_end %}
+                        {{ assessment.assessment_period_start.strftime('%b %d, %Y') }} — {{ assessment.assessment_period_end.strftime('%b %d, %Y') }}
+                        {% else %}
+                        —
+                        {% endif %}
+                    </dd>
+                    <dt>Due Date</dt>
+                    <dd>
+                        {% if assessment.due_date %}
+                        {{ assessment.due_date.strftime('%b %d, %Y') }}
+                        {% else %}
+                        —
+                        {% endif %}
+                    </dd>
+                    <dt>Risk Appetite Threshold</dt>
+                    <dd>{{ assessment.risk_appetite_threshold }}</dd>
+                    <dt>Created</dt>
+                    <dd>{{ assessment.created_at.strftime('%Y-%m-%d %H:%M') if assessment.created_at else '—' }}</dd>
+                    <dt>Updated</dt>
+                    <dd>{{ assessment.updated_at.strftime('%Y-%m-%d %H:%M') if assessment.updated_at else '—' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        {# Progress Card #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Progress</strong></div>
+            <div class="card-body">
+                {% set total_items = assessment.items|length %}
+                {% set scored_items = assessment.items|selectattr('status', 'in', ['ASSESSED', 'REVIEWED'])|list|length %}
+                {% if total_items > 0 %}
+                <div class="text-center mb-3">
+                    <div style="font-size:2.5rem;font-weight:700;color:#2563eb;">{{ scored_items }}</div>
+                    <div class="text-muted small">of {{ total_items }} items scored</div>
+                    <div class="progress mt-2" style="height:10px;">
+                        <div class="progress-bar bg-success" style="width:{{ (scored_items / total_items * 100)|round }}%;"></div>
+                    </div>
+                    <div class="text-muted small mt-1">{{ (scored_items / total_items * 100)|round|int }}% complete</div>
+                </div>
+                <hr>
+                <h6 class="small fw-semibold text-muted mb-2">Items by Status</h6>
+                {% set pending_count = assessment.items|selectattr('status', 'equalto', 'PENDING')|list|length %}
+                {% set in_progress_count = assessment.items|selectattr('status', 'equalto', 'IN_PROGRESS')|list|length %}
+                {% set assessed_count = assessment.items|selectattr('status', 'equalto', 'ASSESSED')|list|length %}
+                {% set reviewed_count = assessment.items|selectattr('status', 'equalto', 'REVIEWED')|list|length %}
+
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">Pending</small>
+                    <small class="fw-semibold">{{ pending_count }}</small>
+                </div>
+                <div class="progress mb-2" style="height:5px;">
+                    <div class="progress-bar" style="width:{{ (pending_count / total_items * 100)|round }}%;background:#6c757d;"></div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">In Progress</small>
+                    <small class="fw-semibold">{{ in_progress_count }}</small>
+                </div>
+                <div class="progress mb-2" style="height:5px;">
+                    <div class="progress-bar" style="width:{{ (in_progress_count / total_items * 100)|round }}%;background:#0d6efd;"></div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">Assessed</small>
+                    <small class="fw-semibold">{{ assessed_count }}</small>
+                </div>
+                <div class="progress mb-2" style="height:5px;">
+                    <div class="progress-bar" style="width:{{ (assessed_count / total_items * 100)|round }}%;background:#ffc107;"></div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">Reviewed</small>
+                    <small class="fw-semibold">{{ reviewed_count }}</small>
+                </div>
+                <div class="progress mb-2" style="height:5px;">
+                    <div class="progress-bar" style="width:{{ (reviewed_count / total_items * 100)|round }}%;background:#198754;"></div>
+                </div>
+
+                {% else %}
+                <div class="text-center text-muted py-2">
+                    <i class="bi bi-hourglass" style="font-size:1.5rem;"></i>
+                    <p class="small mt-1 mb-0">No items yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Actions Card (when APPROVED) #}
+        {% if assessment.status == 'APPROVED' %}
+        <div class="card mb-3 border-success">
+            <div class="card-header bg-success bg-opacity-10"><strong><i class="bi bi-lightning-charge me-1"></i>Actions</strong></div>
+            <div class="card-body">
+                <form method="post" action="/risk-assessments/{{ assessment.id }}/finalize" onsubmit="return confirm('Finalize this assessment? This will update all linked risk scores.');">
+                    <button type="submit" class="btn btn-success w-100 mb-2"><i class="bi bi-check-all me-1"></i>Finalize &amp; Apply Scores</button>
+                </form>
+                <div class="alert alert-warning py-2 px-3 mb-3" style="font-size:0.8rem;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>This will update all linked risk register scores based on assessment results.
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/risk-assessments/{{ assessment.id }}/report" class="btn btn-outline-secondary btn-sm flex-grow-1"><i class="bi bi-file-earmark-text me-1"></i>View Report</a>
+                    <a href="/risk-assessments/{{ assessment.id }}/compare" class="btn btn-outline-secondary btn-sm flex-grow-1"><i class="bi bi-arrow-left-right me-1"></i>Compare</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

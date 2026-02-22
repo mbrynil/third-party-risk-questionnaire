@@ -30,6 +30,7 @@ from models import (
     backfill_incident_tables, backfill_asset_tables,
     backfill_trust_center_table, ensure_trust_center_config,
     seed_default_policies, seed_default_risks,
+    backfill_risk_assessment_tables, seed_default_assessment_templates,
     SessionLocal,
     Assessment, Response, User, ensure_reminder_config,
     RESPONSE_STATUS_SUBMITTED,
@@ -42,6 +43,7 @@ from app.routers import audit_projects as audit_projects_router
 from app.routers import incidents as incidents_router
 from app.routers import assets as assets_router
 from app.routers import trust_center as trust_center_router
+from app.routers import risk_assessments as risk_assessments_router
 from app.routers import auth as auth_router
 from app.services.auth_service import get_current_user
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -63,6 +65,7 @@ backfill_audit_project_tables()
 backfill_incident_tables()
 backfill_asset_tables()
 backfill_trust_center_table()
+backfill_risk_assessment_tables()
 seed_question_bank()
 seed_risk_statements()
 seed_default_templates()
@@ -77,6 +80,7 @@ backfill_question_bank_item_ids()
 backfill_decision_scores()
 seed_default_policies()
 seed_default_risks()
+seed_default_assessment_templates()
 
 # Ensure default configs exist
 _db = SessionLocal()
@@ -159,6 +163,7 @@ app.include_router(audit_projects_router.router)
 app.include_router(incidents_router.router)
 app.include_router(assets_router.router)
 app.include_router(trust_center_router.router)
+app.include_router(risk_assessments_router.router)
 
 if __name__ == "__main__":
     import uvicorn

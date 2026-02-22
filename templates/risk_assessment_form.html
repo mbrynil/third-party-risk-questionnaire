@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}{{ "Edit " + assessment.assessment_ref if assessment else "New Assessment" }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item active">{{ "Edit " + assessment.assessment_ref if assessment else "New Assessment" }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clipboard-data me-2"></i>{{ "Edit Assessment" if assessment else "New Risk Assessment" }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {# Template selection (create only) #}
+                    {% if not assessment %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Start from Template</label>
+                        <select name="template_id" class="form-select">
+                            <option value="">-- No template (start blank) --</option>
+                            {% for t in templates_list %}
+                            <option value="{{ t.id }}">{{ t.name }}{% if t.methodology %} ({{ ASSESSMENT_METHODOLOGY_LABELS.get(t.methodology, t.methodology) }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Optionally select a template to pre-populate assessment settings.</div>
+                    </div>
+                    <hr class="mb-3">
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required value="{{ assessment.title if assessment else '' }}" placeholder="e.g., Q1 2026 Enterprise Risk Assessment">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="Describe the purpose and objectives of this assessment...">{{ assessment.description if assessment else '' }}</textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Scope</label>
+                        <textarea name="scope" class="form-control" rows="3" placeholder="Define what business areas, processes, and risk categories are in scope...">{{ assessment.scope if assessment else '' }}</textarea>
+                        <div class="form-text">Define what areas and risks are in scope for this assessment.</div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Methodology <span class="text-danger">*</span></label>
+                            <select name="methodology" class="form-select" required>
+                                <option value="">-- Select methodology --</option>
+                                {% for m in VALID_ASSESSMENT_METHODOLOGIES %}
+                                <option value="{{ m }}" {{ 'selected' if assessment and assessment.methodology == m }}>{{ ASSESSMENT_METHODOLOGY_LABELS.get(m, m) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Lead Assessor</label>
+                            <select name="lead_user_id" class="form-select">
+                                <option value="">-- Select lead --</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}" {{ 'selected' if assessment and assessment.lead_user_id == u.id }}>{{ u.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Assessment Period Start</label>
+                            <input type="date" name="assessment_period_start" class="form-control" value="{{ assessment.assessment_period_start.strftime('%Y-%m-%d') if assessment and assessment.assessment_period_start else '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Assessment Period End</label>
+                            <input type="date" name="assessment_period_end" class="form-control" value="{{ assessment.assessment_period_end.strftime('%Y-%m-%d') if assessment and assessment.assessment_period_end else '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Due Date</label>
+                            <input type="date" name="due_date" class="form-control" value="{{ assessment.due_date.strftime('%Y-%m-%d') if assessment and assessment.due_date else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Risk Appetite Threshold</label>
+                            <input type="number" name="risk_appetite_threshold" class="form-control" value="{{ assessment.risk_appetite_threshold if assessment else 10 }}" min="1" max="25">
+                            <div class="form-text">Max acceptable residual risk score (1-25). Scores above this trigger attention.</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Notes</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Any additional notes or context...">{{ assessment.notes if assessment else '' }}</textarea>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{{ "Save Changes" if assessment else "Create Assessment" }}</button>
+                        <a href="{{ '/risk-assessments/' ~ assessment.id if assessment else '/risk-assessments' }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Boolean, text
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime, Boolean, Float, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -1345,7 +1345,8 @@ COMMENT_ENTITY_POLICY = "policy"
 COMMENT_ENTITY_RISK = "risk"
 COMMENT_ENTITY_INCIDENT = "incident"
 COMMENT_ENTITY_ASSET = "asset"
-VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION, COMMENT_ENTITY_CONTROL, COMMENT_ENTITY_CONTROL_IMPL, COMMENT_ENTITY_POLICY, COMMENT_ENTITY_RISK, COMMENT_ENTITY_INCIDENT, COMMENT_ENTITY_ASSET]
+COMMENT_ENTITY_RISK_ASSESSMENT = "risk_assessment"
+VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION, COMMENT_ENTITY_CONTROL, COMMENT_ENTITY_CONTROL_IMPL, COMMENT_ENTITY_POLICY, COMMENT_ENTITY_RISK, COMMENT_ENTITY_INCIDENT, COMMENT_ENTITY_ASSET, COMMENT_ENTITY_RISK_ASSESSMENT]
 
 
 class Comment(Base):
@@ -1777,6 +1778,8 @@ AUDIT_ENTITY_CUSTOM_FRAMEWORK = "custom_framework"
 AUDIT_ENTITY_AUDIT_PROJECT = "audit_project"
 AUDIT_ENTITY_INCIDENT = "incident"
 AUDIT_ENTITY_ASSET = "asset"
+AUDIT_ENTITY_RISK_ASSESSMENT = "risk_assessment"
+AUDIT_ENTITY_RISK_INTAKE = "risk_intake"
 
 
 class AuditLog(Base):
@@ -3722,6 +3725,222 @@ class TrustCenterConfig(Base):
     updated_at = Column(DateTime, default=datetime.utcnow)
 
 
+# ==================== RISK ASSESSMENT MODULE ====================
+
+# Assessment Methodology
+VALID_ASSESSMENT_METHODOLOGIES = ["QUALITATIVE", "QUANTITATIVE", "SEMI_QUANTITATIVE"]
+ASSESSMENT_METHODOLOGY_LABELS = {
+    "QUALITATIVE": "Qualitative (Likelihood \u00d7 Impact)",
+    "QUANTITATIVE": "Quantitative (Financial / ALE)",
+    "SEMI_QUANTITATIVE": "Semi-Quantitative (Both)",
+}
+
+# Assessment Campaign Status
+RA_STATUS_DRAFT = "DRAFT"
+RA_STATUS_IN_PROGRESS = "IN_PROGRESS"
+RA_STATUS_UNDER_REVIEW = "UNDER_REVIEW"
+RA_STATUS_APPROVED = "APPROVED"
+RA_STATUS_COMPLETED = "COMPLETED"
+RA_STATUS_CANCELLED = "CANCELLED"
+VALID_RA_STATUSES = [RA_STATUS_DRAFT, RA_STATUS_IN_PROGRESS, RA_STATUS_UNDER_REVIEW, RA_STATUS_APPROVED, RA_STATUS_COMPLETED, RA_STATUS_CANCELLED]
+RA_STATUS_LABELS = {
+    RA_STATUS_DRAFT: "Draft",
+    RA_STATUS_IN_PROGRESS: "In Progress",
+    RA_STATUS_UNDER_REVIEW: "Under Review",
+    RA_STATUS_APPROVED: "Approved",
+    RA_STATUS_COMPLETED: "Completed",
+    RA_STATUS_CANCELLED: "Cancelled",
+}
+RA_STATUS_COLORS = {
+    RA_STATUS_DRAFT: "#6c757d",
+    RA_STATUS_IN_PROGRESS: "#0d6efd",
+    RA_STATUS_UNDER_REVIEW: "#ffc107",
+    RA_STATUS_APPROVED: "#198754",
+    RA_STATUS_COMPLETED: "#0dcaf0",
+    RA_STATUS_CANCELLED: "#dc3545",
+}
+
+# Assessment Item Status
+RAI_STATUS_PENDING = "PENDING"
+RAI_STATUS_IN_PROGRESS = "IN_PROGRESS"
+RAI_STATUS_ASSESSED = "ASSESSED"
+RAI_STATUS_REVIEWED = "REVIEWED"
+VALID_RAI_STATUSES = [RAI_STATUS_PENDING, RAI_STATUS_IN_PROGRESS, RAI_STATUS_ASSESSED, RAI_STATUS_REVIEWED]
+RAI_STATUS_LABELS = {
+    RAI_STATUS_PENDING: "Pending",
+    RAI_STATUS_IN_PROGRESS: "In Progress",
+    RAI_STATUS_ASSESSED: "Assessed",
+    RAI_STATUS_REVIEWED: "Reviewed",
+}
+RAI_STATUS_COLORS = {
+    RAI_STATUS_PENDING: "#6c757d",
+    RAI_STATUS_IN_PROGRESS: "#0d6efd",
+    RAI_STATUS_ASSESSED: "#ffc107",
+    RAI_STATUS_REVIEWED: "#198754",
+}
+
+# Confidence Levels
+VALID_CONFIDENCE_LEVELS = ["LOW", "MEDIUM", "HIGH"]
+CONFIDENCE_LEVEL_LABELS = {"LOW": "Low", "MEDIUM": "Medium", "HIGH": "High"}
+CONFIDENCE_LEVEL_COLORS = {"LOW": "#dc3545", "MEDIUM": "#ffc107", "HIGH": "#198754"}
+
+# Risk Intake Status
+INTAKE_STATUS_SUBMITTED = "SUBMITTED"
+INTAKE_STATUS_UNDER_REVIEW = "UNDER_REVIEW"
+INTAKE_STATUS_ACCEPTED = "ACCEPTED"
+INTAKE_STATUS_REJECTED = "REJECTED"
+INTAKE_STATUS_CONVERTED = "CONVERTED"
+VALID_INTAKE_STATUSES = [INTAKE_STATUS_SUBMITTED, INTAKE_STATUS_UNDER_REVIEW, INTAKE_STATUS_ACCEPTED, INTAKE_STATUS_REJECTED, INTAKE_STATUS_CONVERTED]
+INTAKE_STATUS_LABELS = {
+    INTAKE_STATUS_SUBMITTED: "Submitted",
+    INTAKE_STATUS_UNDER_REVIEW: "Under Review",
+    INTAKE_STATUS_ACCEPTED: "Accepted",
+    INTAKE_STATUS_REJECTED: "Rejected",
+    INTAKE_STATUS_CONVERTED: "Converted to Risk",
+}
+INTAKE_STATUS_COLORS = {
+    INTAKE_STATUS_SUBMITTED: "#0d6efd",
+    INTAKE_STATUS_UNDER_REVIEW: "#ffc107",
+    INTAKE_STATUS_ACCEPTED: "#198754",
+    INTAKE_STATUS_REJECTED: "#dc3545",
+    INTAKE_STATUS_CONVERTED: "#0dcaf0",
+}
+
+# Initial severity for intake
+VALID_INTAKE_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+INTAKE_SEVERITY_LABELS = {"LOW": "Low", "MEDIUM": "Medium", "HIGH": "High", "CRITICAL": "Critical"}
+INTAKE_SEVERITY_COLORS = {"LOW": "#198754", "MEDIUM": "#ffc107", "HIGH": "#fd7e14", "CRITICAL": "#dc3545"}
+
+# Likelihood descriptors (for UI)
+LIKELIHOOD_DESCRIPTORS = {1: "Rare", 2: "Unlikely", 3: "Possible", 4: "Likely", 5: "Almost Certain"}
+IMPACT_DESCRIPTORS = {1: "Negligible", 2: "Minor", 3: "Moderate", 4: "Major", 5: "Severe"}
+
+
+class RiskAssessment(Base):
+    """A formal risk assessment campaign/cycle."""
+    __tablename__ = "risk_assessments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_ref = Column(String(20), unique=True, nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    scope = Column(Text, nullable=True)
+    methodology = Column(String(30), nullable=False, default="QUALITATIVE")
+    status = Column(String(30), nullable=False, default=RA_STATUS_DRAFT)
+    lead_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    assessment_period_start = Column(DateTime, nullable=True)
+    assessment_period_end = Column(DateTime, nullable=True)
+    due_date = Column(DateTime, nullable=True)
+    risk_appetite_threshold = Column(Integer, default=10)
+    notes = Column(Text, nullable=True)
+    approved_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    lead = relationship("User", foreign_keys=[lead_user_id])
+    approver = relationship("User", foreign_keys=[approved_by_user_id])
+    items = relationship("RiskAssessmentItem", back_populates="assessment", cascade="all, delete-orphan",
+                         order_by="RiskAssessmentItem.display_order")
+
+
+class RiskAssessmentItem(Base):
+    """Individual risk evaluation within an assessment campaign."""
+    __tablename__ = "risk_assessment_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_id = Column(Integer, ForeignKey("risk_assessments.id"), nullable=False)
+    risk_id = Column(Integer, ForeignKey("risks.id"), nullable=False)
+    assessor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    status = Column(String(30), nullable=False, default=RAI_STATUS_PENDING)
+    display_order = Column(Integer, default=0)
+
+    # Qualitative scoring
+    likelihood = Column(Integer, nullable=True)
+    impact = Column(Integer, nullable=True)
+    inherent_score = Column(Integer, nullable=True)
+    residual_likelihood = Column(Integer, nullable=True)
+    residual_impact = Column(Integer, nullable=True)
+    residual_score = Column(Integer, nullable=True)
+
+    # Quantitative scoring (financial)
+    asset_value = Column(Float, nullable=True)
+    exposure_factor = Column(Float, nullable=True)
+    single_loss_expectancy = Column(Float, nullable=True)
+    annual_rate_of_occurrence = Column(Float, nullable=True)
+    annualized_loss_expectancy = Column(Float, nullable=True)
+
+    # Assessment metadata
+    confidence_level = Column(String(20), nullable=True)
+    rationale = Column(Text, nullable=True)
+    existing_controls_notes = Column(Text, nullable=True)
+    recommended_treatment = Column(Text, nullable=True)
+    findings = Column(Text, nullable=True)
+    assessed_at = Column(DateTime, nullable=True)
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    reviewer_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    assessment = relationship("RiskAssessment", back_populates="items")
+    risk = relationship("Risk")
+    assessor = relationship("User", foreign_keys=[assessor_user_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by_user_id])
+
+
+class RiskIntake(Base):
+    """Risk identification intake form — submitted for review before becoming a formal Risk."""
+    __tablename__ = "risk_intakes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    intake_ref = Column(String(20), unique=True, nullable=False, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    submitter_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    risk_category = Column(String(100), nullable=True)
+    risk_source = Column(String(50), nullable=True)
+    status = Column(String(30), nullable=False, default=INTAKE_STATUS_SUBMITTED)
+    initial_severity = Column(String(20), nullable=True)
+    business_context = Column(Text, nullable=True)
+    potential_impact = Column(Text, nullable=True)
+    affected_assets = Column(Text, nullable=True)
+    suggested_owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewer_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    converted_risk_id = Column(Integer, ForeignKey("risks.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    submitter = relationship("User", foreign_keys=[submitter_user_id])
+    suggested_owner = relationship("User", foreign_keys=[suggested_owner_user_id])
+    reviewer = relationship("User", foreign_keys=[reviewer_user_id])
+    converted_risk = relationship("Risk")
+
+
+class RiskAssessmentTemplate(Base):
+    """Reusable assessment methodology templates."""
+    __tablename__ = "risk_assessment_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    methodology = Column(String(30), nullable=False, default="QUALITATIVE")
+    default_risk_appetite = Column(Integer, default=10)
+    default_scope = Column(Text, nullable=True)
+    criteria_json = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_by = relationship("User")
+
+
 # ==================== BACKFILL FUNCTIONS FOR NEW TABLES ====================
 
 def backfill_incident_tables():
@@ -3752,6 +3971,59 @@ def backfill_asset_tables():
         ]:
             if tbl_name not in existing:
                 model.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def backfill_risk_assessment_tables():
+    """Create risk assessment tables if missing."""
+    db = SessionLocal()
+    try:
+        existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        for tbl_name, model in [
+            ("risk_assessments", RiskAssessment),
+            ("risk_assessment_items", RiskAssessmentItem),
+            ("risk_intakes", RiskIntake),
+            ("risk_assessment_templates", RiskAssessmentTemplate),
+        ]:
+            if tbl_name not in existing:
+                model.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def seed_default_assessment_templates():
+    """Seed default risk assessment templates."""
+    db = SessionLocal()
+    try:
+        if db.query(RiskAssessmentTemplate).count() > 0:
+            return
+        templates = [
+            RiskAssessmentTemplate(
+                name="Annual Qualitative Risk Assessment",
+                description="Standard annual risk assessment using 5\u00d75 likelihood \u00d7 impact matrix. Suitable for most organizations as a baseline methodology.",
+                methodology="QUALITATIVE",
+                default_risk_appetite=10,
+                default_scope="Enterprise-wide risk assessment covering all organizational risk categories.",
+            ),
+            RiskAssessmentTemplate(
+                name="Quantitative Financial Risk Assessment",
+                description="Financial impact-focused assessment using ALE (Annualized Loss Expectancy) methodology. Best for risks with quantifiable financial impact data.",
+                methodology="QUANTITATIVE",
+                default_risk_appetite=10,
+                default_scope="Financial impact analysis of key organizational risks with available loss data.",
+            ),
+            RiskAssessmentTemplate(
+                name="Comprehensive Semi-Quantitative Assessment",
+                description="Combined qualitative and quantitative assessment. Provides both likelihood/impact ratings and financial estimates for complete risk picture.",
+                methodology="SEMI_QUANTITATIVE",
+                default_risk_appetite=10,
+                default_scope="Comprehensive assessment combining qualitative ratings with financial impact estimates.",
+            ),
+        ]
+        for t in templates:
+            db.add(t)
+        db.commit()
     finally:
         db.close()
 

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Compare Assessments{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments/{{ assessment.id }}">{{ assessment.assessment_ref }}</a></li>
+<li class="breadcrumb-item active">Compare</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2><i class="bi bi-arrow-left-right me-2"></i>Assessment Comparison</h2>
+        <p class="text-muted mb-0">
+            <span class="badge" style="background:{{ RA_STATUS_COLORS.get(assessment.status, '#6c757d') }};">
+                {{ RA_STATUS_LABELS.get(assessment.status, assessment.status) }}
+            </span>
+            <span class="badge bg-secondary ms-1">{{ ASSESSMENT_METHODOLOGY_LABELS.get(assessment.methodology, assessment.methodology) }}</span>
+        </p>
+    </div>
+    <a href="/risk-assessments/{{ assessment.id }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Assessment
+    </a>
+</div>
+
+{% if comparison and comparison.previous %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <strong>Current: {{ comparison.current.assessment_ref }}</strong> — {{ comparison.current.title }}
+            </div>
+            <div class="card-body">
+                <small class="text-muted">
+                    {% if comparison.current.assessment_period_start and comparison.current.assessment_period_end %}
+                    {{ comparison.current.assessment_period_start.strftime('%b %d, %Y') }} — {{ comparison.current.assessment_period_end.strftime('%b %d, %Y') }}
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-secondary">
+            <div class="card-header bg-secondary text-white">
+                <strong>Previous: {{ comparison.previous.assessment_ref }}</strong> — {{ comparison.previous.title }}
+            </div>
+            <div class="card-body">
+                <small class="text-muted">
+                    {% if comparison.previous.assessment_period_start and comparison.previous.assessment_period_end %}
+                    {{ comparison.previous.assessment_period_start.strftime('%b %d, %Y') }} — {{ comparison.previous.assessment_period_end.strftime('%b %d, %Y') }}
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if comparison.deltas %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Risk Score Changes</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Risk Ref</th>
+                        <th>Title</th>
+                        <th class="text-center">Previous Score</th>
+                        <th class="text-center">Current Score</th>
+                        <th class="text-center">Change</th>
+                        <th class="text-center">Direction</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for delta in comparison.deltas %}
+                    <tr>
+                        <td><a href="/risks/{{ delta.risk_id }}"><code>{{ delta.risk_ref }}</code></a></td>
+                        <td>{{ delta.risk_title }}</td>
+                        <td class="text-center">
+                            {% if delta.prev_score is not none %}
+                            {% set prev_level = get_risk_level_label(delta.prev_score) %}
+                            <span class="badge" style="background:{{ RISK_LEVEL_COLORS.get(prev_level, '#6c757d') }};">
+                                {{ delta.prev_score }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if delta.curr_score is not none %}
+                            {% set curr_level = get_risk_level_label(delta.curr_score) %}
+                            <span class="badge" style="background:{{ RISK_LEVEL_COLORS.get(curr_level, '#6c757d') }};">
+                                {{ delta.curr_score }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if delta.change is not none %}
+                            {% if delta.change > 0 %}
+                            <span class="text-danger fw-bold">+{{ delta.change }}</span>
+                            {% elif delta.change < 0 %}
+                            <span class="text-success fw-bold">{{ delta.change }}</span>
+                            {% else %}
+                            <span class="text-muted">0</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if delta.direction == 'increased' %}
+                            <i class="bi bi-arrow-up-circle-fill text-danger" title="Risk Increased"></i>
+                            {% elif delta.direction == 'decreased' %}
+                            <i class="bi bi-arrow-down-circle-fill text-success" title="Risk Decreased"></i>
+                            {% elif delta.direction == 'unchanged' %}
+                            <i class="bi bi-dash-circle text-muted" title="Unchanged"></i>
+                            {% else %}
+                            <i class="bi bi-plus-circle text-info" title="New"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card text-center border-danger">
+            <div class="card-body">
+                <h3 class="text-danger">{{ comparison.deltas|selectattr('direction', 'equalto', 'increased')|list|length }}</h3>
+                <small class="text-muted">Risks Increased</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h3 class="text-success">{{ comparison.deltas|selectattr('direction', 'equalto', 'decreased')|list|length }}</h3>
+                <small class="text-muted">Risks Decreased</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3 class="text-muted">{{ comparison.deltas|selectattr('direction', 'equalto', 'unchanged')|list|length }}</h3>
+                <small class="text-muted">Unchanged</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>No comparable risk items found between these two assessments.
+</div>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5">
+    <i class="bi bi-arrow-left-right display-1 text-muted"></i>
+    <h4 class="mt-3 text-muted">No Previous Assessment Available</h4>
+    <p class="text-muted">Comparison requires at least two completed or approved assessments.</p>
+    <a href="/risk-assessments/{{ assessment.id }}" class="btn btn-primary mt-2">
+        <i class="bi bi-arrow-left me-1"></i>Back to Assessment
+    </a>
+</div>
+{% endif %}
+{% endblock %}

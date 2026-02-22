@@ -248,18 +248,25 @@
                     {% endif %}
 
                     {# Risk Register dropdown #}
-                    {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-exclamation-triangle me-1"></i>Risks
                         </a>
                         <ul class="dropdown-menu">
+                            {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}
                             <li><a class="dropdown-item" href="/risks"><i class="bi bi-exclamation-triangle me-2"></i>Risk Register</a></li>
                             <li><a class="dropdown-item" href="/risks/dashboard"><i class="bi bi-speedometer me-2"></i>Risk Dashboard</a></li>
                             <li><a class="dropdown-item" href="/risks/heatmap"><i class="bi bi-grid-3x3 me-2"></i>Risk Heatmap</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="/risk-assessments">
+                                <i class="bi bi-clipboard-data me-2"></i>Risk Assessments</a></li>
+                            <li><a class="dropdown-item" href="/risk-assessments/dashboard">
+                                <i class="bi bi-speedometer2 me-2"></i>Assessment Dashboard</a></li>
+                            <li><a class="dropdown-item" href="/risk-assessments/intake">
+                                <i class="bi bi-inbox me-2"></i>Risk Intake</a></li>
                         </ul>
                     </li>
-                    {% endif %}
 
                     {# Audits dropdown #}
                     {% if not request.state.current_user or request.state.current_user.role != 'viewer' %}

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Risk Assessment Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block content %}
+{# Header #}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Risk Assessment Dashboard</h3>
+        <p class="text-muted mb-0">Campaign performance and metrics overview</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/risk-assessments" class="btn btn-outline-primary"><i class="bi bi-clipboard-data me-1"></i>Assessments</a>
+        <a href="/intake/new" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-in-right me-1"></i>Intake</a>
+    </div>
+</div>
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#2563eb;">{{ data.total_assessments }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Total Assessments</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#0d6efd;">{{ data.active_campaigns }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Active Campaigns</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#198754;">{{ data.completed_count }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Completed</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#6f42c1;">{{ data.avg_completion_rate|round|int }}%</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Avg Completion Rate</small>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    {# Status Breakdown #}
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><strong><i class="bi bi-bar-chart me-1"></i>Status Breakdown</strong></div>
+            <div class="card-body">
+                {% for status_key, status_label, status_color, status_count in data.status_breakdown %}
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge" style="background:{{ status_color }};font-size:0.7rem;">{{ status_label }}</span>
+                    </div>
+                    <small class="fw-semibold">{{ status_count }}</small>
+                </div>
+                <div class="progress mb-3" style="height:8px;">
+                    <div class="progress-bar" style="width:{{ (status_count / data.total_assessments * 100)|round if data.total_assessments > 0 else 0 }}%;background:{{ status_color }};"></div>
+                </div>
+                {% endfor %}
+
+                {% if not data.status_breakdown %}
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-bar-chart" style="font-size:2rem;color:#d1d5db;"></i>
+                    <p class="small mt-2 mb-0">No assessment data yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Methodology Distribution #}
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><strong><i class="bi bi-diagram-3 me-1"></i>Methodology Distribution</strong></div>
+            <div class="card-body">
+                <div class="row g-3">
+                    {% for meth_key, meth_label, meth_count, meth_icon in data.methodology_distribution %}
+                    <div class="col-md-4">
+                        <div class="text-center p-3 rounded" style="background:#f8fafc;">
+                            <i class="bi {{ meth_icon }}" style="font-size:1.5rem;color:#2563eb;"></i>
+                            <div class="fw-bold fs-4 mt-1">{{ meth_count }}</div>
+                            <small class="text-muted">{{ meth_label }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    {% if not data.methodology_distribution %}
+                    <div class="col-12 text-center text-muted py-3">
+                        <p class="small mb-0">No methodology data available.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Active Campaign Spotlight #}
+{% if data.active_spotlight %}
+<div class="card mb-4 border-start border-4 border-primary">
+    <div class="card-header bg-primary bg-opacity-10">
+        <strong><i class="bi bi-lightning-charge me-1"></i>Active Campaign Spotlight</strong>
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h5 class="mb-1">
+                    <a href="/risk-assessments/{{ data.active_spotlight.id }}" class="text-decoration-none">
+                        <code class="me-1">{{ data.active_spotlight.assessment_ref }}</code>{{ data.active_spotlight.title }}
+                    </a>
+                </h5>
+                <div class="d-flex gap-2 mt-1">
+                    <span class="badge bg-light text-dark">{{ ASSESSMENT_METHODOLOGY_LABELS.get(data.active_spotlight.methodology, data.active_spotlight.methodology) }}</span>
+                    <span class="badge" style="background:{{ RA_STATUS_COLORS.get(data.active_spotlight.status, '#6c757d') }};">{{ RA_STATUS_LABELS.get(data.active_spotlight.status, data.active_spotlight.status) }}</span>
+                </div>
+                {% if data.active_spotlight.lead %}
+                <small class="text-muted d-block mt-2"><i class="bi bi-person me-1"></i>Lead: {{ data.active_spotlight.lead.display_name }}</small>
+                {% endif %}
+                {% if data.active_spotlight.due_date %}
+                <small class="text-muted d-block"><i class="bi bi-calendar me-1"></i>Due: {{ data.active_spotlight.due_date.strftime('%b %d, %Y') }}</small>
+                {% endif %}
+            </div>
+            <div class="col-md-4">
+                {% set spotlight_total = data.active_spotlight.items|length if data.active_spotlight.items else 0 %}
+                {% set spotlight_scored = data.active_spotlight.items|selectattr('status', 'in', ['ASSESSED', 'REVIEWED'])|list|length if data.active_spotlight.items else 0 %}
+                <div class="text-center">
+                    <div class="fs-1 fw-bold text-primary">{{ (spotlight_scored / spotlight_total * 100)|round|int if spotlight_total > 0 else 0 }}%</div>
+                    <div class="text-muted small">{{ spotlight_scored }} of {{ spotlight_total }} items scored</div>
+                    <div class="progress mt-2" style="height:10px;">
+                        <div class="progress-bar bg-success" style="width:{{ (spotlight_scored / spotlight_total * 100)|round if spotlight_total > 0 else 0 }}%;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2 text-end">
+                <a href="/risk-assessments/{{ data.active_spotlight.id }}" class="btn btn-primary btn-sm"><i class="bi bi-arrow-right me-1"></i>Open</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# Recent Assessments Table #}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong><i class="bi bi-clock-history me-1"></i>Recent Assessments</strong>
+        <a href="/risk-assessments" class="btn btn-sm btn-outline-primary">View All</a>
+    </div>
+    {% if data.recent_assessments %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:90px;">Ref</th>
+                    <th>Title</th>
+                    <th>Methodology</th>
+                    <th style="width:120px;">Status</th>
+                    <th>Lead</th>
+                    <th style="width:120px;">Completion</th>
+                    <th style="width:100px;">Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in data.recent_assessments %}
+                <tr>
+                    <td><a href="/risk-assessments/{{ a.id }}" class="text-decoration-none fw-semibold">{{ a.assessment_ref }}</a></td>
+                    <td><a href="/risk-assessments/{{ a.id }}" class="text-decoration-none">{{ a.title }}</a></td>
+                    <td><span class="badge bg-light text-dark">{{ ASSESSMENT_METHODOLOGY_LABELS.get(a.methodology, a.methodology) }}</span></td>
+                    <td><span class="badge" style="background:{{ RA_STATUS_COLORS.get(a.status, '#6c757d') }};">{{ RA_STATUS_LABELS.get(a.status, a.status) }}</span></td>
+                    <td><small class="text-muted">{{ a.lead.display_name if a.lead else '—' }}</small></td>
+                    <td>
+                        {% set total_items = a.items|length if a.items else 0 %}
+                        {% set scored_items = a.items|selectattr('status', 'in', ['ASSESSED', 'REVIEWED'])|list|length if a.items else 0 %}
+                        {% if total_items > 0 %}
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="progress flex-grow-1" style="height:6px;">
+                                <div class="progress-bar bg-success" style="width:{{ (scored_items / total_items * 100)|round }}%;"></div>
+                            </div>
+                            <small class="text-muted" style="font-size:0.7rem;">{{ (scored_items / total_items * 100)|round|int }}%</small>
+                        </div>
+                        {% else %}
+                        <small class="text-muted fst-italic">—</small>
+                        {% endif %}
+                    </td>
+                    <td><small class="text-muted">{{ a.created_at.strftime('%Y-%m-%d') if a.created_at else '—' }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center py-5">
+        <i class="bi bi-clipboard-data" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No assessments yet</h5>
+        <p class="text-muted">Create your first risk assessment campaign to start tracking.</p>
+        <a href="/risk-assessments/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Assessment</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

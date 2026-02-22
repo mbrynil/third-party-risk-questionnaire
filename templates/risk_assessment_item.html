@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block title %}Score {{ item.risk.risk_ref if item.risk else 'Risk' }} — {{ assessment.assessment_ref }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments/{{ assessment.id }}">{{ assessment.assessment_ref }}</a></li>
+<li class="breadcrumb-item active">Score {{ item.risk.risk_ref if item.risk else 'Risk' }}</li>
+{% endblock %}
+
+{% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# Header #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <i class="bi bi-pencil-square me-2"></i>Score Risk: <code class="me-2">{{ item.risk.risk_ref if item.risk else '—' }}</code>{{ item.risk.title if item.risk else 'Unknown Risk' }}
+        </h3>
+        <div class="d-flex gap-2 mt-1">
+            <span class="badge bg-light text-dark">{{ METHODOLOGY_LABELS.get(assessment.methodology, assessment.methodology) }}</span>
+            <span class="badge" style="background:{{ RA_ITEM_STATUS_COLORS.get(item.status, '#6c757d') }};">{{ RA_ITEM_STATUS_LABELS.get(item.status, item.status) }}</span>
+        </div>
+    </div>
+    <a href="/risk-assessments/{{ assessment.id }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Assessment</a>
+</div>
+
+{# Risk Context Card #}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-info-circle me-1"></i>Risk Context</strong></div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-8">
+                {% if item.risk and item.risk.description %}
+                <p style="white-space:pre-wrap;" class="mb-2">{{ item.risk.description }}</p>
+                {% else %}
+                <p class="text-muted fst-italic mb-2">No description available.</p>
+                {% endif %}
+            </div>
+            <div class="col-md-4">
+                <dl class="small mb-0">
+                    <dt>Category</dt>
+                    <dd>{{ item.risk.risk_category if item.risk and item.risk.risk_category else '—' }}</dd>
+                    <dt>Source</dt>
+                    <dd>{{ item.risk.risk_source if item.risk and item.risk.risk_source else '—' }}</dd>
+                    <dt>Current Inherent Score</dt>
+                    <dd>
+                        {% if item.risk and item.risk.inherent_risk_score %}
+                        <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(item.risk.inherent_risk_score)] }};">{{ get_risk_level_label(item.risk.inherent_risk_score) }} ({{ item.risk.inherent_risk_score }})</span>
+                        {% else %}
+                        <small class="text-muted">Not yet assessed</small>
+                        {% endif %}
+                    </dd>
+                    <dt>Current Residual Score</dt>
+                    <dd>
+                        {% if item.risk and item.risk.residual_risk_score %}
+                        <span class="badge" style="background:{{ RISK_LEVEL_COLORS[get_risk_level_label(item.risk.residual_risk_score)] }};font-size:0.7rem;">{{ item.risk.residual_risk_score }}</span>
+                        {% else %}
+                        <small class="text-muted">—</small>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Scoring Form #}
+<form method="post" action="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}/assess">
+    <div class="row">
+        <div class="col-lg-8">
+
+            {# Qualitative / Semi-Quantitative: Inherent Risk Scoring #}
+            {% if assessment.methodology in ['QUALITATIVE', 'SEMI_QUANTITATIVE'] %}
+            <div class="card mb-3">
+                <div class="card-header"><strong><i class="bi bi-graph-up me-1"></i>Inherent Risk Scoring</strong></div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Likelihood (1-5) <span class="text-danger">*</span></label>
+                            <select name="inherent_likelihood" id="inherentLikelihood" class="form-select" required>
+                                <option value="">-- Select --</option>
+                                {% for v in [1,2,3,4,5] %}
+                                <option value="{{ v }}" {{ 'selected' if item.inherent_likelihood == v }}>{{ v }} — {{ LIKELIHOOD_DESCRIPTORS[v] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Impact (1-5) <span class="text-danger">*</span></label>
+                            <select name="inherent_impact" id="inherentImpact" class="form-select" required>
+                                <option value="">-- Select --</option>
+                                {% for v in [1,2,3,4,5] %}
+                                <option value="{{ v }}" {{ 'selected' if item.inherent_impact == v }}>{{ v }} — {{ IMPACT_DESCRIPTORS[v] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex flex-column justify-content-end">
+                            <div class="text-center p-2 rounded" id="inherentScoreDisplay" style="background:#f1f5f9;">
+                                <div class="fw-bold fs-4" id="inherentScoreValue">—</div>
+                                <small class="text-muted" id="inherentScoreLabel">Score</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Residual Risk Scoring #}
+            <div class="card mb-3">
+                <div class="card-header"><strong><i class="bi bi-graph-down me-1"></i>Residual Risk Scoring</strong></div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Score residual risk after considering existing controls and mitigations.</p>
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Residual Likelihood (1-5)</label>
+                            <select name="residual_likelihood" id="residualLikelihood" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for v in [1,2,3,4,5] %}
+                                <option value="{{ v }}" {{ 'selected' if item.residual_likelihood == v }}>{{ v }} — {{ LIKELIHOOD_DESCRIPTORS[v] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Residual Impact (1-5)</label>
+                            <select name="residual_impact" id="residualImpact" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for v in [1,2,3,4,5] %}
+                                <option value="{{ v }}" {{ 'selected' if item.residual_impact == v }}>{{ v }} — {{ IMPACT_DESCRIPTORS[v] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex flex-column justify-content-end">
+                            <div class="text-center p-2 rounded" id="residualScoreDisplay" style="background:#f1f5f9;">
+                                <div class="fw-bold fs-4" id="residualScoreValue">—</div>
+                                <small class="text-muted" id="residualScoreLabel">Score</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Quantitative / Semi-Quantitative: Financial Impact #}
+            {% if assessment.methodology in ['QUANTITATIVE', 'SEMI_QUANTITATIVE'] %}
+            <div class="card mb-3">
+                <div class="card-header"><strong><i class="bi bi-currency-dollar me-1"></i>Financial Impact Analysis</strong></div>
+                <div class="card-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Asset Value ($)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" name="asset_value" id="assetValue" class="form-control" min="0" step="0.01"
+                                       value="{{ item.asset_value if item.asset_value else '' }}" placeholder="0.00">
+                            </div>
+                            <div class="form-text">Estimated value of the asset at risk.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Exposure Factor (%)</label>
+                            <div class="input-group">
+                                <input type="number" name="exposure_factor" id="exposureFactor" class="form-control" min="0" max="100" step="0.1"
+                                       value="{{ item.exposure_factor if item.exposure_factor else '' }}" placeholder="0">
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text">Percentage of asset value lost per incident.</div>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Single Loss Expectancy (SLE)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="text" id="sleDisplay" class="form-control" readonly style="background:#f1f5f9;" value="—">
+                            </div>
+                            <input type="hidden" name="single_loss_expectancy" id="sleValue">
+                            <div class="form-text">Computed: Asset Value x Exposure Factor</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Annual Rate of Occurrence (ARO)</label>
+                            <input type="number" name="annual_rate_of_occurrence" id="aroValue" class="form-control" min="0" step="0.1"
+                                   value="{{ item.annual_rate_of_occurrence if item.annual_rate_of_occurrence else '' }}" placeholder="0.0">
+                            <div class="form-text">Expected number of incidents per year.</div>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Annualized Loss Expectancy (ALE)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="text" id="aleDisplay" class="form-control" readonly style="background:#f1f5f9;font-weight:700;" value="—">
+                            </div>
+                            <input type="hidden" name="annualized_loss_expectancy" id="aleValue">
+                            <div class="form-text">Computed: SLE x ARO</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Common Fields #}
+            <div class="card mb-3">
+                <div class="card-header"><strong><i class="bi bi-journal-text me-1"></i>Assessment Details</strong></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Confidence Level</label>
+                        <select name="confidence_level" class="form-select">
+                            <option value="">-- Select --</option>
+                            <option value="LOW" {{ 'selected' if item.confidence_level == 'LOW' }}>Low — Limited data or expertise available</option>
+                            <option value="MEDIUM" {{ 'selected' if item.confidence_level == 'MEDIUM' }}>Medium — Reasonable data and subject-matter input</option>
+                            <option value="HIGH" {{ 'selected' if item.confidence_level == 'HIGH' }}>High — Strong data, expert consensus</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Rationale</label>
+                        <textarea name="rationale" class="form-control" rows="3" placeholder="Justify your scoring decisions...">{{ item.rationale if item.rationale else '' }}</textarea>
+                        <div class="form-text">Justify your scoring — reference data, trends, expert input, or historical incidents.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Existing Controls</label>
+                        <textarea name="existing_controls" class="form-control" rows="3" placeholder="Note current controls mitigating this risk...">{{ item.existing_controls if item.existing_controls else '' }}</textarea>
+                        <div class="form-text">Note current controls mitigating this risk (used to inform residual scoring).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Recommended Treatment</label>
+                        <textarea name="recommended_treatment" class="form-control" rows="3" placeholder="Suggest treatment actions...">{{ item.recommended_treatment if item.recommended_treatment else '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Findings</label>
+                        <textarea name="findings" class="form-control" rows="3" placeholder="Key observations and concerns...">{{ item.findings if item.findings else '' }}</textarea>
+                        <div class="form-text">Key observations and concerns identified during this assessment.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mb-4">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Submit Assessment</button>
+                <a href="/risk-assessments/{{ assessment.id }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </div>
+
+        {# Right sidebar with scoring reference #}
+        <div class="col-lg-4">
+            <div class="card mb-3">
+                <div class="card-header"><strong>Scoring Reference</strong></div>
+                <div class="card-body small">
+                    <h6 class="fw-semibold mb-2">Risk Levels</h6>
+                    <table class="table table-sm mb-3">
+                        <tbody>
+                            <tr><td><span class="badge" style="background:#198754;">Very Low</span></td><td>1 — 5</td></tr>
+                            <tr><td><span class="badge" style="background:#20c997;">Low</span></td><td>6 — 10</td></tr>
+                            <tr><td><span class="badge" style="background:#ffc107;">Medium</span></td><td>11 — 15</td></tr>
+                            <tr><td><span class="badge" style="background:#fd7e14;">High</span></td><td>16 — 20</td></tr>
+                            <tr><td><span class="badge" style="background:#dc3545;">Critical</span></td><td>21 — 25</td></tr>
+                        </tbody>
+                    </table>
+                    {% if assessment.risk_appetite_threshold %}
+                    <div class="alert alert-info py-2 px-3 mb-0" style="font-size:0.8rem;">
+                        <i class="bi bi-info-circle me-1"></i>Risk Appetite Threshold: <strong>{{ assessment.risk_appetite_threshold }}</strong>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if assessment.methodology in ['QUALITATIVE', 'SEMI_QUANTITATIVE'] %}
+            <div class="card mb-3">
+                <div class="card-header"><strong>Likelihood Scale</strong></div>
+                <div class="card-body small">
+                    <dl class="mb-0">
+                        {% for v in [1,2,3,4,5] %}
+                        <dt>{{ v }} — {{ LIKELIHOOD_DESCRIPTORS[v] }}</dt>
+                        <dd class="text-muted mb-2">
+                            {% if v == 1 %}May occur only in exceptional circumstances{% endif %}
+                            {% if v == 2 %}Could occur at some time{% endif %}
+                            {% if v == 3 %}Might occur at some time{% endif %}
+                            {% if v == 4 %}Will probably occur in most circumstances{% endif %}
+                            {% if v == 5 %}Expected to occur in most circumstances{% endif %}
+                        </dd>
+                        {% endfor %}
+                    </dl>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header"><strong>Impact Scale</strong></div>
+                <div class="card-body small">
+                    <dl class="mb-0">
+                        {% for v in [1,2,3,4,5] %}
+                        <dt>{{ v }} — {{ IMPACT_DESCRIPTORS[v] }}</dt>
+                        <dd class="text-muted mb-2">
+                            {% if v == 1 %}Insignificant impact on objectives{% endif %}
+                            {% if v == 2 %}Minor impact, easily remediated{% endif %}
+                            {% if v == 3 %}Moderate impact, manageable disruption{% endif %}
+                            {% if v == 4 %}Major impact, significant disruption{% endif %}
+                            {% if v == 5 %}Catastrophic impact on objectives{% endif %}
+                        </dd>
+                        {% endfor %}
+                    </dl>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    // Risk level thresholds
+    var RISK_LEVELS = [
+        {max: 5, label: 'Very Low', color: '#198754'},
+        {max: 10, label: 'Low', color: '#20c997'},
+        {max: 15, label: 'Medium', color: '#ffc107'},
+        {max: 20, label: 'High', color: '#fd7e14'},
+        {max: 25, label: 'Critical', color: '#dc3545'}
+    ];
+
+    function getRiskLevel(score) {
+        for (var i = 0; i < RISK_LEVELS.length; i++) {
+            if (score <= RISK_LEVELS[i].max) return RISK_LEVELS[i];
+        }
+        return RISK_LEVELS[RISK_LEVELS.length - 1];
+    }
+
+    function formatCurrency(value) {
+        if (isNaN(value) || value === null) return '—';
+        return new Intl.NumberFormat('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(value);
+    }
+
+    // Qualitative scoring: Inherent
+    var inherentL = document.getElementById('inherentLikelihood');
+    var inherentI = document.getElementById('inherentImpact');
+    var inherentScoreVal = document.getElementById('inherentScoreValue');
+    var inherentScoreLbl = document.getElementById('inherentScoreLabel');
+    var inherentScoreDisp = document.getElementById('inherentScoreDisplay');
+
+    function updateInherentScore() {
+        if (!inherentL || !inherentI) return;
+        var l = parseInt(inherentL.value) || 0;
+        var i = parseInt(inherentI.value) || 0;
+        if (l > 0 && i > 0) {
+            var score = l * i;
+            var level = getRiskLevel(score);
+            inherentScoreVal.textContent = score;
+            inherentScoreLbl.textContent = level.label;
+            inherentScoreDisp.style.background = level.color + '20';
+            inherentScoreVal.style.color = level.color;
+        } else {
+            inherentScoreVal.textContent = '—';
+            inherentScoreLbl.textContent = 'Score';
+            inherentScoreDisp.style.background = '#f1f5f9';
+            inherentScoreVal.style.color = '';
+        }
+    }
+
+    if (inherentL) inherentL.addEventListener('change', updateInherentScore);
+    if (inherentI) inherentI.addEventListener('change', updateInherentScore);
+
+    // Qualitative scoring: Residual
+    var residualL = document.getElementById('residualLikelihood');
+    var residualI = document.getElementById('residualImpact');
+    var residualScoreVal = document.getElementById('residualScoreValue');
+    var residualScoreLbl = document.getElementById('residualScoreLabel');
+    var residualScoreDisp = document.getElementById('residualScoreDisplay');
+
+    function updateResidualScore() {
+        if (!residualL || !residualI) return;
+        var l = parseInt(residualL.value) || 0;
+        var i = parseInt(residualI.value) || 0;
+        if (l > 0 && i > 0) {
+            var score = l * i;
+            var level = getRiskLevel(score);
+            residualScoreVal.textContent = score;
+            residualScoreLbl.textContent = level.label;
+            residualScoreDisp.style.background = level.color + '20';
+            residualScoreVal.style.color = level.color;
+        } else {
+            residualScoreVal.textContent = '—';
+            residualScoreLbl.textContent = 'Score';
+            residualScoreDisp.style.background = '#f1f5f9';
+            residualScoreVal.style.color = '';
+        }
+    }
+
+    if (residualL) residualL.addEventListener('change', updateResidualScore);
+    if (residualI) residualI.addEventListener('change', updateResidualScore);
+
+    // Quantitative scoring: SLE / ALE
+    var assetValue = document.getElementById('assetValue');
+    var exposureFactor = document.getElementById('exposureFactor');
+    var sleDisplay = document.getElementById('sleDisplay');
+    var sleValue = document.getElementById('sleValue');
+    var aroValue = document.getElementById('aroValue');
+    var aleDisplay = document.getElementById('aleDisplay');
+    var aleValue = document.getElementById('aleValue');
+
+    function updateFinancials() {
+        if (!assetValue || !exposureFactor) return;
+        var av = parseFloat(assetValue.value) || 0;
+        var ef = parseFloat(exposureFactor.value) || 0;
+        var sle = av * (ef / 100);
+
+        if (av > 0 && ef > 0) {
+            sleDisplay.value = formatCurrency(sle);
+            sleValue.value = sle.toFixed(2);
+        } else {
+            sleDisplay.value = '—';
+            sleValue.value = '';
+        }
+
+        var aro = parseFloat(aroValue.value) || 0;
+        if (sle > 0 && aro > 0) {
+            var ale = sle * aro;
+            aleDisplay.value = formatCurrency(ale);
+            aleValue.value = ale.toFixed(2);
+        } else {
+            aleDisplay.value = '—';
+            aleValue.value = '';
+        }
+    }
+
+    if (assetValue) assetValue.addEventListener('input', updateFinancials);
+    if (exposureFactor) exposureFactor.addEventListener('input', updateFinancials);
+    if (aroValue) aroValue.addEventListener('input', updateFinancials);
+
+    // Initialize on load
+    updateInherentScore();
+    updateResidualScore();
+    updateFinancials();
+})();
+</script>
+{% endblock %}

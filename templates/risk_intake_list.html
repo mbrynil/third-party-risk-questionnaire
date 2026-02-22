@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block title %}Risk Intake{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item active">Risk Intake</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-inbox me-2"></i>Risk Intake</h3>
+        <p class="text-muted mb-0">{{ intakes|length }} submission{{ 's' if intakes|length != 1 else '' }}</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/risk-assessments/intake/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Submit New Risk</a>
+    </div>
+</div>
+
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#2563eb;">{{ stats.total }}</div>
+                <div class="kpi-label">Total Submissions</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#0d6efd;">{{ stats.pending }}</div>
+                <div class="kpi-label">Pending Review</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#198754;">{{ stats.accepted }}</div>
+                <div class="kpi-label">Accepted</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#0dcaf0;">{{ stats.converted }}</div>
+                <div class="kpi-label">Converted</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Filter Bar #}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    {% for key, label in INTAKE_STATUS_LABELS.items() %}
+                    <option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-1 align-items-end">
+                <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">Filter</button>
+                <a href="/risk-assessments/intake" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Intake Table #}
+{% if intakes %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:100px;">Ref</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th style="width:100px;">Severity</th>
+                    <th style="width:120px;">Status</th>
+                    <th>Submitted By</th>
+                    <th style="width:110px;">Submitted</th>
+                    <th>Reviewer</th>
+                    <th class="text-end" style="width:80px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for intake in intakes %}
+                <tr>
+                    <td><a href="/risk-assessments/intake/{{ intake.id }}" class="text-decoration-none fw-semibold">{{ intake.intake_ref }}</a></td>
+                    <td><a href="/risk-assessments/intake/{{ intake.id }}" class="text-decoration-none">{{ intake.title }}</a></td>
+                    <td><small class="text-muted">{{ intake.risk_category or '---' }}</small></td>
+                    <td>
+                        {% if intake.initial_severity %}
+                        <span class="badge" style="background:{{ INTAKE_SEVERITY_COLORS.get(intake.initial_severity, '#6c757d') }};">{{ INTAKE_SEVERITY_LABELS.get(intake.initial_severity, intake.initial_severity) }}</span>
+                        {% else %}
+                        <small class="text-muted">---</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge" style="background:{{ INTAKE_STATUS_COLORS.get(intake.status, '#6c757d') }};">{{ INTAKE_STATUS_LABELS.get(intake.status, intake.status) }}</span>
+                    </td>
+                    <td><small class="text-muted">{{ intake.submitter.display_name if intake.submitter else '---' }}</small></td>
+                    <td><small class="text-muted">{{ intake.created_at.strftime('%Y-%m-%d') if intake.created_at else '---' }}</small></td>
+                    <td><small class="text-muted">{{ intake.reviewer.display_name if intake.reviewer else '---' }}</small></td>
+                    <td class="text-end">
+                        <a href="/risk-assessments/intake/{{ intake.id }}" class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-inbox" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No risk submissions yet</h5>
+        <p class="text-muted">Any employee can submit a potential risk for review by the risk management team.</p>
+        <a href="/risk-assessments/intake/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Submit New Risk</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

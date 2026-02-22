@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}{{ "Edit Submission" if intake else "Submit New Risk" }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments/intake">Risk Intake</a></li>
+<li class="breadcrumb-item active">{{ "Edit " + intake.intake_ref if intake else "Submit New Risk" }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-inbox me-2"></i>{{ "Edit Submission" if intake else "Submit a Risk for Review" }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Submit a Risk for Review</strong> — Any employee can submit a potential risk. It will be reviewed by the risk management team.
+                </div>
+
+                <form method="post">
+                    {# Title #}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required value="{{ intake.title if intake else '' }}">
+                        <div class="form-text">Brief name for the potential risk</div>
+                    </div>
+
+                    {# Description #}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea name="description" class="form-control" rows="3">{{ intake.description if intake else '' }}</textarea>
+                        <div class="form-text">Describe the risk in detail</div>
+                    </div>
+
+                    <div class="row">
+                        {# Risk Category #}
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Risk Category</label>
+                            <select name="risk_category" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for d in VALID_CONTROL_DOMAINS %}
+                                <option value="{{ d }}" {{ 'selected' if intake and intake.risk_category == d }}>{{ d }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Which area does this risk relate to?</div>
+                        </div>
+
+                        {# Risk Source #}
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Risk Source</label>
+                            <select name="risk_source" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for s in VALID_RISK_SOURCES %}
+                                <option value="{{ s }}" {{ 'selected' if intake and intake.risk_source == s }}>{{ RISK_SOURCE_LABELS[s] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        {# Initial Severity Estimate #}
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Initial Severity Estimate</label>
+                            {% set sev_colors = {'CRITICAL': '#dc3545', 'HIGH': '#fd7e14', 'MEDIUM': '#ffc107', 'LOW': '#198754', 'INFO': '#6c757d'} %}
+                            {% set sev_labels = {'CRITICAL': 'Critical', 'HIGH': 'High', 'MEDIUM': 'Medium', 'LOW': 'Low', 'INFO': 'Informational'} %}
+                            <select name="severity" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for s in VALID_INTAKE_SEVERITIES %}
+                                <option value="{{ s }}" {{ 'selected' if intake and intake.severity == s }}>{{ sev_labels.get(s, s) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {# Business Context #}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Business Context</label>
+                        <textarea name="business_context" class="form-control" rows="3">{{ intake.business_context if intake else '' }}</textarea>
+                        <div class="form-text">Why is this a risk to the organization?</div>
+                    </div>
+
+                    {# Potential Impact #}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Potential Impact</label>
+                        <textarea name="potential_impact" class="form-control" rows="3">{{ intake.potential_impact if intake else '' }}</textarea>
+                        <div class="form-text">What could happen if this risk materializes?</div>
+                    </div>
+
+                    {# Affected Assets #}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Affected Assets</label>
+                        <textarea name="affected_assets" class="form-control" rows="3">{{ intake.affected_assets if intake else '' }}</textarea>
+                        <div class="form-text">What systems, data, or processes are at risk?</div>
+                    </div>
+
+                    {# Suggested Owner #}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Suggested Owner</label>
+                        <select name="suggested_owner_id" class="form-select">
+                            <option value="">-- Select (optional) --</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}" {{ 'selected' if intake and intake.suggested_owner_id == u.id }}>{{ u.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Who should own this risk?</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i>Submit Risk</button>
+                        <a href="/risk-assessments/intake" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

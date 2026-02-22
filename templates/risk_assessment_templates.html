@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Assessment Templates{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item active">Templates</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2><i class="bi bi-file-earmark-ruled me-2"></i>Assessment Templates</h2>
+        <p class="text-muted mb-0">Reusable methodology templates for risk assessments</p>
+    </div>
+    <div>
+        <a href="/risk-assessments" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i>Assessments
+        </a>
+        {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <a href="/risk-assessments/templates/new" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>New Template
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% if request.query_params.get('message') %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show">
+    {{ request.query_params.get('message') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if templates_list %}
+<div class="row">
+    {% for tmpl in templates_list %}
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">{{ tmpl.name }}</h6>
+                <span class="badge bg-secondary">{{ ASSESSMENT_METHODOLOGY_LABELS.get(tmpl.methodology, tmpl.methodology) }}</span>
+            </div>
+            <div class="card-body">
+                {% if tmpl.description %}
+                <p class="card-text small text-muted">{{ tmpl.description }}</p>
+                {% endif %}
+                <dl class="row mb-0 small">
+                    <dt class="col-sm-6">Methodology</dt>
+                    <dd class="col-sm-6">{{ ASSESSMENT_METHODOLOGY_LABELS.get(tmpl.methodology, tmpl.methodology) }}</dd>
+                    <dt class="col-sm-6">Risk Appetite</dt>
+                    <dd class="col-sm-6">{{ tmpl.default_risk_appetite or 10 }}</dd>
+                    {% if tmpl.default_scope %}
+                    <dt class="col-12 mt-2">Default Scope</dt>
+                    <dd class="col-12"><small>{{ tmpl.default_scope[:100] }}{% if tmpl.default_scope|length > 100 %}...{% endif %}</small></dd>
+                    {% endif %}
+                </dl>
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <small class="text-muted">Created {{ tmpl.created_at.strftime('%b %d, %Y') if tmpl.created_at else 'N/A' }}</small>
+                <div>
+                    <a href="/risk-assessments/new?template_id={{ tmpl.id }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-play me-1"></i>Use
+                    </a>
+                    {% if request.state.current_user and request.state.current_user.role == 'admin' %}
+                    <form method="post" action="/risk-assessments/templates/{{ tmpl.id }}/delete" class="d-inline"
+                          onsubmit="return confirm('Delete this template?')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5">
+    <i class="bi bi-file-earmark-ruled display-1 text-muted"></i>
+    <h4 class="mt-3 text-muted">No Templates Yet</h4>
+    <p class="text-muted">Create reusable templates to streamline assessment creation.</p>
+    <a href="/risk-assessments/templates/new" class="btn btn-primary mt-2">
+        <i class="bi bi-plus-lg me-1"></i>Create Template
+    </a>
+</div>
+{% endif %}
+{% endblock %}

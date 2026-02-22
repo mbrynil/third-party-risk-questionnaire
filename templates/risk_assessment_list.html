@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Risk Assessments{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item active">Risk Assessments</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-clipboard-data me-2"></i>Risk Assessments</h3>
+        <p class="text-muted mb-0">{{ assessments|length }} campaign{{ 's' if assessments|length != 1 else '' }} tracked</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/risk-assessments/dashboard" class="btn btn-outline-info"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+        <a href="/risk-assessments/templates" class="btn btn-outline-secondary"><i class="bi bi-bookmark-star me-1"></i>Templates</a>
+        <a href="/intake/new" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-in-right me-1"></i>Intake</a>
+        <a href="/risk-assessments/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Assessment</a>
+    </div>
+</div>
+
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#2563eb;">{{ stats.total }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Total Assessments</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#0d6efd;">{{ stats.active }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Active</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#ffc107;">{{ stats.under_review }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Under Review</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#198754;">{{ stats.completed }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Completed</small>
+        </div>
+    </div>
+</div>
+
+{# Filter Bar #}
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    {% for s in VALID_RA_STATUSES %}
+                    <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ RA_STATUS_LABELS.get(s, s) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Methodology</label>
+                <select name="methodology" class="form-select form-select-sm">
+                    <option value="">All Methodologies</option>
+                    {% for m in VALID_ASSESSMENT_METHODOLOGIES %}
+                    <option value="{{ m }}" {% if filters.methodology == m %}selected{% endif %}>{{ ASSESSMENT_METHODOLOGY_LABELS.get(m, m) }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label form-label-sm mb-1">Lead</label>
+                <select name="lead_id" class="form-select form-select-sm">
+                    <option value="">All Leads</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if filters.lead_id == u.id %}selected{% endif %}>{{ u.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-1">
+                <button type="submit" class="btn btn-sm btn-outline-primary flex-grow-1">Filter</button>
+                <a href="/risk-assessments" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Assessment Table #}
+{% if assessments %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:100px;">Ref</th>
+                    <th>Title</th>
+                    <th>Methodology</th>
+                    <th style="width:120px;">Status</th>
+                    <th>Lead</th>
+                    <th>Period</th>
+                    <th style="width:100px;">Due Date</th>
+                    <th style="width:120px;">Progress</th>
+                    <th class="text-end" style="width:80px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in assessments %}
+                <tr>
+                    <td><a href="/risk-assessments/{{ a.id }}" class="text-decoration-none fw-semibold">{{ a.assessment_ref }}</a></td>
+                    <td><a href="/risk-assessments/{{ a.id }}" class="text-decoration-none">{{ a.title }}</a></td>
+                    <td><span class="badge bg-light text-dark">{{ ASSESSMENT_METHODOLOGY_LABELS.get(a.methodology, a.methodology) }}</span></td>
+                    <td><span class="badge" style="background:{{ RA_STATUS_COLORS.get(a.status, '#6c757d') }};">{{ RA_STATUS_LABELS.get(a.status, a.status) }}</span></td>
+                    <td><small class="text-muted">{{ a.lead.display_name if a.lead else '—' }}</small></td>
+                    <td>
+                        <small class="text-muted">
+                            {% if a.period_start and a.period_end %}
+                            {{ a.period_start.strftime('%b %d') }} — {{ a.period_end.strftime('%b %d, %Y') }}
+                            {% else %}
+                            —
+                            {% endif %}
+                        </small>
+                    </td>
+                    <td>
+                        <small class="text-muted">{{ a.due_date.strftime('%Y-%m-%d') if a.due_date else '—' }}</small>
+                    </td>
+                    <td>
+                        {% set total_items = a.items|length if a.items else 0 %}
+                        {% set assessed_items = a.items|selectattr('status', 'in', ['ASSESSED', 'REVIEWED'])|list|length if a.items else 0 %}
+                        {% if total_items > 0 %}
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="progress flex-grow-1" style="height:6px;">
+                                <div class="progress-bar bg-success" style="width:{{ (assessed_items / total_items * 100)|round }}%;"></div>
+                            </div>
+                            <small class="text-muted" style="font-size:0.7rem;">{{ assessed_items }}/{{ total_items }}</small>
+                        </div>
+                        {% else %}
+                        <small class="text-muted fst-italic">No items</small>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="d-flex gap-1 justify-content-end">
+                            <a href="/risk-assessments/{{ a.id }}" class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></a>
+                            <a href="/risk-assessments/{{ a.id }}/edit" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-clipboard-data" style="font-size:3rem;color:#d1d5db;"></i>
+        <h5 class="mt-3 text-muted">No risk assessments found</h5>
+        <p class="text-muted">Create your first risk assessment campaign to begin evaluating organizational risks.</p>
+        <a href="/risk-assessments/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Assessment</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

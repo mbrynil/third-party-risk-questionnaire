@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}{{ intake.intake_ref }} — {{ intake.title }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments/intake">Risk Intake</a></li>
+<li class="breadcrumb-item active">{{ intake.intake_ref }}</li>
+{% endblock %}
+
+{% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# Header #}
+{% set status_colors = {'SUBMITTED': '#0d6efd', 'UNDER_REVIEW': '#fd7e14', 'ACCEPTED': '#198754', 'REJECTED': '#dc3545', 'CONVERTED': '#0dcaf0'} %}
+{% set sev_colors = {'CRITICAL': '#dc3545', 'HIGH': '#fd7e14', 'MEDIUM': '#ffc107', 'LOW': '#198754', 'INFO': '#6c757d'} %}
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <code class="me-2">{{ intake.intake_ref }}</code>{{ intake.title }}
+        </h3>
+        <div class="d-flex gap-2 mt-1">
+            <span class="badge" style="background:{{ status_colors.get(intake.status, '#6c757d') }};">{{ INTAKE_STATUS_LABELS.get(intake.status, intake.status) }}</span>
+            {% if intake.severity %}
+            <span class="badge" style="background:{{ sev_colors.get(intake.severity, '#6c757d') }};">{{ intake.severity }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/risk-assessments/intake" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to List</a>
+    </div>
+</div>
+
+<div class="row">
+    {# Main content — left column #}
+    <div class="col-lg-8">
+        {# Description #}
+        {% if intake.description %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Description</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;" class="mb-0">{{ intake.description }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Business Context #}
+        {% if intake.business_context %}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-briefcase me-1"></i>Business Context</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;" class="mb-0">{{ intake.business_context }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Potential Impact #}
+        {% if intake.potential_impact %}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-exclamation-circle me-1"></i>Potential Impact</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;" class="mb-0">{{ intake.potential_impact }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Affected Assets #}
+        {% if intake.affected_assets %}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-hdd-rack me-1"></i>Affected Assets</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;" class="mb-0">{{ intake.affected_assets }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Review Actions — only for SUBMITTED or UNDER_REVIEW, analyst+ #}
+        {% if intake.status in ['SUBMITTED', 'UNDER_REVIEW'] and request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-clipboard-check me-1"></i>Review Actions</strong></div>
+            <div class="card-body">
+                <form method="post" action="/risk-assessments/intake/{{ intake.id }}/review">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Decision</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="decision" id="decisionAccept" value="ACCEPTED" required>
+                                <label class="form-check-label text-success fw-semibold" for="decisionAccept">
+                                    <i class="bi bi-check-circle me-1"></i>Accept
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="decision" id="decisionReject" value="REJECTED" required>
+                                <label class="form-check-label text-danger fw-semibold" for="decisionReject">
+                                    <i class="bi bi-x-circle me-1"></i>Reject
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Reviewer Notes</label>
+                        <textarea name="reviewer_notes" class="form-control" rows="3" placeholder="Provide rationale for the decision..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Submit Review</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Convert to Risk — only for ACCEPTED, analyst+ #}
+        {% if intake.status == 'ACCEPTED' and request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <div class="card mb-3 border-success">
+            <div class="card-header bg-success bg-opacity-10"><strong><i class="bi bi-arrow-right-circle me-1"></i>Convert to Risk</strong></div>
+            <div class="card-body">
+                <p class="text-muted mb-3">This intake has been accepted. Convert it to a formal risk entry in the Risk Register.</p>
+                <form method="post" action="/risk-assessments/intake/{{ intake.id }}/convert">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Owner</label>
+                        <select name="owner_user_id" class="form-select">
+                            <option value="">-- Select Owner --</option>
+                            {% for u in users %}
+                            <option value="{{ u.id }}" {{ 'selected' if intake.suggested_owner_id and intake.suggested_owner_id == u.id }}>{{ u.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Defaults to the suggested owner if one was provided.</div>
+                    </div>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-arrow-right-circle me-1"></i>Convert to Risk</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Converted Risk — only for CONVERTED #}
+        {% if intake.status == 'CONVERTED' and intake.converted_risk %}
+        <div class="card mb-3 border-info">
+            <div class="card-header bg-info bg-opacity-10"><strong><i class="bi bi-check-circle-fill me-1"></i>Converted Risk</strong></div>
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size:2rem;"></i>
+                    <div>
+                        <p class="mb-1">This intake has been converted to a formal risk entry.</p>
+                        <a href="/risks/{{ intake.converted_risk.id }}" class="btn btn-outline-info btn-sm">
+                            <i class="bi bi-arrow-right me-1"></i>{{ intake.converted_risk.risk_ref }} — {{ intake.converted_risk.title }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Sidebar — right column #}
+    <div class="col-lg-4">
+        {# Details #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Details</strong></div>
+            <div class="card-body small">
+                <dl class="mb-0">
+                    <dt>Category</dt>
+                    <dd>{{ intake.risk_category or '---' }}</dd>
+                    <dt>Source</dt>
+                    <dd>{{ RISK_SOURCE_LABELS.get(intake.risk_source, intake.risk_source or '---') }}</dd>
+                    <dt>Severity</dt>
+                    <dd>
+                        {% if intake.severity %}
+                        <span class="badge" style="background:{{ sev_colors.get(intake.severity, '#6c757d') }};">{{ intake.severity }}</span>
+                        {% else %}
+                        ---
+                        {% endif %}
+                    </dd>
+                    <dt>Submitted By</dt>
+                    <dd>{{ intake.submitted_by.display_name if intake.submitted_by else '---' }}</dd>
+                    <dt>Submitted Date</dt>
+                    <dd>{{ intake.submitted_at.strftime('%Y-%m-%d %H:%M') if intake.submitted_at else '---' }}</dd>
+                    <dt>Suggested Owner</dt>
+                    <dd>{{ intake.suggested_owner.display_name if intake.suggested_owner else '---' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        {# Review Status #}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-clipboard-check me-1"></i>Review Status</strong></div>
+            <div class="card-body small">
+                <dl class="mb-0">
+                    <dt>Reviewer</dt>
+                    <dd>{{ intake.reviewer.display_name if intake.reviewer else '---' }}</dd>
+                    <dt>Reviewed At</dt>
+                    <dd>{{ intake.reviewed_at.strftime('%Y-%m-%d %H:%M') if intake.reviewed_at else '---' }}</dd>
+                    {% if intake.reviewer_notes %}
+                    <dt>Reviewer Notes</dt>
+                    <dd style="white-space:pre-wrap;">{{ intake.reviewer_notes }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

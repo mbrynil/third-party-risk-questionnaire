@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+
+{% block title %}Assessment Report: {{ assessment.assessment_ref }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments">Risk Assessments</a></li>
+<li class="breadcrumb-item"><a href="/risk-assessments/{{ assessment.id }}">{{ assessment.assessment_ref }}</a></li>
+<li class="breadcrumb-item active">Report</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+    .level-box {
+        border-radius: 8px;
+        padding: 0.75rem;
+        text-align: center;
+        color: #fff;
+        min-width: 120px;
+    }
+    .level-box .level-count { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
+    .level-box .level-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .pct-bar { height: 24px; border-radius: 4px; display: flex; overflow: hidden; }
+    .pct-bar-segment { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.65rem; font-weight: 600; min-width: 0; }
+    .finding-card { border-left: 3px solid #2563eb; }
+    .recommendation-card { border-left: 3px solid #198754; }
+    @media print {
+        .no-print { display: none !important; }
+        .card { break-inside: avoid; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# Methodology + status color maps #}
+{% set methodology_colors = {'QUALITATIVE': '#6f42c1', 'SEMI_QUANTITATIVE': '#0d6efd', 'QUANTITATIVE': '#198754'} %}
+{% set status_colors = {'DRAFT': '#6c757d', 'IN_PROGRESS': '#0d6efd', 'REVIEW': '#fd7e14', 'COMPLETED': '#198754', 'CANCELLED': '#dc3545'} %}
+
+{# Header #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <i class="bi bi-file-earmark-bar-graph me-2"></i>Assessment Report: <code>{{ assessment.assessment_ref }}</code>
+        </h3>
+        <p class="text-muted mb-1">{{ assessment.title }}</p>
+        <div class="d-flex gap-2 mt-1">
+            <span class="badge" style="background:{{ methodology_colors.get(assessment.methodology, '#6c757d') }};">{{ methodology_label }}</span>
+            <span class="badge" style="background:{{ status_colors.get(assessment.status, '#6c757d') }};">{{ assessment.status }}</span>
+        </div>
+    </div>
+    <div class="d-flex gap-2 no-print">
+        <button onclick="window.print()" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>Print</button>
+        <a href="/risk-assessments/{{ assessment.id }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to Assessment</a>
+    </div>
+</div>
+
+{# Executive Summary #}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-journal-text me-1"></i>Executive Summary</strong></div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <small class="text-muted d-block">Assessment Period</small>
+                <span>{{ assessment.assessment_period_start.strftime('%Y-%m-%d') if assessment.assessment_period_start else '---' }} to {{ assessment.assessment_period_end.strftime('%Y-%m-%d') if assessment.assessment_period_end else '---' }}</span>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted d-block">Lead Assessor</small>
+                <span>{{ assessment.lead.display_name if assessment.lead else '---' }}</span>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted d-block">Methodology</small>
+                <span class="badge" style="background:{{ methodology_colors.get(assessment.methodology, '#6c757d') }};">{{ methodology_label }}</span>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-md col-6">
+                <div class="card kpi-card">
+                    <div class="card-body py-3">
+                        <div class="kpi-value" style="color:#2563eb;">{{ stats.total_items }}</div>
+                        <div class="kpi-label">Total Risks Assessed</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md col-6">
+                <div class="card kpi-card">
+                    <div class="card-body py-3">
+                        <div class="kpi-value" style="color:#6f42c1;">{{ "%.1f"|format(stats.avg_inherent_score) if stats.avg_inherent_score else '---' }}</div>
+                        <div class="kpi-label">Avg Inherent Score</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md col-6">
+                <div class="card kpi-card">
+                    <div class="card-body py-3">
+                        <div class="kpi-value" style="color:#0dcaf0;">{{ "%.1f"|format(stats.avg_residual_score) if stats.avg_residual_score else '---' }}</div>
+                        <div class="kpi-label">Avg Residual Score</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md col-6">
+                <div class="card kpi-card">
+                    <div class="card-body py-3">
+                        <div class="kpi-value" style="color:#dc3545;">{{ stats.high_critical_count }}</div>
+                        <div class="kpi-label">High / Critical Risks</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Risk Level Distribution #}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-bar-chart-fill me-1"></i>Risk Level Distribution</strong></div>
+    <div class="card-body">
+        {% set levels = ['Critical', 'High', 'Medium', 'Low', 'Very Low'] %}
+        <div class="d-flex gap-3 flex-wrap mb-3">
+            {% for level in levels %}
+            {% set count = items_by_level.get(level, [])|length %}
+            <div class="level-box" style="background:{{ RISK_LEVEL_COLORS.get(level, '#6c757d') }};">
+                <div class="level-count">{{ count }}</div>
+                <div class="level-label">{{ level }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Percentage Bar #}
+        {% set total = stats.total_items if stats.total_items > 0 else 1 %}
+        <div class="pct-bar">
+            {% for level in levels %}
+            {% set count = items_by_level.get(level, [])|length %}
+            {% set pct = (count / total * 100)|round(1) %}
+            {% if count > 0 %}
+            <div class="pct-bar-segment" style="width:{{ pct }}%;background:{{ RISK_LEVEL_COLORS.get(level, '#6c757d') }};">
+                {% if pct >= 8 %}{{ pct }}%{% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        <div class="d-flex gap-3 mt-2">
+            {% for level in levels %}
+            {% set count = items_by_level.get(level, [])|length %}
+            {% set pct = (count / total * 100)|round(1) %}
+            <small class="text-muted"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ RISK_LEVEL_COLORS.get(level, '#6c757d') }};"></span> {{ level }}: {{ pct }}%</small>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{# Assessment Results Table #}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-table me-1"></i>Assessment Results</strong></div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:90px;">Risk Ref</th>
+                    <th>Risk Title</th>
+                    <th>Category</th>
+                    {% if assessment.methodology in ['QUALITATIVE', 'SEMI_QUANTITATIVE'] %}
+                    <th style="width:90px;">Likelihood</th>
+                    <th style="width:80px;">Impact</th>
+                    <th style="width:120px;">Inherent Score</th>
+                    <th style="width:110px;">Residual Score</th>
+                    {% endif %}
+                    {% if assessment.methodology in ['QUANTITATIVE', 'SEMI_QUANTITATIVE'] %}
+                    <th style="width:100px;">SLE ($)</th>
+                    <th style="width:70px;">ARO</th>
+                    <th style="width:100px;">ALE ($)</th>
+                    {% endif %}
+                    <th style="width:100px;">Confidence</th>
+                    <th>Findings</th>
+                    <th style="width:100px;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set all_items = [] %}
+                {% for level in ['Critical', 'High', 'Medium', 'Low', 'Very Low'] %}
+                {% for item in items_by_level.get(level, []) %}
+                {% set risk_level = get_risk_level_label(item.inherent_score) if item.inherent_score else 'Very Low' %}
+                <tr style="border-left: 3px solid {{ RISK_LEVEL_COLORS.get(risk_level, '#6c757d') }};">
+                    <td>
+                        {% if item.risk %}
+                        <a href="/risks/{{ item.risk.id }}" class="text-decoration-none fw-semibold">{{ item.risk.risk_ref }}</a>
+                        {% else %}
+                        <span class="text-muted">---</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.risk %}
+                        <a href="/risks/{{ item.risk.id }}" class="text-decoration-none">{{ item.risk.title }}</a>
+                        {% else %}
+                        <span class="text-muted">{{ item.notes or '---' }}</span>
+                        {% endif %}
+                    </td>
+                    <td><small class="text-muted">{{ item.risk.risk_category if item.risk else '---' }}</small></td>
+                    {% if assessment.methodology in ['QUALITATIVE', 'SEMI_QUANTITATIVE'] %}
+                    <td>
+                        {% if item.likelihood %}
+                        <span class="fw-semibold">{{ item.likelihood }}</span>
+                        {% if LIKELIHOOD_DESCRIPTORS %}
+                        <small class="text-muted d-block" style="font-size:0.65rem;">{{ LIKELIHOOD_DESCRIPTORS.get(item.likelihood, '') }}</small>
+                        {% endif %}
+                        {% else %}
+                        <small class="text-muted">---</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.impact %}
+                        <span class="fw-semibold">{{ item.impact }}</span>
+                        {% if IMPACT_DESCRIPTORS %}
+                        <small class="text-muted d-block" style="font-size:0.65rem;">{{ IMPACT_DESCRIPTORS.get(item.impact, '') }}</small>
+                        {% endif %}
+                        {% else %}
+                        <small class="text-muted">---</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.inherent_score %}
+                        <span class="badge" style="background:{{ RISK_LEVEL_COLORS.get(get_risk_level_label(item.inherent_score), '#6c757d') }};">{{ get_risk_level_label(item.inherent_score) }}</span>
+                        <small class="text-muted ms-1">({{ item.inherent_score }})</small>
+                        {% else %}
+                        <small class="text-muted fst-italic">Not scored</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.residual_score %}
+                        <span class="badge" style="background:{{ RISK_LEVEL_COLORS.get(get_risk_level_label(item.residual_score), '#6c757d') }};font-size:0.7rem;">{{ item.residual_score }}</span>
+                        {% else %}
+                        <small class="text-muted">---</small>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                    {% if assessment.methodology in ['QUANTITATIVE', 'SEMI_QUANTITATIVE'] %}
+                    <td><small>{{ "${:,.0f}".format(item.single_loss_expectancy) if item.single_loss_expectancy else '---' }}</small></td>
+                    <td><small>{{ "%.2f"|format(item.annual_rate_of_occurrence) if item.annual_rate_of_occurrence else '---' }}</small></td>
+                    <td>
+                        {% if item.annualized_loss_expectancy %}
+                        <span class="fw-semibold">${{ "{:,.0f}".format(item.annualized_loss_expectancy) }}</span>
+                        {% else %}
+                        <small class="text-muted">---</small>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                    <td>
+                        {% if item.confidence_level %}
+                        {% set conf_colors = {'HIGH': '#198754', 'MEDIUM': '#ffc107', 'LOW': '#dc3545'} %}
+                        <span class="badge" style="background:{{ conf_colors.get(item.confidence_level, '#6c757d') }};">{{ item.confidence_level }}</span>
+                        {% else %}
+                        <small class="text-muted">---</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.findings %}
+                        <small class="text-muted">{{ item.findings[:60] }}{{ '...' if item.findings|length > 60 else '' }}</small>
+                        {% else %}
+                        <small class="text-muted">---</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.status %}
+                        {% set item_status_colors = {'PENDING': '#6c757d', 'IN_PROGRESS': '#0d6efd', 'COMPLETED': '#198754', 'DEFERRED': '#fd7e14'} %}
+                        <span class="badge" style="background:{{ item_status_colors.get(item.status, '#6c757d') }};">{{ item.status }}</span>
+                        {% else %}
+                        <small class="text-muted">---</small>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# Key Findings #}
+{% set items_with_findings = [] %}
+{% for level in ['Critical', 'High', 'Medium', 'Low', 'Very Low'] %}
+{% for item in items_by_level.get(level, []) %}
+{% if item.findings %}
+{% set _ = items_with_findings.append(item) %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+{% if items_with_findings %}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-search me-1"></i>Key Findings</strong> <span class="badge bg-secondary">{{ items_with_findings|length }}</span></div>
+    <div class="card-body">
+        {% for item in items_with_findings %}
+        <div class="card finding-card mb-2">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        {% if item.risk %}
+                        <strong class="small">{{ item.risk.risk_ref }}</strong>
+                        <span class="small text-muted ms-1">{{ item.risk.title }}</span>
+                        {% endif %}
+                    </div>
+                    {% if item.inherent_score %}
+                    <span class="badge" style="background:{{ RISK_LEVEL_COLORS.get(get_risk_level_label(item.inherent_score), '#6c757d') }};font-size:0.65rem;">{{ get_risk_level_label(item.inherent_score) }}</span>
+                    {% endif %}
+                </div>
+                <p class="small mb-0 mt-1" style="white-space:pre-wrap;">{{ item.findings }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# Recommendations #}
+{% set items_with_recs = [] %}
+{% for level in ['Critical', 'High', 'Medium', 'Low', 'Very Low'] %}
+{% for item in items_by_level.get(level, []) %}
+{% if item.recommended_treatment %}
+{% set _ = items_with_recs.append(item) %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+{% if items_with_recs %}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-lightbulb me-1"></i>Recommendations</strong> <span class="badge bg-secondary">{{ items_with_recs|length }}</span></div>
+    <div class="card-body">
+        {% for item in items_with_recs %}
+        <div class="card recommendation-card mb-2">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        {% if item.risk %}
+                        <strong class="small">{{ item.risk.risk_ref }}</strong>
+                        <span class="small text-muted ms-1">{{ item.risk.title }}</span>
+                        {% endif %}
+                    </div>
+                    {% if item.inherent_score %}
+                    <span class="badge" style="background:{{ RISK_LEVEL_COLORS.get(get_risk_level_label(item.inherent_score), '#6c757d') }};font-size:0.65rem;">{{ get_risk_level_label(item.inherent_score) }}</span>
+                    {% endif %}
+                </div>
+                <p class="small mb-0 mt-1" style="white-space:pre-wrap;">{{ item.recommended_treatment }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# Financial Summary — only for QUANTITATIVE or SEMI_QUANTITATIVE #}
+{% if assessment.methodology in ['QUANTITATIVE', 'SEMI_QUANTITATIVE'] %}
+<div class="card mb-4">
+    <div class="card-header"><strong><i class="bi bi-currency-dollar me-1"></i>Financial Summary</strong></div>
+    <div class="card-body">
+        {# Compute financial stats #}
+        {% set all_items_flat = [] %}
+        {% for level in ['Critical', 'High', 'Medium', 'Low', 'Very Low'] %}
+        {% for item in items_by_level.get(level, []) %}
+        {% set _ = all_items_flat.append(item) %}
+        {% endfor %}
+        {% endfor %}
+
+        {% set ale_items = all_items_flat|selectattr('annualized_loss_expectancy')|list %}
+        {% set total_ale = ale_items|sum(attribute='annualized_loss_expectancy') %}
+        {% set avg_ale = (total_ale / ale_items|length) if ale_items|length > 0 else 0 %}
+        {% set top_ale = ale_items|sort(attribute='annualized_loss_expectancy', reverse=true) %}
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card kpi-card">
+                    <div class="card-body py-3">
+                        <div class="kpi-value" style="color:#dc3545;">${{ "{:,.0f}".format(total_ale) }}</div>
+                        <div class="kpi-label">Total ALE</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card kpi-card">
+                    <div class="card-body py-3">
+                        <div class="kpi-value" style="color:#fd7e14;">${{ "{:,.0f}".format(avg_ale) }}</div>
+                        <div class="kpi-label">Average ALE</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card kpi-card">
+                    <div class="card-body py-3">
+                        <div class="kpi-value" style="color:#6f42c1;">{{ ale_items|length }}</div>
+                        <div class="kpi-label">Risks with ALE</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if top_ale %}
+        <h6 class="fw-semibold mb-3">Top 5 Risks by Annual Loss Expectancy</h6>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Risk</th>
+                        <th style="width:120px;">SLE</th>
+                        <th style="width:80px;">ARO</th>
+                        <th style="width:120px;">ALE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in top_ale[:5] %}
+                    <tr>
+                        <td><span class="badge bg-dark">{{ loop.index }}</span></td>
+                        <td>
+                            {% if item.risk %}
+                            <a href="/risks/{{ item.risk.id }}" class="text-decoration-none">
+                                <strong>{{ item.risk.risk_ref }}</strong> — {{ item.risk.title }}
+                            </a>
+                            {% else %}
+                            <span class="text-muted">---</span>
+                            {% endif %}
+                        </td>
+                        <td>${{ "{:,.0f}".format(item.single_loss_expectancy) if item.single_loss_expectancy else '---' }}</td>
+                        <td>{{ "%.2f"|format(item.annual_rate_of_occurrence) if item.annual_rate_of_occurrence else '---' }}</td>
+                        <td class="fw-bold text-danger">${{ "{:,.0f}".format(item.annualized_loss_expectancy) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
