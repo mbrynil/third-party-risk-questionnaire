@@ -707,6 +707,9 @@ async def assessment_item_form(
         "assets": assets,
         "vendors": vendors,
         "latest_sim": latest_sim,
+        "sim_histogram_json": latest_sim.histogram_json if latest_sim else "[]",
+        "sim_exceedance_json": latest_sim.exceedance_json if latest_sim else "[]",
+        "sim_sensitivity_json": latest_sim.sensitivity_json if latest_sim else "[]",
         "VALID_TREATMENT_DECISIONS": VALID_TREATMENT_DECISIONS,
         "TREATMENT_DECISION_LABELS": TREATMENT_DECISION_LABELS,
         "EFFECTIVENESS_LABELS": EFFECTIVENESS_LABELS,
@@ -768,6 +771,8 @@ async def assessment_item_assess(
         ]
         for field in fair_fields:
             val = form.get(field)
+            if val:
+                val = val.replace(",", "").replace("$", "").strip()
             scores[field] = float(val) if val else None
 
         scores["asset_id"] = form.get("asset_id") or None
@@ -788,7 +793,10 @@ async def assessment_item_assess(
               description=f"Assessed item {item_id} (risk: {item.risk.risk_ref if item.risk else item.risk_id})",
               actor_user=current_user)
     db.commit()
-    return RedirectResponse(url=f"/risk-assessments/{assessment_id}", status_code=303)
+    return RedirectResponse(
+        url=f"/risk-assessments/{assessment_id}/items/{item_id}?message=Assessment saved&message_type=success",
+        status_code=303,
+    )
 
 
 # ==================== REVIEW ITEM ====================
@@ -998,8 +1006,17 @@ async def run_simulation(
     if distribution not in VALID_SIMULATION_DISTRIBUTIONS:
         distribution = "PERT"
 
-    run = mc_svc.run_and_store(db, item_id, user_id=current_user.id,
-                                iterations=iterations, seed=seed, distribution=distribution)
+    try:
+        run = mc_svc.run_and_store(db, item_id, user_id=current_user.id,
+                                    iterations=iterations, seed=seed, distribution=distribution)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return RedirectResponse(
+            url=f"/risk-assessments/{assessment_id}/items/{item_id}?message=Simulation error: {str(e)[:200]}&message_type=danger",
+            status_code=303,
+        )
+
     if not run:
         return RedirectResponse(
             url=f"/risk-assessments/{assessment_id}/items/{item_id}?message=Missing FAIR factor inputs — fill all min/likely/max fields before simulating&message_type=danger",
@@ -1012,7 +1029,7 @@ async def run_simulation(
               actor_user=current_user)
     db.commit()
     return RedirectResponse(
-        url=f"/risk-assessments/{assessment_id}/items/{item_id}/simulation/{run.id}",
+        url=f"/risk-assessments/{assessment_id}/items/{item_id}?message=Simulation complete — {iterations:,} iterations&message_type=success",
         status_code=303,
     )
 

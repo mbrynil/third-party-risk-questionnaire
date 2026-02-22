@@ -208,6 +208,71 @@
             </div>
         </div>
 
+        {# Monte Carlo Simulation Summary #}
+        {% set sim_items = [] %}
+        {% for item in assessment.items %}
+            {% if item.simulation_runs %}
+                {% if sim_items.append(item) %}{% endif %}
+            {% endif %}
+        {% endfor %}
+        {% if sim_items %}
+        <div class="card mb-3 border-primary">
+            <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-dice-5 me-1"></i>Monte Carlo Simulation Results</strong>
+                <a href="/risk-assessments/{{ assessment.id }}/executive-summary" class="btn btn-sm btn-outline-primary"><i class="bi bi-file-earmark-bar-graph me-1"></i>Executive Summary</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Risk</th>
+                                <th class="text-end">Mean ALE</th>
+                                <th class="text-end">P90 ALE</th>
+                                <th class="text-end">P95 ALE</th>
+                                <th class="text-center">Iterations</th>
+                                <th class="text-end">Run Date</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set ns = namespace(total_mean=0, total_p90=0) %}
+                            {% for item in sim_items %}
+                            {% set run = item.simulation_runs[0] %}
+                            {% set ns.total_mean = ns.total_mean + (run.mean_ale or 0) %}
+                            {% set ns.total_p90 = ns.total_p90 + (run.p90_ale or 0) %}
+                            <tr>
+                                <td>
+                                    <code>{{ item.risk.risk_ref if item.risk else '—' }}</code>
+                                    <small class="text-muted ms-1">{{ item.risk.title if item.risk else '' }}</small>
+                                </td>
+                                <td class="text-end fw-bold">${{ "{:,.0f}".format(run.mean_ale) }}</td>
+                                <td class="text-end fw-bold text-warning">${{ "{:,.0f}".format(run.p90_ale) }}</td>
+                                <td class="text-end fw-bold text-danger">${{ "{:,.0f}".format(run.p95_ale) }}</td>
+                                <td class="text-center"><small>{{ "{:,}".format(run.iterations) }}</small></td>
+                                <td class="text-end"><small class="text-muted">{{ run.run_at.strftime('%Y-%m-%d %H:%M') if run.run_at else '—' }}</small></td>
+                                <td class="text-end">
+                                    <a href="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}/simulation/{{ run.id }}" class="btn btn-sm btn-outline-primary" title="View full results"><i class="bi bi-bar-chart"></i></a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% if sim_items|length > 1 %}
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td>Portfolio Total</td>
+                                <td class="text-end text-primary">${{ "{:,.0f}".format(ns.total_mean) }}</td>
+                                <td class="text-end text-danger">${{ "{:,.0f}".format(ns.total_p90) }}</td>
+                                <td colspan="4"></td>
+                            </tr>
+                        </tfoot>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         {# Add Risks Collapsible #}
         {% if assessment.status in ['DRAFT', 'IN_PROGRESS'] and request.state.current_user and request.state.current_user.role != 'viewer' %}
         <div class="collapse mb-3" id="addRisksSection">

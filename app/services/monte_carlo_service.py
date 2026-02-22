@@ -20,28 +20,42 @@ from models import (
 # ── Distribution Samplers ────────────────────────────────────────────────
 
 def pert_sample(min_val, likely, max_val, lambda_=4, rng=None):
-    """Sample from a PERT (modified Beta) distribution using the inverse-CDF method.
+    """Sample from a PERT (modified Beta) distribution.
 
     The PERT distribution is parameterized by min, most-likely, max and a shape
     parameter lambda_ (default 4). We convert to standard Beta(alpha, beta)
     parameters and sample using the Gamma-ratio method from Python stdlib.
     """
     rng = rng or random
-    if max_val <= min_val:
+
+    # Auto-swap if min > max
+    if min_val > max_val:
+        min_val, max_val = max_val, min_val
+
+    # Clamp likely within bounds
+    likely = max(min_val, min(likely, max_val))
+
+    # Degenerate case: no range
+    if max_val - min_val < 1e-12:
         return likely
 
     mu = (min_val + lambda_ * likely + max_val) / (lambda_ + 2)
-    # Prevent division by zero
-    if max_val == min_val:
-        return likely
 
-    # Standard Beta parameters
-    a1 = ((mu - min_val) * (2 * likely - min_val - max_val)) / ((likely - mu) * (max_val - min_val))
-    if a1 <= 0:
-        a1 = 1.0 + lambda_ / 2
-    a2 = a1 * (max_val - mu) / (mu - min_val)
-    if a2 <= 0:
-        a2 = 1.0 + lambda_ / 2
+    # When likely == mu (or very close), the standard PERT alpha formula
+    # divides by (likely - mu) which is zero.  Fall back to symmetric Beta
+    # shape parameters derived from lambda_.
+    denom = (likely - mu) * (max_val - min_val)
+    if abs(denom) < 1e-12:
+        # Symmetric fallback: alpha = beta = 1 + lambda_/2  (bell-shaped)
+        a1 = 1.0 + lambda_ / 2.0
+        a2 = a1
+    else:
+        a1 = ((mu - min_val) * (2 * likely - min_val - max_val)) / denom
+        if a1 <= 0:
+            a1 = 1.0 + lambda_ / 2.0
+        a2 = a1 * (max_val - mu) / (mu - min_val) if (mu - min_val) > 1e-12 else 1.0 + lambda_ / 2.0
+        if a2 <= 0:
+            a2 = 1.0 + lambda_ / 2.0
 
     # Sample from Beta(a1, a2) using gammavariate
     x = rng.gammavariate(a1, 1.0)
@@ -57,7 +71,10 @@ def pert_sample(min_val, likely, max_val, lambda_=4, rng=None):
 def triangular_sample(min_val, likely, max_val, rng=None):
     """Triangular distribution — uses Python stdlib random.triangular()."""
     rng = rng or random
-    if max_val <= min_val:
+    # Auto-swap if min > max
+    if min_val > max_val:
+        min_val, max_val = max_val, min_val
+    if max_val - min_val < 1e-12:
         return likely
     # Clamp mode within bounds
     mode = max(min_val, min(likely, max_val))
@@ -317,6 +334,17 @@ def run_and_store(db: Session, item_id: int, user_id: int = None,
         if getattr(item, attr, None) is None:
             return None
 
+    # Auto-correct min/max ordering (user may have entered them backwards)
+    def _ordered(lo, hi):
+        if lo is not None and hi is not None and lo > hi:
+            return hi, lo
+        return lo, hi
+
+    tef_min, tef_max = _ordered(item.tef_min, item.tef_max)
+    vuln_min, vuln_max = _ordered(item.vuln_min, item.vuln_max)
+    plm_min, plm_max = _ordered(item.plm_min, item.plm_max)
+    slm_min, slm_max = _ordered(item.slm_min, item.slm_max)
+
     # Compute combined control effectiveness from linked controls
     control_links = db.query(ScenarioControlLink).filter(
         ScenarioControlLink.item_id == item_id
@@ -325,10 +353,10 @@ def run_and_store(db: Session, item_id: int, user_id: int = None,
 
     # Run simulation
     result = run_simulation(
-        tef_min=item.tef_min, tef_likely=item.tef_likely, tef_max=item.tef_max,
-        vuln_min=item.vuln_min, vuln_likely=item.vuln_likely, vuln_max=item.vuln_max,
-        plm_min=item.plm_min, plm_likely=item.plm_likely, plm_max=item.plm_max,
-        slm_min=item.slm_min, slm_likely=item.slm_likely, slm_max=item.slm_max,
+        tef_min=tef_min, tef_likely=item.tef_likely, tef_max=tef_max,
+        vuln_min=vuln_min, vuln_likely=item.vuln_likely, vuln_max=vuln_max,
+        plm_min=plm_min, plm_likely=item.plm_likely, plm_max=plm_max,
+        slm_min=slm_min, slm_likely=item.slm_likely, slm_max=slm_max,
         control_effectiveness=combined_eff,
         iterations=iterations,
         seed=seed,

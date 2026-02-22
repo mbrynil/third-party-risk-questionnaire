@@ -275,22 +275,22 @@
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text">$ Min</span>
-                                        <input type="number" name="plm_min" class="form-control" min="0" step="100"
-                                               value="{{ item.plm_min|int if item.plm_min is not none else '' }}" placeholder="0">
+                                        <input type="text" inputmode="numeric" name="plm_min" class="form-control fair-dollar"
+                                               value="{{ item.plm_min|int if item.plm_min is not none else '' }}" placeholder="e.g. 10000">
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text">$ Likely</span>
-                                        <input type="number" name="plm_likely" class="form-control" min="0" step="100"
-                                               value="{{ item.plm_likely|int if item.plm_likely is not none else '' }}" placeholder="0">
+                                        <input type="text" inputmode="numeric" name="plm_likely" class="form-control fair-dollar"
+                                               value="{{ item.plm_likely|int if item.plm_likely is not none else '' }}" placeholder="e.g. 50000">
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text">$ Max</span>
-                                        <input type="number" name="plm_max" class="form-control" min="0" step="100"
-                                               value="{{ item.plm_max|int if item.plm_max is not none else '' }}" placeholder="0">
+                                        <input type="text" inputmode="numeric" name="plm_max" class="form-control fair-dollar"
+                                               value="{{ item.plm_max|int if item.plm_max is not none else '' }}" placeholder="e.g. 500000">
                                     </div>
                                 </div>
                             </div>
@@ -303,29 +303,121 @@
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text">$ Min</span>
-                                        <input type="number" name="slm_min" class="form-control" min="0" step="100"
-                                               value="{{ item.slm_min|int if item.slm_min is not none else '' }}" placeholder="0">
+                                        <input type="text" inputmode="numeric" name="slm_min" class="form-control fair-dollar"
+                                               value="{{ item.slm_min|int if item.slm_min is not none else '' }}" placeholder="e.g. 5000">
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text">$ Likely</span>
-                                        <input type="number" name="slm_likely" class="form-control" min="0" step="100"
-                                               value="{{ item.slm_likely|int if item.slm_likely is not none else '' }}" placeholder="0">
+                                        <input type="text" inputmode="numeric" name="slm_likely" class="form-control fair-dollar"
+                                               value="{{ item.slm_likely|int if item.slm_likely is not none else '' }}" placeholder="e.g. 25000">
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="input-group input-group-sm">
                                         <span class="input-group-text">$ Max</span>
-                                        <input type="number" name="slm_max" class="form-control" min="0" step="100"
-                                               value="{{ item.slm_max|int if item.slm_max is not none else '' }}" placeholder="0">
+                                        <input type="text" inputmode="numeric" name="slm_max" class="form-control fair-dollar"
+                                               value="{{ item.slm_max|int if item.slm_max is not none else '' }}" placeholder="e.g. 250000">
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        <div class="border-top pt-3 mt-2">
+                            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-save me-1"></i>Save All & Continue</button>
+                            <span class="text-muted small ms-2">Saves all scoring data including FAIR factors</span>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {# ── Simulation Results (inline) ── #}
+            {% if latest_sim %}
+            <div class="card mb-3 border-primary">
+                <div class="card-header bg-primary bg-opacity-10">
+                    <strong><i class="bi bi-dice-5 me-1"></i>Monte Carlo Simulation Results</strong>
+                    <span class="badge bg-light text-dark ms-2">{{ "{:,}".format(latest_sim.iterations) }} iterations</span>
+                    <span class="badge bg-light text-dark">{{ SIMULATION_DISTRIBUTION_LABELS.get(latest_sim.distribution_type, latest_sim.distribution_type) }}</span>
+                    <small class="text-muted float-end">{{ latest_sim.run_at.strftime('%Y-%m-%d %H:%M') if latest_sim.run_at else '' }}</small>
+                </div>
+                <div class="card-body">
+                    {# KPI Row #}
+                    <div class="row g-2 mb-3">
+                        <div class="col">
+                            <div class="text-center p-2 rounded" style="background:#eff6ff;">
+                                <div class="fw-bold fs-5 text-primary">${{ "{:,.0f}".format(latest_sim.mean_ale) }}</div>
+                                <div style="font-size:0.65rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Mean ALE</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="text-center p-2 rounded" style="background:#f8f9fa;">
+                                <div class="fw-bold fs-5">${{ "{:,.0f}".format(latest_sim.median_ale) }}</div>
+                                <div style="font-size:0.65rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Median</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="text-center p-2 rounded" style="background:#fff8e1;">
+                                <div class="fw-bold fs-5 text-warning">${{ "{:,.0f}".format(latest_sim.p90_ale) }}</div>
+                                <div style="font-size:0.65rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">P90</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="text-center p-2 rounded" style="background:#fef2f2;">
+                                <div class="fw-bold fs-5 text-danger">${{ "{:,.0f}".format(latest_sim.p95_ale) }}</div>
+                                <div style="font-size:0.65rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">P95</div>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <div class="text-center p-2 rounded" style="background:#f8f9fa;">
+                                <div class="fw-bold fs-5">${{ "{:,.0f}".format(latest_sim.std_dev) }}</div>
+                                <div style="font-size:0.65rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Std Dev</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {# Charts #}
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <h6 class="small fw-semibold mb-1"><i class="bi bi-bar-chart me-1"></i>Loss Distribution</h6>
+                            <div style="position:relative;height:220px;">
+                                <canvas id="inlineHistogram"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="small fw-semibold mb-1"><i class="bi bi-graph-down me-1"></i>Exceedance Curve</h6>
+                            <div style="position:relative;height:220px;">
+                                <canvas id="inlineExceedance"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-6">
+                            <h6 class="small fw-semibold mb-1"><i class="bi bi-sort-down me-1"></i>Sensitivity (Tornado)</h6>
+                            <div style="position:relative;height:180px;">
+                                <canvas id="inlineTornado"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="small fw-semibold mb-1"><i class="bi bi-table me-1"></i>Detailed Statistics</h6>
+                            <table class="table table-sm small mb-0">
+                                <tbody>
+                                    <tr><td class="text-muted">Minimum</td><td class="text-end fw-bold">${{ "{:,.0f}".format(latest_sim.min_ale) }}</td></tr>
+                                    <tr><td class="text-muted">5th Percentile</td><td class="text-end fw-bold">${{ "{:,.0f}".format(latest_sim.p5_ale) }}</td></tr>
+                                    <tr><td class="text-muted">10th Percentile</td><td class="text-end fw-bold">${{ "{:,.0f}".format(latest_sim.p10_ale) }}</td></tr>
+                                    <tr><td class="text-muted">90th Percentile</td><td class="text-end fw-bold text-warning">${{ "{:,.0f}".format(latest_sim.p90_ale) }}</td></tr>
+                                    <tr><td class="text-muted">95th Percentile</td><td class="text-end fw-bold text-danger">${{ "{:,.0f}".format(latest_sim.p95_ale) }}</td></tr>
+                                    <tr><td class="text-muted">Maximum</td><td class="text-end fw-bold">${{ "{:,.0f}".format(latest_sim.max_ale) }}</td></tr>
+                                    <tr><td class="text-muted">Control Effectiveness</td><td class="text-end fw-bold">{{ "{:.1%}".format(latest_sim.combined_control_effectiveness or 0) }}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <a href="/risk-assessments/{{ assessment.id }}/items/{{ item.id }}/simulation/{{ latest_sim.id }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrows-fullscreen me-1"></i>View Full-Page Results</a>
+                </div>
+            </div>
+            {% endif %}
 
             {# ── Scenario Context ── #}
             <div class="card mb-3">
@@ -583,6 +675,9 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{% if latest_sim %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endif %}
 <script>
 (function() {
     // Risk level thresholds
@@ -719,6 +814,112 @@
     updateInherentScore();
     updateResidualScore();
     updateFinancials();
+
+    // ── Inline Simulation Charts ────────────────────────────────────────
+    {% if latest_sim %}
+    (function() {
+        var histogramData = {{ sim_histogram_json|safe }};
+        var exceedanceData = {{ sim_exceedance_json|safe }};
+        var sensitivityData = {{ sim_sensitivity_json|safe }};
+        var meanALE = {{ latest_sim.mean_ale }};
+        var p90ALE = {{ latest_sim.p90_ale }};
+        var p95ALE = {{ latest_sim.p95_ale }};
+
+        function fmt(val) {
+            return '$' + val.toLocaleString('en-US', {maximumFractionDigits: 0});
+        }
+
+        // Histogram
+        if (histogramData.length > 0 && document.getElementById('inlineHistogram')) {
+            new Chart(document.getElementById('inlineHistogram').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: histogramData.map(function(b) { return fmt(b.bin_start); }),
+                    datasets: [{
+                        data: histogramData.map(function(b) { return b.count; }),
+                        backgroundColor: histogramData.map(function(b) {
+                            var mid = (b.bin_start + b.bin_end) / 2;
+                            if (mid >= p95ALE) return 'rgba(220,53,69,0.7)';
+                            if (mid >= p90ALE) return 'rgba(253,126,20,0.7)';
+                            if (mid >= meanALE) return 'rgba(255,193,7,0.7)';
+                            return 'rgba(13,110,253,0.6)';
+                        }),
+                        borderWidth: 0, barPercentage: 1.0, categoryPercentage: 1.0,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false },
+                        tooltip: { callbacks: {
+                            title: function(items) { var i = items[0].dataIndex; return fmt(histogramData[i].bin_start) + ' — ' + fmt(histogramData[i].bin_end); },
+                            label: function(item) { return item.raw + ' iterations'; }
+                        }}
+                    },
+                    scales: {
+                        x: { display: true, ticks: { maxTicksLimit: 6, font: { size: 9 }, callback: function(val, idx) { return idx % 6 === 0 ? this.getLabelForValue(val) : ''; } } },
+                        y: { ticks: { font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        // Exceedance
+        if (exceedanceData.length > 0 && document.getElementById('inlineExceedance')) {
+            new Chart(document.getElementById('inlineExceedance').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: exceedanceData.map(function(e) { return e.threshold; }),
+                    datasets: [{
+                        data: exceedanceData.map(function(e) { return e.probability; }),
+                        borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.1)',
+                        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false },
+                        tooltip: { callbacks: {
+                            title: function(items) { return fmt(items[0].parsed.x); },
+                            label: function(item) { return (item.parsed.y * 100).toFixed(1) + '% chance of exceeding'; }
+                        }}
+                    },
+                    scales: {
+                        x: { type: 'linear', ticks: { callback: function(val) { return fmt(val); }, maxTicksLimit: 6, font: { size: 9 } } },
+                        y: { min: 0, max: 1, ticks: { callback: function(val) { return (val * 100).toFixed(0) + '%'; }, font: { size: 9 } } }
+                    }
+                }
+            });
+        }
+
+        // Tornado
+        if (sensitivityData.length > 0 && document.getElementById('inlineTornado')) {
+            var factorLabels = {'TEF': 'Threat Event Freq', 'VULN': 'Vulnerability', 'PLM': 'Primary Loss', 'SLM': 'Secondary Loss'};
+            new Chart(document.getElementById('inlineTornado').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: sensitivityData.map(function(s) { return factorLabels[s.factor] || s.factor; }),
+                    datasets: [{
+                        data: sensitivityData.map(function(s) { return s.correlation; }),
+                        backgroundColor: sensitivityData.map(function(s) {
+                            return s.correlation >= 0 ? 'rgba(13,110,253,0.7)' : 'rgba(220,53,69,0.7)';
+                        }),
+                        borderWidth: 0,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false },
+                        tooltip: { callbacks: { label: function(item) { return 'Correlation: ' + item.raw.toFixed(3); } } }
+                    },
+                    scales: {
+                        x: { min: -1, max: 1, ticks: { font: { size: 9 } } },
+                        y: { ticks: { font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+    })();
+    {% endif %}
 })();
 </script>
 {% endblock %}
