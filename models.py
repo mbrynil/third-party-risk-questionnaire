@@ -1343,7 +1343,9 @@ COMMENT_ENTITY_CONTROL = "control"
 COMMENT_ENTITY_CONTROL_IMPL = "control_implementation"
 COMMENT_ENTITY_POLICY = "policy"
 COMMENT_ENTITY_RISK = "risk"
-VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION, COMMENT_ENTITY_CONTROL, COMMENT_ENTITY_CONTROL_IMPL, COMMENT_ENTITY_POLICY, COMMENT_ENTITY_RISK]
+COMMENT_ENTITY_INCIDENT = "incident"
+COMMENT_ENTITY_ASSET = "asset"
+VALID_COMMENT_ENTITIES = [COMMENT_ENTITY_VENDOR, COMMENT_ENTITY_ASSESSMENT, COMMENT_ENTITY_DECISION, COMMENT_ENTITY_REMEDIATION, COMMENT_ENTITY_CONTROL, COMMENT_ENTITY_CONTROL_IMPL, COMMENT_ENTITY_POLICY, COMMENT_ENTITY_RISK, COMMENT_ENTITY_INCIDENT, COMMENT_ENTITY_ASSET]
 
 
 class Comment(Base):
@@ -1773,6 +1775,8 @@ AUDIT_ENTITY_POLICY = "policy"
 AUDIT_ENTITY_RISK = "risk"
 AUDIT_ENTITY_CUSTOM_FRAMEWORK = "custom_framework"
 AUDIT_ENTITY_AUDIT_PROJECT = "audit_project"
+AUDIT_ENTITY_INCIDENT = "incident"
+AUDIT_ENTITY_ASSET = "asset"
 
 
 class AuditLog(Base):
@@ -3491,6 +3495,290 @@ def seed_default_risks():
         db.commit()
     finally:
         db.close()
+
+
+# ==================== INCIDENT MANAGEMENT ====================
+
+INCIDENT_SEVERITY_P1 = "P1"
+INCIDENT_SEVERITY_P2 = "P2"
+INCIDENT_SEVERITY_P3 = "P3"
+INCIDENT_SEVERITY_P4 = "P4"
+VALID_INCIDENT_SEVERITIES = ["P1", "P2", "P3", "P4"]
+INCIDENT_SEVERITY_LABELS = {"P1": "Critical", "P2": "High", "P3": "Medium", "P4": "Low"}
+INCIDENT_SEVERITY_COLORS = {"P1": "#dc3545", "P2": "#fd7e14", "P3": "#ffc107", "P4": "#198754"}
+
+INCIDENT_STATUS_REPORTED = "REPORTED"
+INCIDENT_STATUS_TRIAGED = "TRIAGED"
+INCIDENT_STATUS_INVESTIGATING = "INVESTIGATING"
+INCIDENT_STATUS_CONTAINED = "CONTAINED"
+INCIDENT_STATUS_RESOLVED = "RESOLVED"
+INCIDENT_STATUS_CLOSED = "CLOSED"
+VALID_INCIDENT_STATUSES = ["REPORTED", "TRIAGED", "INVESTIGATING", "CONTAINED", "RESOLVED", "CLOSED"]
+INCIDENT_STATUS_LABELS = {
+    "REPORTED": "Reported", "TRIAGED": "Triaged", "INVESTIGATING": "Investigating",
+    "CONTAINED": "Contained", "RESOLVED": "Resolved", "CLOSED": "Closed",
+}
+INCIDENT_STATUS_COLORS = {
+    "REPORTED": "#dc3545", "TRIAGED": "#fd7e14", "INVESTIGATING": "#ffc107",
+    "CONTAINED": "#0dcaf0", "RESOLVED": "#198754", "CLOSED": "#6c757d",
+}
+
+VALID_INCIDENT_CATEGORIES = [
+    "DATA_BREACH", "UNAUTHORIZED_ACCESS", "MALWARE", "PHISHING",
+    "DENIAL_OF_SERVICE", "INSIDER_THREAT", "PHYSICAL_SECURITY",
+    "THIRD_PARTY", "POLICY_VIOLATION", "CONFIGURATION_ERROR", "OTHER",
+]
+INCIDENT_CATEGORY_LABELS = {
+    "DATA_BREACH": "Data Breach", "UNAUTHORIZED_ACCESS": "Unauthorized Access",
+    "MALWARE": "Malware / Ransomware", "PHISHING": "Phishing",
+    "DENIAL_OF_SERVICE": "Denial of Service", "INSIDER_THREAT": "Insider Threat",
+    "PHYSICAL_SECURITY": "Physical Security", "THIRD_PARTY": "Third-Party Incident",
+    "POLICY_VIOLATION": "Policy Violation", "CONFIGURATION_ERROR": "Configuration Error",
+    "OTHER": "Other",
+}
+
+
+class Incident(Base):
+    __tablename__ = "incidents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_ref = Column(String(20), unique=True, nullable=False)
+    title = Column(String(300), nullable=False)
+    description = Column(Text)
+    category = Column(String(50))
+    severity = Column(String(10), default="P3")
+    status = Column(String(20), default=INCIDENT_STATUS_REPORTED)
+
+    detected_at = Column(DateTime, nullable=True)
+    reported_at = Column(DateTime, default=datetime.utcnow)
+    contained_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+    detection_method = Column(String(200), nullable=True)
+
+    affected_systems = Column(Text, nullable=True)
+    affected_users_count = Column(Integer, default=0)
+    data_compromised = Column(Boolean, default=False)
+    business_impact = Column(Text, nullable=True)
+
+    response_lead_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    root_cause = Column(Text, nullable=True)
+    lessons_learned = Column(Text, nullable=True)
+    corrective_actions = Column(Text, nullable=True)
+
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    response_lead = relationship("User", foreign_keys=[response_lead_user_id])
+    vendor = relationship("Vendor", foreign_keys=[vendor_id])
+    timeline_entries = relationship("IncidentTimeline", backref="incident", order_by="IncidentTimeline.event_at.desc()")
+    control_mappings = relationship("IncidentControlMapping", backref="incident")
+    risk_mappings = relationship("IncidentRiskMapping", backref="incident")
+
+
+class IncidentTimeline(Base):
+    __tablename__ = "incident_timeline"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id"), nullable=False)
+    event_at = Column(DateTime, default=datetime.utcnow)
+    event_type = Column(String(50))
+    description = Column(Text)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    user = relationship("User")
+
+
+class IncidentControlMapping(Base):
+    __tablename__ = "incident_control_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id"), nullable=False)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
+    relationship_type = Column(String(20), default="FAILED")
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    control = relationship("Control")
+
+
+class IncidentRiskMapping(Base):
+    __tablename__ = "incident_risk_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id"), nullable=False)
+    risk_id = Column(Integer, ForeignKey("risks.id"), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    risk = relationship("Risk")
+
+
+# ==================== ASSET INVENTORY ====================
+
+VALID_ASSET_TYPES = [
+    "SERVER", "ENDPOINT", "APPLICATION", "DATABASE", "CLOUD_SERVICE",
+    "NETWORK_DEVICE", "MOBILE_DEVICE", "SAAS_APPLICATION", "OTHER",
+]
+ASSET_TYPE_LABELS = {
+    "SERVER": "Server", "ENDPOINT": "Endpoint", "APPLICATION": "Application",
+    "DATABASE": "Database", "CLOUD_SERVICE": "Cloud Service",
+    "NETWORK_DEVICE": "Network Device", "MOBILE_DEVICE": "Mobile Device",
+    "SAAS_APPLICATION": "SaaS Application", "OTHER": "Other",
+}
+ASSET_TYPE_ICONS = {
+    "SERVER": "bi-hdd-rack", "ENDPOINT": "bi-laptop", "APPLICATION": "bi-window",
+    "DATABASE": "bi-database", "CLOUD_SERVICE": "bi-cloud",
+    "NETWORK_DEVICE": "bi-router", "MOBILE_DEVICE": "bi-phone",
+    "SAAS_APPLICATION": "bi-globe", "OTHER": "bi-box",
+}
+
+ASSET_STATUS_ACTIVE = "ACTIVE"
+ASSET_STATUS_MAINTENANCE = "MAINTENANCE"
+ASSET_STATUS_RETIRED = "RETIRED"
+ASSET_STATUS_DECOMMISSIONED = "DECOMMISSIONED"
+VALID_ASSET_STATUSES = ["ACTIVE", "MAINTENANCE", "RETIRED", "DECOMMISSIONED"]
+ASSET_STATUS_LABELS = {
+    "ACTIVE": "Active", "MAINTENANCE": "Maintenance",
+    "RETIRED": "Retired", "DECOMMISSIONED": "Decommissioned",
+}
+ASSET_STATUS_COLORS = {
+    "ACTIVE": "#198754", "MAINTENANCE": "#ffc107",
+    "RETIRED": "#fd7e14", "DECOMMISSIONED": "#6c757d",
+}
+
+
+class Asset(Base):
+    __tablename__ = "assets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    asset_ref = Column(String(20), unique=True, nullable=False)
+    name = Column(String(300), nullable=False)
+    description = Column(Text, nullable=True)
+    asset_type = Column(String(50), default="OTHER")
+    status = Column(String(20), default=ASSET_STATUS_ACTIVE)
+
+    data_classification = Column(String(50), nullable=True)
+    business_criticality = Column(String(20), nullable=True)
+    environment = Column(String(50), nullable=True)
+
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    department = Column(String(100), nullable=True)
+    location = Column(String(200), nullable=True)
+
+    hostname = Column(String(200), nullable=True)
+    ip_address = Column(String(50), nullable=True)
+    operating_system = Column(String(100), nullable=True)
+    version = Column(String(100), nullable=True)
+
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+    provider = Column(String(200), nullable=True)
+
+    acquired_date = Column(DateTime, nullable=True)
+    end_of_life_date = Column(DateTime, nullable=True)
+    last_scan_date = Column(DateTime, nullable=True)
+
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner = relationship("User", foreign_keys=[owner_user_id])
+    vendor = relationship("Vendor", foreign_keys=[vendor_id])
+    control_mappings = relationship("AssetControlMapping", backref="asset")
+
+
+class AssetControlMapping(Base):
+    __tablename__ = "asset_control_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False)
+    control_id = Column(Integer, ForeignKey("controls.id"), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    control = relationship("Control")
+
+
+# ==================== TRUST CENTER ====================
+
+class TrustCenterConfig(Base):
+    __tablename__ = "trust_center_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+    is_enabled = Column(Boolean, default=False)
+    access_token = Column(String(100), nullable=True)
+    company_name = Column(String(200), default="Our Organization")
+    company_description = Column(Text, nullable=True)
+    primary_color = Column(String(10), default="#2563eb")
+    contact_email = Column(String(200), nullable=True)
+    show_frameworks = Column(Boolean, default=True)
+    show_controls_summary = Column(Boolean, default=True)
+    show_policies = Column(Boolean, default=True)
+    show_certifications = Column(Boolean, default=True)
+    custom_message = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ==================== BACKFILL FUNCTIONS FOR NEW TABLES ====================
+
+def backfill_incident_tables():
+    """Create incident management tables if missing."""
+    db = SessionLocal()
+    try:
+        existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        for tbl_name, model in [
+            ("incidents", Incident),
+            ("incident_timeline", IncidentTimeline),
+            ("incident_control_mappings", IncidentControlMapping),
+            ("incident_risk_mappings", IncidentRiskMapping),
+        ]:
+            if tbl_name not in existing:
+                model.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def backfill_asset_tables():
+    """Create asset inventory tables if missing."""
+    db = SessionLocal()
+    try:
+        existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        for tbl_name, model in [
+            ("assets", Asset),
+            ("asset_control_mappings", AssetControlMapping),
+        ]:
+            if tbl_name not in existing:
+                model.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def backfill_trust_center_table():
+    """Create trust center config table if missing."""
+    db = SessionLocal()
+    try:
+        existing = {r[0] for r in db.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+        if "trust_center_config" not in existing:
+            TrustCenterConfig.__table__.create(engine, checkfirst=True)
+    finally:
+        db.close()
+
+
+def ensure_trust_center_config(db):
+    """Ensure a default TrustCenterConfig row exists."""
+    import secrets
+    existing = db.query(TrustCenterConfig).first()
+    if not existing:
+        db.add(TrustCenterConfig(
+            is_enabled=False,
+            access_token=secrets.token_urlsafe(32),
+            company_name="Our Organization",
+            company_description="We take security seriously. This Trust Center provides transparency into our security and compliance posture.",
+        ))
+        db.commit()
 
 
 def get_db():

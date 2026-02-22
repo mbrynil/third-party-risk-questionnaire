@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Trust Center Settings{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/settings">Settings</a></li>
+<li class="breadcrumb-item active">Trust Center</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center gap-3 mb-4">
+    <i class="bi bi-shield-check" style="font-size:2rem; color:#2563eb;"></i>
+    <div>
+        <h1 class="mb-0" style="font-size:1.75rem;">Trust Center Settings</h1>
+        <p class="mb-0 text-muted">Configure your public-facing security posture page</p>
+    </div>
+</div>
+
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle me-2"></i>Trust Center settings saved successfully.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if request.query_params.get('regenerated') %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <i class="bi bi-key me-2"></i>Access token regenerated. Previous links will no longer work.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <!-- Left Column: Config Form -->
+    <div class="col-lg-8">
+        <form method="post" action="/settings/trust-center">
+            <div class="card mb-4">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-toggles text-primary"></i>
+                    <span>General Settings</span>
+                </div>
+                <div class="card-body">
+                    <!-- Enable Toggle -->
+                    <div class="form-check form-switch mb-4">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="is_enabled" name="is_enabled" value="on"
+                               {{ 'checked' if config.is_enabled else '' }}
+                               style="width:3em; height:1.5em;">
+                        <label class="form-check-label fw-bold ms-2" for="is_enabled">
+                            Enable Trust Center
+                        </label>
+                        <div class="form-text">When disabled, the public page will return a 404 error.</div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Company Name -->
+                    <div class="mb-3">
+                        <label for="company_name" class="form-label">Company Name</label>
+                        <input type="text" class="form-control" id="company_name" name="company_name"
+                               value="{{ config.company_name or '' }}" required>
+                    </div>
+
+                    <!-- Company Description -->
+                    <div class="mb-3">
+                        <label for="company_description" class="form-label">Company Description</label>
+                        <textarea class="form-control" id="company_description" name="company_description"
+                                  rows="3" placeholder="Brief description of your organization's security commitment...">{{ config.company_description or '' }}</textarea>
+                    </div>
+
+                    <!-- Primary Color -->
+                    <div class="mb-3">
+                        <label for="primary_color" class="form-label">Brand Color</label>
+                        <div class="d-flex align-items-center gap-3">
+                            <input type="color" class="form-control form-control-color" id="primary_color"
+                                   name="primary_color" value="{{ config.primary_color or '#2563eb' }}"
+                                   style="width:60px; height:40px;">
+                            <input type="text" class="form-control" id="primary_color_text"
+                                   value="{{ config.primary_color or '#2563eb' }}"
+                                   style="width:120px; font-family:monospace;"
+                                   readonly>
+                            <span class="text-muted small">Used for accents on the public page</span>
+                        </div>
+                    </div>
+
+                    <!-- Contact Email -->
+                    <div class="mb-3">
+                        <label for="contact_email" class="form-label">Contact Email</label>
+                        <input type="email" class="form-control" id="contact_email" name="contact_email"
+                               value="{{ config.contact_email or '' }}"
+                               placeholder="security@example.com">
+                        <div class="form-text">Shown in the footer of the trust center page.</div>
+                    </div>
+
+                    <!-- Custom Message -->
+                    <div class="mb-3">
+                        <label for="custom_message" class="form-label">Custom Message</label>
+                        <textarea class="form-control" id="custom_message" name="custom_message"
+                                  rows="3" placeholder="Optional message displayed at the top of the trust center...">{{ config.custom_message or '' }}</textarea>
+                        <div class="form-text">A callout message shown prominently on the public page.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-eye text-primary"></i>
+                    <span>Visible Sections</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Choose which sections to display on the public trust center page.</p>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="show_frameworks" name="show_frameworks" value="on"
+                               {{ 'checked' if config.show_frameworks else '' }}>
+                        <label class="form-check-label" for="show_frameworks">
+                            <i class="bi bi-journal-bookmark me-1 text-muted"></i>
+                            <strong>Compliance Frameworks</strong>
+                            <span class="text-muted">— Show framework coverage percentages</span>
+                        </label>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="show_controls_summary" name="show_controls_summary" value="on"
+                               {{ 'checked' if config.show_controls_summary else '' }}>
+                        <label class="form-check-label" for="show_controls_summary">
+                            <i class="bi bi-shield-lock me-1 text-muted"></i>
+                            <strong>Controls Summary</strong>
+                            <span class="text-muted">— Total controls, implementation rate, domain breakdown</span>
+                        </label>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="show_policies" name="show_policies" value="on"
+                               {{ 'checked' if config.show_policies else '' }}>
+                        <label class="form-check-label" for="show_policies">
+                            <i class="bi bi-file-earmark-text me-1 text-muted"></i>
+                            <strong>Published Policies</strong>
+                            <span class="text-muted">— Approved policy titles, domains, and dates (no content)</span>
+                        </label>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="show_certifications" name="show_certifications" value="on"
+                               {{ 'checked' if config.show_certifications else '' }}>
+                        <label class="form-check-label" for="show_certifications">
+                            <i class="bi bi-patch-check me-1 text-muted"></i>
+                            <strong>Certifications</strong>
+                            <span class="text-muted">— Frameworks with &gt;80% coverage shown as badges</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mb-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Save Settings
+                </button>
+                <a href="/settings" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Right Column: Shareable Link & Preview -->
+    <div class="col-lg-4">
+        <!-- Status Card -->
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center gap-2">
+                {% if config.is_enabled %}
+                <span class="badge bg-success">LIVE</span>
+                {% else %}
+                <span class="badge bg-secondary">DISABLED</span>
+                {% endif %}
+                <span>Trust Center Status</span>
+            </div>
+            <div class="card-body">
+                {% if config.is_enabled %}
+                <p class="text-success small mb-0">
+                    <i class="bi bi-check-circle-fill me-1"></i>
+                    Your trust center is publicly accessible.
+                </p>
+                {% else %}
+                <p class="text-muted small mb-0">
+                    <i class="bi bi-x-circle me-1"></i>
+                    Trust center is disabled. Enable it above to make it public.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Shareable Link -->
+        <div class="card mb-4">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-link-45deg text-primary"></i>
+                <span>Shareable Link</span>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">Share this URL with customers to access your trust center.</p>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control form-control-sm" id="shareableUrl" readonly
+                           value="{{ request.base_url }}trust-center/{{ config.access_token }}"
+                           style="font-family: monospace; font-size: 0.8rem;">
+                    <button class="btn btn-outline-primary btn-sm" type="button" id="copyLinkBtn" title="Copy to clipboard">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+                <div id="copyFeedback" class="text-success small d-none">
+                    <i class="bi bi-check me-1"></i>Copied to clipboard!
+                </div>
+
+                <!-- Preview Button -->
+                {% if config.is_enabled %}
+                <a href="/trust-center/{{ config.access_token }}" target="_blank"
+                   class="btn btn-outline-primary btn-sm w-100 mb-3">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Preview Trust Center
+                </a>
+                {% else %}
+                <button class="btn btn-outline-secondary btn-sm w-100 mb-3" disabled>
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Preview (Enable First)
+                </button>
+                {% endif %}
+
+                <hr>
+
+                <!-- Regenerate Token -->
+                <form method="post" action="/settings/trust-center/regenerate-token"
+                      onsubmit="return confirm('Are you sure? All existing links will stop working.');">
+                    <button type="submit" class="btn btn-outline-danger btn-sm w-100">
+                        <i class="bi bi-key me-1"></i>Regenerate Token
+                    </button>
+                </form>
+                <p class="text-muted small mt-2 mb-0">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Regenerating the token will invalidate all previously shared links.
+                </p>
+            </div>
+        </div>
+
+        <!-- Help Card -->
+        <div class="card">
+            <div class="card-header d-flex align-items-center gap-2">
+                <i class="bi bi-question-circle text-primary"></i>
+                <span>About Trust Center</span>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">
+                    The Trust Center is a public page that showcases your organization's security and compliance posture to customers and partners.
+                </p>
+                <ul class="small text-muted mb-0" style="padding-left:1.2rem;">
+                    <li class="mb-1">Share compliance framework coverage</li>
+                    <li class="mb-1">Display security control statistics</li>
+                    <li class="mb-1">List approved policies (no content)</li>
+                    <li class="mb-1">Highlight certifications automatically</li>
+                    <li>Token-protected URL (no login needed)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    // Copy link to clipboard
+    var copyBtn = document.getElementById('copyLinkBtn');
+    var urlInput = document.getElementById('shareableUrl');
+    var feedback = document.getElementById('copyFeedback');
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function() {
+            urlInput.select();
+            urlInput.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(urlInput.value).then(function() {
+                feedback.classList.remove('d-none');
+                setTimeout(function() {
+                    feedback.classList.add('d-none');
+                }, 2000);
+            });
+        });
+    }
+
+    // Sync color picker with text display
+    var colorPicker = document.getElementById('primary_color');
+    var colorText = document.getElementById('primary_color_text');
+    if (colorPicker && colorText) {
+        colorPicker.addEventListener('input', function() {
+            colorText.value = this.value;
+        });
+    }
+})();
+</script>
+{% endblock %}

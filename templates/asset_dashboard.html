@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Asset Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/assets">Asset Inventory</a></li>
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Asset Dashboard</h3>
+    <div class="d-flex gap-2">
+        <a href="/assets" class="btn btn-outline-primary"><i class="bi bi-hdd-rack me-1"></i>Inventory</a>
+        <a href="/assets/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Asset</a>
+    </div>
+</div>
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#2563eb;">{{ data.total }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Total Assets</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:#198754;">{{ data.active }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Active</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:{% if data.critical > 0 %}#dc3545{% else %}#198754{% endif %};">{{ data.critical }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">Critical / High</small>
+        </div>
+    </div>
+    <div class="col-md col-6">
+        <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:700;color:{% if data.eol_approaching > 0 %}#fd7e14{% else %}#198754{% endif %};">{{ data.eol_approaching }}</div>
+            <small class="text-muted text-uppercase" style="font-size:0.7rem;letter-spacing:0.05em;">EOL Approaching</small>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    {# Type Distribution #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-collection me-1"></i>Asset Type Distribution</h6></div>
+            <div class="card-body">
+                {% if data.total > 0 %}
+                <ul class="list-group list-group-flush">
+                    {% for t, count in data.by_type.items() %}
+                    {% if count > 0 %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span>
+                            <i class="bi {{ data.type_icons.get(t, 'bi-box') }} me-2 text-muted"></i>
+                            {{ data.type_labels.get(t, t) }}
+                        </span>
+                        <div>
+                            <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                            <a href="/assets?asset_type={{ t }}" class="btn btn-sm btn-outline-secondary ms-2" title="View"><i class="bi bi-arrow-right"></i></a>
+                        </div>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+                {% if data.by_type.values()|sum == 0 %}
+                <p class="text-muted mb-0">No assets recorded yet.</p>
+                {% endif %}
+                {% else %}
+                <p class="text-muted mb-0">No assets recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Status Breakdown #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-bar-chart-fill me-1"></i>Status Breakdown</h6></div>
+            <div class="card-body">
+                {% if data.total > 0 %}
+                {% for s, count in data.by_status.items() %}
+                {% set pct = (count / data.total * 100)|round(1) if data.total > 0 else 0 %}
+                <div class="d-flex align-items-center mb-2">
+                    <div style="min-width:120px;" class="small fw-semibold">{{ data.status_labels.get(s, s) }}</div>
+                    <div class="flex-grow-1 mx-2">
+                        <div class="progress" style="height:20px;">
+                            <div class="progress-bar" style="width:{{ pct }}%;background-color:{{ data.status_colors.get(s, '#6c757d') }};">
+                                {% if pct >= 10 %}{{ count }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="small text-muted" style="min-width:60px;text-align:right;">{{ count }} ({{ pct }}%)</div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-muted mb-0">No assets recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    {# Criticality Breakdown #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-exclamation-triangle me-1"></i>Business Criticality</h6></div>
+            <div class="card-body">
+                {% set crit_colors = {"Critical": "#dc3545", "High": "#fd7e14", "Medium": "#ffc107", "Low": "#198754"} %}
+                {% set crit_total = data.by_criticality.values()|sum %}
+                {% if crit_total > 0 %}
+                <div class="row g-3 text-center">
+                    {% for level in ["Critical", "High", "Medium", "Low"] %}
+                    {% set count = data.by_criticality.get(level, 0) %}
+                    <div class="col-3">
+                        <a href="/assets?business_criticality={{ level }}" class="text-decoration-none">
+                            <div class="p-3 rounded" style="background:{{ crit_colors[level] }}15;">
+                                <div class="fs-4 fw-bold" style="color:{{ crit_colors[level] }};">{{ count }}</div>
+                                <small class="text-muted">{{ level }}</small>
+                            </div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No criticality ratings assigned yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Environment Breakdown #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-layers me-1"></i>Environment Distribution</h6></div>
+            <div class="card-body">
+                {% set env_colors = {"Production": "#dc3545", "Staging": "#fd7e14", "Development": "#0d6efd", "Test": "#6c757d"} %}
+                {% set env_total = data.by_environment.values()|sum %}
+                {% if env_total > 0 %}
+                <div class="row g-3 text-center">
+                    {% for env in ["Production", "Staging", "Development", "Test"] %}
+                    {% set count = data.by_environment.get(env, 0) %}
+                    <div class="col-3">
+                        <a href="/assets?environment={{ env }}" class="text-decoration-none">
+                            <div class="p-3 rounded" style="background:{{ env_colors[env] }}15;">
+                                <div class="fs-4 fw-bold" style="color:{{ env_colors[env] }};">{{ count }}</div>
+                                <small class="text-muted">{{ env }}</small>
+                            </div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No environment assignments yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Recent Assets #}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-clock-history me-1"></i>Recent Assets</h6>
+        <a href="/assets" class="btn btn-sm btn-outline-secondary">View All</a>
+    </div>
+    {% if data.recent_assets %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:100px;">Ref</th>
+                    <th>Name</th>
+                    <th style="width:150px;">Type</th>
+                    <th style="width:120px;">Status</th>
+                    <th>Owner</th>
+                    <th style="width:100px;">Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in data.recent_assets %}
+                <tr>
+                    <td><a href="/assets/{{ a.id }}" class="text-decoration-none fw-semibold">{{ a.asset_ref }}</a></td>
+                    <td><a href="/assets/{{ a.id }}" class="text-decoration-none">{{ a.name[:60] }}{% if a.name|length > 60 %}...{% endif %}</a></td>
+                    <td>
+                        <i class="bi {{ ASSET_TYPE_ICONS.get(a.asset_type, 'bi-box') }} me-1 text-muted"></i>
+                        <small>{{ ASSET_TYPE_LABELS.get(a.asset_type, a.asset_type) }}</small>
+                    </td>
+                    <td>
+                        <span class="badge" style="background:{{ ASSET_STATUS_COLORS.get(a.status, '#6c757d') }};font-size:0.65rem;">{{ ASSET_STATUS_LABELS.get(a.status, a.status) }}</span>
+                    </td>
+                    <td><small class="text-muted">{{ a.owner.display_name if a.owner else '—' }}</small></td>
+                    <td><small class="text-muted">{{ a.created_at.strftime('%Y-%m-%d') if a.created_at else '—' }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-muted">No assets yet. <a href="/assets/new">Add your first asset</a>.</div>
+    {% endif %}
+</div>
+{% endblock %}

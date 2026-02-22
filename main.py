@@ -27,6 +27,8 @@ from models import (
     sync_adoptions_from_existing_mappings, update_control_enrichments,
     backfill_custom_frameworks_table, backfill_policy_tables,
     backfill_risk_tables, backfill_audit_project_tables,
+    backfill_incident_tables, backfill_asset_tables,
+    backfill_trust_center_table, ensure_trust_center_config,
     seed_default_policies, seed_default_risks,
     SessionLocal,
     Assessment, Response, User, ensure_reminder_config,
@@ -37,6 +39,9 @@ from app.routers import home, vendor_facing, responses, assessments, templates_m
 from app.routers import policies as policies_router
 from app.routers import risks as risks_router
 from app.routers import audit_projects as audit_projects_router
+from app.routers import incidents as incidents_router
+from app.routers import assets as assets_router
+from app.routers import trust_center as trust_center_router
 from app.routers import auth as auth_router
 from app.services.auth_service import get_current_user
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -55,6 +60,9 @@ backfill_custom_frameworks_table()
 backfill_policy_tables()
 backfill_risk_tables()
 backfill_audit_project_tables()
+backfill_incident_tables()
+backfill_asset_tables()
+backfill_trust_center_table()
 seed_question_bank()
 seed_risk_statements()
 seed_default_templates()
@@ -76,6 +84,7 @@ try:
     ensure_reminder_config(_db)
     ensure_scoring_config(_db)
     ensure_sla_configs(_db)
+    ensure_trust_center_config(_db)
 finally:
     _db.close()
 
@@ -147,6 +156,9 @@ app.include_router(controls.router)
 app.include_router(policies_router.router)
 app.include_router(risks_router.router)
 app.include_router(audit_projects_router.router)
+app.include_router(incidents_router.router)
+app.include_router(assets_router.router)
+app.include_router(trust_center_router.router)
 
 if __name__ == "__main__":
     import uvicorn

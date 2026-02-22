@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+
+{% block title %}{{ incident.incident_ref }} — {{ incident.title }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/incidents">Incidents</a></li>
+<li class="breadcrumb-item active">{{ incident.incident_ref }}</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .timeline-list { list-style: none; padding-left: 0; position: relative; }
+    .timeline-list::before { content: ''; position: absolute; left: 15px; top: 0; bottom: 0; width: 2px; background: #e5e7eb; }
+    .timeline-item { position: relative; padding-left: 40px; padding-bottom: 1rem; }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .timeline-dot { position: absolute; left: 8px; top: 4px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 2px #e5e7eb; }
+    .timeline-dot.status-change { background: #0d6efd; box-shadow: 0 0 0 2px #0d6efd; }
+    .timeline-dot.created { background: #198754; box-shadow: 0 0 0 2px #198754; }
+    .timeline-dot.note { background: #6c757d; box-shadow: 0 0 0 2px #6c757d; }
+    .timeline-dot.action { background: #fd7e14; box-shadow: 0 0 0 2px #fd7e14; }
+    .timeline-dot.evidence { background: #6f42c1; box-shadow: 0 0 0 2px #6f42c1; }
+    .timeline-dot.communication { background: #0dcaf0; box-shadow: 0 0 0 2px #0dcaf0; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set message = request.query_params.get('message', '') %}
+{% if message %}
+<div class="alert alert-{{ request.query_params.get('message_type', 'info') }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{# Header #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h3 class="mb-1">
+            <code class="me-2">{{ incident.incident_ref }}</code>{{ incident.title }}
+        </h3>
+        <div class="d-flex gap-2 mt-1">
+            <span class="badge" style="background:{{ INCIDENT_SEVERITY_COLORS[incident.severity] }};">{{ incident.severity }} — {{ INCIDENT_SEVERITY_LABELS[incident.severity] }}</span>
+            <span class="badge" style="background:{{ INCIDENT_STATUS_COLORS[incident.status] }};">{{ INCIDENT_STATUS_LABELS[incident.status] }}</span>
+            {% if incident.category %}
+            <span class="badge bg-light text-dark">{{ INCIDENT_CATEGORY_LABELS.get(incident.category, incident.category) }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <a href="/incidents/{{ incident.id }}/edit" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Edit</a>
+        {% endif %}
+        {% if request.state.current_user and request.state.current_user.role == 'admin' %}
+        <form method="post" action="/incidents/{{ incident.id }}/delete" class="d-inline" onsubmit="return confirm('Delete this incident?');">
+            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Delete</button>
+        </form>
+        {% endif %}
+        <a href="/incidents" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back to List</a>
+    </div>
+</div>
+
+<div class="row">
+    {# Main content — left column #}
+    <div class="col-lg-8">
+        {# Description #}
+        {% if incident.description %}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Description</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;">{{ incident.description }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Timeline #}
+        <div class="card mb-3" id="timeline">
+            <div class="card-header"><strong><i class="bi bi-clock-history me-1"></i>Timeline</strong> <span class="badge bg-secondary">{{ incident.timeline_entries|length }}</span></div>
+            <div class="card-body">
+                {% if incident.timeline_entries %}
+                <ul class="timeline-list">
+                    {% for entry in incident.timeline_entries %}
+                    <li class="timeline-item">
+                        <div class="timeline-dot {{ entry.event_type|lower|replace('_', '-') if entry.event_type else 'note' }}"></div>
+                        <div>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge bg-light text-dark me-1" style="font-size:0.7rem;">{{ entry.event_type or 'NOTE' }}</span>
+                                    {% if entry.user %}
+                                    <small class="text-muted">{{ entry.user.display_name }}</small>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">{{ entry.event_at.strftime('%Y-%m-%d %H:%M') if entry.event_at else '' }}</small>
+                            </div>
+                            <div class="small mt-1" style="white-space:pre-wrap;">{{ entry.description }}</div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No timeline entries yet.</p>
+                {% endif %}
+
+                {# Add Timeline Entry form #}
+                {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+                <hr>
+                <h6>Add Timeline Entry</h6>
+                <form method="post" action="/incidents/{{ incident.id }}/timeline">
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-4">
+                            <select name="event_type" class="form-select form-select-sm" required>
+                                <option value="">-- Event Type --</option>
+                                <option value="NOTE">Note</option>
+                                <option value="ACTION">Action Taken</option>
+                                <option value="EVIDENCE">Evidence Collected</option>
+                                <option value="COMMUNICATION">Communication</option>
+                                <option value="ESCALATION">Escalation</option>
+                                <option value="CONTAINMENT">Containment</option>
+                                <option value="REMEDIATION">Remediation</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="input-group input-group-sm">
+                                <textarea name="description" class="form-control" rows="1" placeholder="Describe what happened..." required></textarea>
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Root Cause #}
+        {% if incident.root_cause %}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-search me-1"></i>Root Cause</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;" class="mb-0">{{ incident.root_cause }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Lessons Learned #}
+        {% if incident.lessons_learned %}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-lightbulb me-1"></i>Lessons Learned</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;" class="mb-0">{{ incident.lessons_learned }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Corrective Actions #}
+        {% if incident.corrective_actions %}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-check2-square me-1"></i>Corrective Actions</strong></div>
+            <div class="card-body">
+                <p style="white-space:pre-wrap;" class="mb-0">{{ incident.corrective_actions }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Linked Controls #}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-shield-lock me-1"></i>Linked Controls</strong> <span class="badge bg-secondary">{{ incident.control_mappings|length }}</span></div>
+            <div class="card-body">
+                {% if incident.control_mappings %}
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Ref</th>
+                                <th>Title</th>
+                                <th>Relationship</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in incident.control_mappings %}
+                            <tr>
+                                <td><a href="/controls/{{ m.control.id }}" class="text-decoration-none fw-semibold">{{ m.control.control_ref }}</a></td>
+                                <td>{{ m.control.title }}</td>
+                                <td>
+                                    {% if m.relationship_type == 'FAILED' %}
+                                    <span class="badge bg-danger">Failed</span>
+                                    {% elif m.relationship_type == 'MITIGATING' %}
+                                    <span class="badge bg-success">Mitigating</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ m.relationship_type }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+                {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+                <form method="post" action="/incidents/{{ incident.id }}/mappings/controls">
+                    <label class="form-label small fw-semibold">Select Controls</label>
+                    <select name="control_ids" class="form-select form-select-sm" multiple size="5">
+                        {% set mapped_ids = incident.control_mappings|map(attribute='control_id')|list %}
+                        {% for c in all_controls %}
+                        <option value="{{ c.id }}" {{ 'selected' if c.id in mapped_ids }}>{{ c.control_ref }} — {{ c.title }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="d-flex gap-2 mt-2">
+                        <select name="relationship_type" class="form-select form-select-sm" style="max-width:160px;">
+                            <option value="FAILED">Failed</option>
+                            <option value="MITIGATING">Mitigating</option>
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-outline-primary">Save Control Mappings</button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Linked Risks #}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-exclamation-triangle me-1"></i>Linked Risks</strong> <span class="badge bg-secondary">{{ incident.risk_mappings|length }}</span></div>
+            <div class="card-body">
+                {% if incident.risk_mappings %}
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Ref</th>
+                                <th>Title</th>
+                                <th>Category</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in incident.risk_mappings %}
+                            <tr>
+                                <td><a href="/risks/{{ m.risk.id }}" class="text-decoration-none fw-semibold">{{ m.risk.risk_ref }}</a></td>
+                                <td>{{ m.risk.title }}</td>
+                                <td><small class="text-muted">{{ m.risk.risk_category or '—' }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+                {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+                <form method="post" action="/incidents/{{ incident.id }}/mappings/risks">
+                    <label class="form-label small fw-semibold">Select Risks</label>
+                    <select name="risk_ids" class="form-select form-select-sm" multiple size="5">
+                        {% set mapped_ids = incident.risk_mappings|map(attribute='risk_id')|list %}
+                        {% for r in all_risks %}
+                        <option value="{{ r.id }}" {{ 'selected' if r.id in mapped_ids }}>{{ r.risk_ref }} — {{ r.title }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary mt-2">Save Risk Mappings</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Comments #}
+        {% set comment_entity_type = "incident" %}
+        {% set comment_entity_id = incident.id %}
+        {% include "partials/comments.html" with context %}
+    </div>
+
+    {# Sidebar — right column #}
+    <div class="col-lg-4">
+        {# Status Update #}
+        {% if request.state.current_user and request.state.current_user.role != 'viewer' and incident.status != 'CLOSED' %}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-arrow-repeat me-1"></i>Update Status</strong></div>
+            <div class="card-body">
+                <form method="post" action="/incidents/{{ incident.id }}/status">
+                    <div class="mb-2">
+                        <select name="status" class="form-select form-select-sm" required>
+                            <option value="">-- Select New Status --</option>
+                            {% for s in VALID_INCIDENT_STATUSES %}
+                            {% if s != incident.status %}
+                            <option value="{{ s }}">{{ INCIDENT_STATUS_LABELS[s] }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Notes (optional)..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-check-lg me-1"></i>Update Status</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Details #}
+        <div class="card mb-3">
+            <div class="card-header"><strong>Details</strong></div>
+            <div class="card-body small">
+                <dl class="mb-0">
+                    <dt>Severity</dt>
+                    <dd><span class="badge" style="background:{{ INCIDENT_SEVERITY_COLORS[incident.severity] }};">{{ incident.severity }} — {{ INCIDENT_SEVERITY_LABELS[incident.severity] }}</span></dd>
+                    <dt>Category</dt>
+                    <dd>{{ INCIDENT_CATEGORY_LABELS.get(incident.category, incident.category or '—') }}</dd>
+                    <dt>Response Lead</dt>
+                    <dd>{{ incident.response_lead.display_name if incident.response_lead else '—' }}</dd>
+                    <dt>Detection Method</dt>
+                    <dd>{{ incident.detection_method or '—' }}</dd>
+                    <dt>Detected</dt>
+                    <dd>{{ incident.detected_at.strftime('%Y-%m-%d') if incident.detected_at else '—' }}</dd>
+                    <dt>Reported</dt>
+                    <dd>{{ incident.reported_at.strftime('%Y-%m-%d') if incident.reported_at else '—' }}</dd>
+                    <dt>Contained</dt>
+                    <dd>{{ incident.contained_at.strftime('%Y-%m-%d %H:%M') if incident.contained_at else '—' }}</dd>
+                    <dt>Resolved</dt>
+                    <dd>{{ incident.resolved_at.strftime('%Y-%m-%d %H:%M') if incident.resolved_at else '—' }}</dd>
+                    <dt>Closed</dt>
+                    <dd>{{ incident.closed_at.strftime('%Y-%m-%d %H:%M') if incident.closed_at else '—' }}</dd>
+                    {% if incident.vendor %}
+                    <dt>Linked Vendor</dt>
+                    <dd><a href="/vendors/{{ incident.vendor.id }}">{{ incident.vendor.name }}</a></dd>
+                    {% endif %}
+                    <dt>Created</dt>
+                    <dd>{{ incident.created_at.strftime('%Y-%m-%d') if incident.created_at else '—' }}</dd>
+                    <dt>Updated</dt>
+                    <dd>{{ incident.updated_at.strftime('%Y-%m-%d') if incident.updated_at else '—' }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        {# Impact #}
+        <div class="card mb-3">
+            <div class="card-header"><strong><i class="bi bi-exclamation-circle me-1"></i>Impact</strong></div>
+            <div class="card-body small">
+                <dl class="mb-0">
+                    <dt>Affected Systems</dt>
+                    <dd style="white-space:pre-wrap;">{{ incident.affected_systems or '—' }}</dd>
+                    <dt>Affected Users</dt>
+                    <dd>{{ incident.affected_users_count or 0 }}</dd>
+                    <dt>Data Compromised</dt>
+                    <dd>
+                        {% if incident.data_compromised %}
+                        <span class="badge bg-danger">Yes</span>
+                        {% else %}
+                        <span class="badge bg-success">No</span>
+                        {% endif %}
+                    </dd>
+                    {% if incident.business_impact %}
+                    <dt>Business Impact</dt>
+                    <dd style="white-space:pre-wrap;">{{ incident.business_impact }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

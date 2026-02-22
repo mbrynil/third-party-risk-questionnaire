@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from models import get_db, Vendor, Assessment, RemediationItem, Control
+from models import get_db, Vendor, Assessment, RemediationItem, Control, Incident, Asset
 from app.services.auth_service import require_login
 
 router = APIRouter()
@@ -72,6 +72,32 @@ def api_search(
             "title": f"{c.control_ref} — {c.title}",
             "subtitle": c.domain,
             "url": f"/controls/{c.id}",
+        })
+
+    # Incidents
+    incidents = db.query(Incident).filter(
+        or_(Incident.incident_ref.ilike(term), Incident.title.ilike(term))
+    ).limit(5).all()
+    for inc in incidents:
+        results.append({
+            "type": "incident",
+            "icon": "bi-exclamation-diamond",
+            "title": f"{inc.incident_ref} — {inc.title}",
+            "subtitle": f"{inc.severity} — {inc.status.replace('_', ' ').title()}",
+            "url": f"/incidents/{inc.id}",
+        })
+
+    # Assets
+    assets = db.query(Asset).filter(
+        or_(Asset.asset_ref.ilike(term), Asset.name.ilike(term))
+    ).limit(5).all()
+    for asset in assets:
+        results.append({
+            "type": "asset",
+            "icon": "bi-hdd-rack",
+            "title": f"{asset.asset_ref} — {asset.name}",
+            "subtitle": f"{asset.asset_type} — {asset.status.replace('_', ' ').title()}",
+            "url": f"/assets/{asset.id}",
         })
 
     return {"results": results, "query": q}

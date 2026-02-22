@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Compliance Posture - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item active">Compliance Posture</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .posture-kpi {
+        border-radius: 12px;
+        padding: 1.5rem;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        text-align: center;
+    }
+    .posture-kpi .kpi-value {
+        font-size: 2.25rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+    .posture-kpi .kpi-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+    .fw-card {
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        padding: 1.5rem;
+        transition: transform 0.15s, box-shadow 0.15s;
+        height: 100%;
+    }
+    .fw-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .fw-card .fw-name {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1e3a5f;
+        margin-bottom: 0.25rem;
+    }
+    .fw-card .fw-health {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+    }
+    .fw-card .pct-big {
+        font-size: 2.75rem;
+        font-weight: 800;
+        line-height: 1;
+        margin: 0.75rem 0 0.25rem;
+    }
+    .fw-card .pct-label {
+        font-size: 0.7rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        font-weight: 600;
+    }
+    .fw-stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #f3f4f6;
+    }
+    .fw-stat {
+        text-align: center;
+    }
+    .fw-stat .stat-val {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #374151;
+    }
+    .fw-stat .stat-lbl {
+        font-size: 0.65rem;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        font-weight: 600;
+    }
+    .progress-bar-thin {
+        height: 8px;
+        border-radius: 4px;
+        background: #f3f4f6;
+        overflow: hidden;
+    }
+    .progress-bar-thin .fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+    }
+    .no-frameworks {
+        text-align: center;
+        padding: 3rem;
+        color: #9ca3af;
+    }
+    .no-frameworks i {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-shield-check me-2"></i>Compliance Posture</h1>
+    <p>Organization-wide compliance status across all tracked frameworks.</p>
+</div>
+
+<!-- KPI Row -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="posture-kpi">
+            <div class="kpi-value" style="color:{% if overall_pct >= 80 %}#198754{% elif overall_pct >= 50 %}#f59e0b{% else %}#dc3545{% endif %};">
+                {{ overall_pct }}%
+            </div>
+            <div class="kpi-label">Overall Compliance</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="posture-kpi">
+            <div class="kpi-value" style="color:#1e3a5f;">{{ frameworks_tracked }}</div>
+            <div class="kpi-label">Frameworks Tracked</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="posture-kpi">
+            <div class="kpi-value" style="color:#198754;">{{ frameworks_above_80 }}</div>
+            <div class="kpi-label">Frameworks &gt;80%</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="posture-kpi">
+            <div class="kpi-value" style="color:{% if total_gaps > 0 %}#dc3545{% else %}#198754{% endif %};">{{ total_gaps }}</div>
+            <div class="kpi-label">Total Gaps</div>
+        </div>
+    </div>
+</div>
+
+{% if postures|length == 0 %}
+<div class="card">
+    <div class="card-body no-frameworks">
+        <i class="bi bi-journal-bookmark"></i>
+        <h5>No Frameworks Tracked Yet</h5>
+        <p class="mb-3">Import framework requirements to begin tracking compliance posture.</p>
+        <a href="/controls/frameworks" class="btn btn-primary">Manage Frameworks</a>
+    </div>
+</div>
+{% else %}
+
+<!-- Framework Cards -->
+<div class="row g-4">
+    {% for p in postures %}
+    <div class="col-12 col-md-6 col-xl-4">
+        <div class="fw-card">
+            <div class="d-flex align-items-start justify-content-between">
+                <div>
+                    <div class="fw-name">{{ p.display_name }}</div>
+                </div>
+                <span class="fw-health" style="background:{{ p.health_color }}20;color:{{ p.health_color }};">
+                    {{ p.health }}
+                </span>
+            </div>
+
+            <div class="pct-big" style="color:{% if p.compliance_pct >= 80 %}#198754{% elif p.compliance_pct >= 50 %}#f59e0b{% else %}#dc3545{% endif %};">
+                {{ p.compliance_pct }}%
+            </div>
+            <div class="pct-label">Compliance</div>
+
+            <!-- Progress bar -->
+            <div class="progress-bar-thin mt-2">
+                <div class="fill" style="width:{{ p.compliance_pct }}%;background:{% if p.compliance_pct >= 80 %}#198754{% elif p.compliance_pct >= 50 %}#f59e0b{% else %}#dc3545{% endif %};"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-1" style="font-size:0.65rem;color:#9ca3af;">
+                <span>{{ p.adopted_count }} adopted</span>
+                <span>{{ p.total_requirements }} total</span>
+            </div>
+
+            <div class="fw-stat-grid">
+                <div class="fw-stat">
+                    <div class="stat-val">{{ p.total_requirements }}</div>
+                    <div class="stat-lbl">Requirements</div>
+                </div>
+                <div class="fw-stat">
+                    <div class="stat-val">{{ p.adopted_count }}</div>
+                    <div class="stat-lbl">Adopted</div>
+                </div>
+                <div class="fw-stat">
+                    <div class="stat-val" style="color:{% if p.gap_count > 0 %}#dc3545{% else %}#198754{% endif %};">{{ p.gap_count }}</div>
+                    <div class="stat-lbl">Gaps</div>
+                </div>
+                <div class="fw-stat">
+                    <div class="stat-val">{{ p.controls_mapped }}</div>
+                    <div class="stat-lbl">Controls Mapped</div>
+                </div>
+                <div class="fw-stat">
+                    <div class="stat-val">{{ p.controls_tested }}</div>
+                    <div class="stat-lbl">Tested (12mo)</div>
+                </div>
+                <div class="fw-stat">
+                    <div class="stat-val" style="color:{% if p.controls_passing > 0 %}#198754{% else %}#6b7280{% endif %};">{{ p.controls_passing }}</div>
+                    <div class="stat-lbl">Passing</div>
+                </div>
+            </div>
+
+            <div class="mt-3 text-end">
+                <a href="/controls/frameworks/{{ p.framework_key }}" class="btn btn-sm btn-outline-primary">
+                    View Details <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}

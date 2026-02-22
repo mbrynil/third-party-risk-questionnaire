@@ -2435,3 +2435,23 @@ async def framework_requirements_export(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={framework_key}_requirements.csv"},
     )
+
+
+# ==================== COMPLIANCE POSTURE DASHBOARD ====================
+
+@router.get("/compliance/posture", response_class=HTMLResponse)
+async def compliance_posture(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    from app.services.compliance_posture_service import get_compliance_posture
+    data = get_compliance_posture(db)
+    return templates.TemplateResponse("compliance_posture.html", {
+        "request": request,
+        "postures": data["postures"],
+        "overall_pct": data["overall_pct"],
+        "total_gaps": data["total_gaps"],
+        "frameworks_tracked": data["frameworks_tracked"],
+        "frameworks_above_80": data["frameworks_above_80"],
+    })

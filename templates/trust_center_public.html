@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ config.company_name }} — Trust Center</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --tc-primary: {{ data.primary_color }};
+            --tc-primary-light: {{ data.primary_color }}15;
+            --tc-primary-soft: {{ data.primary_color }}25;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        /* ===== Hero ===== */
+        .tc-hero {
+            background: linear-gradient(135deg, var(--tc-primary) 0%, color-mix(in srgb, var(--tc-primary) 70%, #000) 100%);
+            color: #fff;
+            padding: 4rem 0 3.5rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .tc-hero::before {
+            content: '';
+            position: absolute;
+            top: -60%;
+            left: -20%;
+            width: 140%;
+            height: 200%;
+            background: radial-gradient(ellipse at center, rgba(255,255,255,0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .tc-hero .shield-icon {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            opacity: 0.9;
+        }
+        .tc-hero h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.5px;
+        }
+        .tc-hero .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 640px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+
+        /* ===== Container ===== */
+        .tc-container {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        /* ===== Custom Message ===== */
+        .tc-custom-message {
+            background: var(--tc-primary-light);
+            border-left: 4px solid var(--tc-primary);
+            border-radius: 0 8px 8px 0;
+            padding: 1.25rem 1.5rem;
+            margin-top: 2.5rem;
+            font-size: 0.95rem;
+            color: #334155;
+        }
+
+        /* ===== Section ===== */
+        .tc-section {
+            margin-top: 3rem;
+        }
+        .tc-section-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .tc-section-header i {
+            font-size: 1.5rem;
+            color: var(--tc-primary);
+        }
+        .tc-section-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        /* ===== Framework Cards ===== */
+        .fw-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            height: 100%;
+        }
+        .fw-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .fw-card .fw-name {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #0f172a;
+            margin-bottom: 0.75rem;
+        }
+        .fw-card .fw-pct {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+        .fw-card .fw-detail {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-bottom: 0.75rem;
+        }
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+            background: #e2e8f0;
+        }
+        .progress-bar {
+            border-radius: 4px;
+            transition: width 0.6s ease;
+        }
+        .pct-green { color: #16a34a; }
+        .pct-yellow { color: #d97706; }
+        .pct-red { color: #dc2626; }
+        .bg-pct-green { background-color: #16a34a; }
+        .bg-pct-yellow { background-color: #d97706; }
+        .bg-pct-red { background-color: #dc2626; }
+
+        /* ===== Controls Summary ===== */
+        .ctrl-kpi {
+            background: #fff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            border: 1px solid #e2e8f0;
+        }
+        .ctrl-kpi .kpi-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--tc-primary);
+        }
+        .ctrl-kpi .kpi-label {
+            font-size: 0.85rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+        .domain-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--tc-primary-light);
+            color: var(--tc-primary);
+            border-radius: 9999px;
+            padding: 0.35rem 0.85rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin: 0.25rem;
+        }
+        .domain-chip .chip-count {
+            background: var(--tc-primary);
+            color: #fff;
+            border-radius: 9999px;
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+        }
+
+        /* ===== Policies Table ===== */
+        .tc-table {
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            border: 1px solid #e2e8f0;
+        }
+        .tc-table table {
+            width: 100%;
+            margin: 0;
+        }
+        .tc-table thead th {
+            background: #f8fafc;
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+            padding: 0.875rem 1.25rem;
+        }
+        .tc-table tbody td {
+            padding: 0.875rem 1.25rem;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+        .tc-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* ===== Certification Badges ===== */
+        .cert-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border: 1px solid #86efac;
+            border-radius: 10px;
+            padding: 0.75rem 1.25rem;
+            font-weight: 600;
+            color: #166534;
+            font-size: 0.9rem;
+            transition: transform 0.15s ease;
+        }
+        .cert-badge:hover {
+            transform: scale(1.03);
+        }
+        .cert-badge i {
+            font-size: 1.2rem;
+            color: #16a34a;
+        }
+
+        /* ===== Footer ===== */
+        .tc-footer {
+            margin-top: 4rem;
+            padding: 2rem 0;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+        .tc-footer a {
+            color: var(--tc-primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .tc-footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 768px) {
+            .tc-hero h1 { font-size: 1.75rem; }
+            .tc-hero .subtitle { font-size: 0.95rem; }
+            .tc-section-header h2 { font-size: 1.25rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Hero Section -->
+    <div class="tc-hero">
+        <div class="tc-container">
+            <div class="shield-icon"><i class="bi bi-shield-check"></i></div>
+            <h1>{{ data.company_name }}</h1>
+            <div class="subtitle">Trust Center</div>
+            {% if data.company_description %}
+            <p class="subtitle mt-2">{{ data.company_description }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tc-container">
+
+        <!-- Custom Message -->
+        {% if data.custom_message %}
+        <div class="tc-custom-message">
+            {{ data.custom_message }}
+        </div>
+        {% endif %}
+
+        <!-- Certifications Section -->
+        {% if data.certifications is defined and data.certifications %}
+        <div class="tc-section">
+            <div class="tc-section-header">
+                <i class="bi bi-patch-check-fill"></i>
+                <h2>Certifications & High-Coverage Frameworks</h2>
+            </div>
+            <div class="d-flex flex-wrap gap-3">
+                {% for cert in data.certifications %}
+                <div class="cert-badge">
+                    <i class="bi bi-patch-check-fill"></i>
+                    {{ cert.name }} — {{ cert.coverage_pct }}%
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Frameworks Section -->
+        {% if data.frameworks is defined and data.frameworks %}
+        <div class="tc-section">
+            <div class="tc-section-header">
+                <i class="bi bi-journal-bookmark-fill"></i>
+                <h2>Compliance Frameworks</h2>
+            </div>
+            <div class="row g-3">
+                {% for fw in data.frameworks %}
+                <div class="col-md-6 col-lg-4">
+                    <div class="fw-card">
+                        <div class="fw-name">{{ fw.name }}</div>
+                        <div class="fw-pct {% if fw.coverage_pct > 80 %}pct-green{% elif fw.coverage_pct >= 50 %}pct-yellow{% else %}pct-red{% endif %}">
+                            {{ fw.coverage_pct }}%
+                        </div>
+                        <div class="fw-detail">
+                            {{ fw.addressed }} of {{ fw.total }} requirements addressed
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar {% if fw.coverage_pct > 80 %}bg-pct-green{% elif fw.coverage_pct >= 50 %}bg-pct-yellow{% else %}bg-pct-red{% endif %}"
+                                 role="progressbar"
+                                 style="width: {{ fw.coverage_pct }}%"
+                                 aria-valuenow="{{ fw.coverage_pct }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Controls Summary Section -->
+        {% if data.controls_summary is defined and data.controls_summary %}
+        <div class="tc-section">
+            <div class="tc-section-header">
+                <i class="bi bi-shield-lock-fill"></i>
+                <h2>Security Controls</h2>
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="ctrl-kpi">
+                        <div class="kpi-value">{{ data.controls_summary.total }}</div>
+                        <div class="kpi-label">Total Controls</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="ctrl-kpi">
+                        <div class="kpi-value">{{ data.controls_summary.implemented }}</div>
+                        <div class="kpi-label">Implemented</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="ctrl-kpi">
+                        <div class="kpi-value">{{ data.controls_summary.implemented_pct }}%</div>
+                        <div class="kpi-label">Implementation Rate</div>
+                    </div>
+                </div>
+            </div>
+            {% if data.controls_summary.domains %}
+            <div class="text-center">
+                {% for d in data.controls_summary.domains %}
+                <span class="domain-chip">
+                    {{ d.domain }}
+                    <span class="chip-count">{{ d.count }}</span>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Policies Section -->
+        {% if data.policies is defined and data.policies %}
+        <div class="tc-section">
+            <div class="tc-section-header">
+                <i class="bi bi-file-earmark-text-fill"></i>
+                <h2>Published Policies</h2>
+            </div>
+            <div class="tc-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Policy</th>
+                            <th>Domain</th>
+                            <th>Effective Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in data.policies %}
+                        <tr>
+                            <td><strong>{{ p.title }}</strong></td>
+                            <td>{{ p.domain }}</td>
+                            <td>{{ p.effective_date.strftime('%b %d, %Y') if p.effective_date else '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="tc-footer">
+            <p>
+                Last updated: {{ data.updated_at.strftime('%B %d, %Y') if data.updated_at else 'N/A' }}
+                {% if data.contact_email %}
+                &nbsp;&middot;&nbsp;
+                <a href="mailto:{{ data.contact_email }}">{{ data.contact_email }}</a>
+                {% endif %}
+            </p>
+            <p style="font-size:0.75rem; color:#cbd5e1; margin-top:0.5rem;">
+                Powered by RiskQ Trust Center
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

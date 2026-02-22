@@ -19,6 +19,8 @@ from app.services.reminder_service import get_reminder_stats
 from app.services.export_service import generate_portfolio_report_pdf, generate_vendor_list_csv
 from app.services.auth_service import require_login, require_role
 from app.services.workspace_service import get_workspace_data
+from app.services.task_center_service import get_my_tasks
+from app.services.compliance_calendar_service import get_calendar_events, build_calendar_grid
 
 router = APIRouter()
 
@@ -92,6 +94,53 @@ async def executive_dashboard(request: Request, db: Session = Depends(get_db), c
         "request": request,
         "data": data,
         "now": datetime.utcnow(),
+    })
+
+
+# ==================== MY TASKS (Unified Task Center) ====================
+
+@router.get("/my-tasks", response_class=HTMLResponse)
+async def my_tasks(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_login)):
+    tasks = get_my_tasks(db, current_user.id)
+    return templates.TemplateResponse("task_center.html", {
+        "request": request,
+        "tasks": tasks,
+    })
+
+
+# ==================== COMPLIANCE CALENDAR ====================
+
+@router.get("/calendar", response_class=HTMLResponse)
+async def compliance_calendar(
+    request: Request,
+    year: int = 0,
+    month: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+):
+    from datetime import date, timedelta
+    now = datetime.utcnow()
+    if year == 0:
+        year = now.year
+    if month == 0:
+        month = now.month
+    # Clamp
+    if month < 1:
+        month = 1
+    if month > 12:
+        month = 12
+
+    events = get_calendar_events(db, year, month)
+    grid = build_calendar_grid(year, month)
+
+    # upcoming_end for template filtering
+    upcoming_end = date.today() + timedelta(days=30)
+
+    return templates.TemplateResponse("compliance_calendar.html", {
+        "request": request,
+        "events": events,
+        "grid": grid,
+        "upcoming_end": upcoming_end,
     })
 
 

@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}My Tasks - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item active">My Tasks</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .task-kpi {
+        border-radius: 12px;
+        padding: 1.25rem;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        text-align: center;
+    }
+    .task-kpi .kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1.1;
+    }
+    .task-kpi .kpi-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: #f9fafb;
+        border-radius: 8px;
+        cursor: pointer;
+        user-select: none;
+        margin-bottom: 0;
+        border: 1px solid #e5e7eb;
+    }
+    .section-header:hover {
+        background: #f0f4ff;
+    }
+    .section-header .section-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: #fff;
+        font-size: 0.8rem;
+    }
+    .section-header .section-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+        flex: 1;
+    }
+    .section-header .section-count {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.2rem 0.6rem;
+        border-radius: 9999px;
+    }
+    .section-header .chevron {
+        transition: transform 0.2s;
+    }
+    .section-header.collapsed .chevron {
+        transform: rotate(-90deg);
+    }
+    .task-table {
+        margin-bottom: 0;
+    }
+    .task-table td {
+        padding: 0.6rem 0.75rem;
+        font-size: 0.875rem;
+        vertical-align: middle;
+    }
+    .task-table .task-type-icon {
+        width: 24px;
+        text-align: center;
+        color: #6b7280;
+    }
+    .task-table .task-title {
+        font-weight: 500;
+    }
+    .task-table .task-desc {
+        font-size: 0.75rem;
+        color: #9ca3af;
+    }
+    .overdue-row {
+        background: #fef2f2 !important;
+    }
+    .overdue-row .task-title {
+        color: #dc3545;
+    }
+    .overdue-badge {
+        background: #fecaca;
+        color: #991b1b;
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+    .all-clear {
+        text-align: center;
+        padding: 1.5rem;
+        color: #9ca3af;
+        font-size: 0.875rem;
+    }
+    .all-clear i {
+        font-size: 1.5rem;
+        color: #10b981;
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+    .status-badge {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex align-items-center gap-3">
+        <h1 class="mb-0"><i class="bi bi-list-check me-2"></i>My Tasks</h1>
+        <span class="badge bg-primary rounded-pill" style="font-size:0.9rem;">{{ tasks.total_count }}</span>
+        {% if tasks.overdue_count > 0 %}
+        <span class="badge bg-danger rounded-pill" style="font-size:0.9rem;">{{ tasks.overdue_count }} overdue</span>
+        {% endif %}
+    </div>
+    <p class="mt-1">All your pending tasks across controls, policies, audits, and vendor risk.</p>
+</div>
+
+<!-- KPI Row -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="task-kpi">
+            <div class="kpi-value" style="color: #1e3a5f;">{{ tasks.total_count }}</div>
+            <div class="kpi-label">Total Tasks</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="task-kpi">
+            <div class="kpi-value" style="color: {% if tasks.overdue_count > 0 %}#dc3545{% else %}#198754{% endif %};">{{ tasks.overdue_count }}</div>
+            <div class="kpi-label">Overdue</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="task-kpi">
+            <div class="kpi-value" style="color: {% if tasks.due_this_week > 0 %}#f59e0b{% else %}#6b7280{% endif %};">{{ tasks.due_this_week }}</div>
+            <div class="kpi-label">Due This Week</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="task-kpi">
+            <div class="kpi-value" style="color: #198754;"><i class="bi bi-check-circle"></i></div>
+            <div class="kpi-label">{% if tasks.total_count == 0 %}All Clear{% else %}Stay on Track{% endif %}</div>
+        </div>
+    </div>
+</div>
+
+{% if tasks.total_count == 0 %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-check-circle" style="font-size:3rem;color:#10b981;"></i>
+        <h4 class="mt-3 mb-1" style="color:#1e3a5f;">You're all caught up!</h4>
+        <p class="text-muted">No pending tasks assigned to you right now.</p>
+    </div>
+</div>
+{% else %}
+
+<!-- Task Sections -->
+<div class="d-flex flex-column gap-3">
+    {% for section_key, section_label, section_icon, section_color in tasks.sections %}
+    {% set items = tasks[section_key] %}
+    <div class="card">
+        <div class="section-header {% if items|length == 0 %}collapsed{% endif %}"
+             data-bs-toggle="collapse" data-bs-target="#section-{{ section_key }}"
+             aria-expanded="{{ 'true' if items|length > 0 else 'false' }}">
+            <div class="section-icon" style="background:{{ section_color }};">
+                <i class="bi {{ section_icon }}"></i>
+            </div>
+            <span class="section-title">{{ section_label }}</span>
+            <span class="section-count {% if items|length > 0 %}bg-primary text-white{% else %}bg-light text-muted{% endif %}">
+                {{ items|length }}
+            </span>
+            <i class="bi bi-chevron-down chevron"></i>
+        </div>
+        <div class="collapse {% if items|length > 0 %}show{% endif %}" id="section-{{ section_key }}">
+            {% if items|length == 0 %}
+            <div class="all-clear">
+                <i class="bi bi-check-circle-fill"></i>
+                All clear!
+            </div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table task-table mb-0">
+                    <tbody>
+                    {% for item in items %}
+                    <tr class="{% if item.is_overdue %}overdue-row{% endif %}">
+                        <td class="task-type-icon" style="width:36px;">
+                            <i class="bi {{ item.icon }}" style="color:{{ section_color }};"></i>
+                        </td>
+                        <td>
+                            <div class="task-title">{{ item.title }}</div>
+                            {% if item.description %}
+                            <div class="task-desc">{{ item.description }}</div>
+                            {% endif %}
+                        </td>
+                        <td style="width:130px;white-space:nowrap;">
+                            {% if item.due_date %}
+                            <span class="{% if item.is_overdue %}text-danger fw-bold{% else %}text-muted{% endif %}" style="font-size:0.8rem;">
+                                <i class="bi bi-calendar3 me-1"></i>{{ item.due_date.strftime('%b %d, %Y') }}
+                            </span>
+                            {% if item.is_overdue %}
+                            <br><span class="overdue-badge">OVERDUE</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-muted" style="font-size:0.75rem;">No due date</span>
+                            {% endif %}
+                        </td>
+                        <td style="width:110px;">
+                            <span class="status-badge" style="background:
+                                {% if item.status in ('OPEN', 'SCHEDULED', 'PENDING', 'NEEDS_REVIEW', 'REVIEW_DUE') %}#e0f2fe;color:#0369a1;
+                                {% elif item.status == 'IN_PROGRESS' %}#fef3c7;color:#92400e;
+                                {% else %}#f3f4f6;color:#374151;{% endif %}">
+                                {{ item.status|replace('_', ' ') }}
+                            </span>
+                        </td>
+                        <td style="width:40px;text-align:right;">
+                            <a href="{{ item.link }}" class="btn btn-sm btn-outline-primary" style="font-size:0.75rem;padding:0.2rem 0.5rem;">
+                                <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.querySelectorAll('.section-header').forEach(function(el) {
+    el.addEventListener('click', function() {
+        this.classList.toggle('collapsed');
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Incident Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/incidents">Incidents</a></li>
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .kpi-card { text-align: center; }
+    .kpi-card .kpi-value { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .kpi-card .kpi-label { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+    .status-bar { height: 28px; border-radius: 6px; display: flex; overflow: hidden; }
+    .status-bar-segment { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.7rem; font-weight: 600; min-width: 32px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1"><i class="bi bi-speedometer2 me-2"></i>Incident Dashboard</h3>
+        <p class="text-muted mb-0">Overview of security incidents</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/incidents" class="btn btn-outline-primary"><i class="bi bi-fire me-1"></i>All Incidents</a>
+        {% if request.state.current_user and request.state.current_user.role != 'viewer' %}
+        <a href="/incidents/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>New Incident</a>
+        {% endif %}
+    </div>
+</div>
+
+{# KPI Row #}
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#2563eb;">{{ data.total }}</div>
+                <div class="kpi-label">Total Incidents</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if data.open_count > 0 %}#dc3545{% else %}#198754{% endif %};">{{ data.open_count }}</div>
+                <div class="kpi-label">Open Incidents</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:#dc3545;">{{ data.by_severity.get('P1', 0) + data.by_severity.get('P2', 0) }}</div>
+                <div class="kpi-label">P1 + P2 Count</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card kpi-card">
+            <div class="card-body py-3">
+                <div class="kpi-value" style="color:{% if data.mttr_days %}#6c757d{% else %}#adb5bd{% endif %};">{{ data.mttr_days if data.mttr_days is not none else '—' }}</div>
+                <div class="kpi-label">MTTR (Days)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    {# Status Breakdown #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-bar-chart me-1"></i>Status Breakdown</h6></div>
+            <div class="card-body">
+                {% if data.total > 0 %}
+                <div class="status-bar mb-3">
+                    {% for s in VALID_INCIDENT_STATUSES %}
+                    {% set count = data.by_status.get(s, 0) %}
+                    {% if count > 0 %}
+                    <div class="status-bar-segment" style="background:{{ INCIDENT_STATUS_COLORS[s] }};width:{{ (count / data.total * 100)|round(1) }}%;" title="{{ INCIDENT_STATUS_LABELS[s] }}: {{ count }}">
+                        {{ count }}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                <div class="d-flex flex-wrap gap-3">
+                    {% for s in VALID_INCIDENT_STATUSES %}
+                    {% set count = data.by_status.get(s, 0) %}
+                    <div class="d-flex align-items-center gap-1">
+                        <span style="width:12px;height:12px;border-radius:3px;background:{{ INCIDENT_STATUS_COLORS[s] }};display:inline-block;"></span>
+                        <small class="text-muted">{{ INCIDENT_STATUS_LABELS[s] }}: <strong>{{ count }}</strong></small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No incidents recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Severity Distribution #}
+    <div class="col-lg-6">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-exclamation-diamond me-1"></i>Severity Distribution</h6></div>
+            <div class="card-body">
+                {% if data.total > 0 %}
+                <div class="row g-3 text-center">
+                    {% for s in VALID_INCIDENT_SEVERITIES %}
+                    {% set count = data.by_severity.get(s, 0) %}
+                    <div class="col-3">
+                        <a href="/incidents?severity={{ s }}" class="text-decoration-none">
+                            <div class="p-3 rounded" style="background:{{ INCIDENT_SEVERITY_COLORS[s] }}15;">
+                                <div class="fs-3 fw-bold" style="color:{{ INCIDENT_SEVERITY_COLORS[s] }};">{{ count }}</div>
+                                <span class="badge" style="background:{{ INCIDENT_SEVERITY_COLORS[s] }};font-size:0.7rem;">{{ s }} — {{ INCIDENT_SEVERITY_LABELS[s] }}</span>
+                            </div>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No incidents recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    {# Recent Incidents #}
+    <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-clock-history me-1"></i>Recent Incidents (Last 10)</h6></div>
+            {% if data.recent_incidents %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:80px;">Ref</th>
+                            <th>Title</th>
+                            <th style="width:90px;">Severity</th>
+                            <th style="width:100px;">Status</th>
+                            <th style="width:90px;">Reported</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inc in data.recent_incidents %}
+                        <tr>
+                            <td><a href="/incidents/{{ inc.id }}" class="text-decoration-none fw-semibold">{{ inc.incident_ref }}</a></td>
+                            <td><a href="/incidents/{{ inc.id }}" class="text-decoration-none">{{ inc.title[:50] }}{% if inc.title|length > 50 %}...{% endif %}</a></td>
+                            <td>
+                                <span class="badge" style="background:{{ INCIDENT_SEVERITY_COLORS[inc.severity] }};font-size:0.65rem;">{{ inc.severity }}</span>
+                            </td>
+                            <td>
+                                <span class="badge" style="background:{{ INCIDENT_STATUS_COLORS[inc.status] }};font-size:0.65rem;">{{ INCIDENT_STATUS_LABELS[inc.status] }}</span>
+                            </td>
+                            <td><small class="text-muted">{{ inc.reported_at.strftime('%Y-%m-%d') if inc.reported_at else '—' }}</small></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card-body text-muted">No incidents recorded yet.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Category Breakdown #}
+    <div class="col-lg-5">
+        <div class="card mb-4">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-tag me-1"></i>Category Breakdown</h6></div>
+            <div class="card-body">
+                {% set category_total = data.by_category.values()|sum %}
+                {% if category_total > 0 %}
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th class="text-end" style="width:60px;">Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cat in VALID_INCIDENT_CATEGORIES %}
+                        {% set count = data.by_category.get(cat, 0) %}
+                        {% if count > 0 %}
+                        <tr>
+                            <td>
+                                <a href="/incidents?category={{ cat }}" class="text-decoration-none">{{ INCIDENT_CATEGORY_LABELS[cat] }}</a>
+                            </td>
+                            <td class="text-end"><span class="badge bg-secondary">{{ count }}</span></td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0">No categorized incidents yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

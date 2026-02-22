@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Compliance Calendar - RiskQ{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item active">Compliance Calendar</li>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .cal-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .cal-nav .month-label {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #1e3a5f;
+        min-width: 220px;
+        text-align: center;
+    }
+    .cal-nav .btn-nav {
+        background: #fff;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        color: #374151;
+        text-decoration: none;
+        transition: all 0.15s;
+    }
+    .cal-nav .btn-nav:hover {
+        background: #f0f4ff;
+        border-color: #2563eb;
+        color: #2563eb;
+    }
+
+    .cal-grid {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .cal-grid th {
+        background: #f9fafb;
+        padding: 0.6rem 0.5rem;
+        text-align: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #6b7280;
+        border-bottom: 2px solid #e5e7eb;
+    }
+    .cal-grid td {
+        border: 1px solid #f3f4f6;
+        padding: 0.4rem;
+        vertical-align: top;
+        height: 100px;
+        position: relative;
+    }
+    .cal-grid td.empty {
+        background: #fafafa;
+    }
+    .cal-grid td.today {
+        border: 2px solid #2563eb;
+        background: #f0f7ff;
+    }
+    .day-num {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 2px;
+    }
+    .today .day-num {
+        color: #2563eb;
+    }
+    .event-pill {
+        display: block;
+        font-size: 0.6rem;
+        line-height: 1.3;
+        padding: 1px 4px;
+        border-radius: 3px;
+        margin-bottom: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #fff;
+        text-decoration: none;
+        cursor: pointer;
+        max-width: 100%;
+    }
+    .event-pill:hover {
+        opacity: 0.85;
+        color: #fff;
+    }
+    .event-pill.overdue {
+        background: #dc3545 !important;
+    }
+    .more-events {
+        font-size: 0.6rem;
+        color: #6b7280;
+        font-weight: 600;
+        padding: 0 4px;
+        cursor: default;
+    }
+
+    /* Legend */
+    .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    /* Upcoming list */
+    .upcoming-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid #f3f4f6;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.1s;
+    }
+    .upcoming-item:hover {
+        background: #f8fafc;
+        color: inherit;
+    }
+    .upcoming-item:last-child {
+        border-bottom: none;
+    }
+    .upcoming-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 5px;
+    }
+    .upcoming-date {
+        font-size: 0.75rem;
+        color: #6b7280;
+        white-space: nowrap;
+        min-width: 80px;
+    }
+    .upcoming-title {
+        font-size: 0.85rem;
+        font-weight: 500;
+        flex: 1;
+    }
+    .upcoming-overdue .upcoming-title {
+        color: #dc3545;
+    }
+    .upcoming-overdue .upcoming-date {
+        color: #dc3545;
+        font-weight: 600;
+    }
+
+    /* Tooltip for event pills */
+    .event-pill[title] {
+        position: relative;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-calendar3 me-2"></i>Compliance Calendar</h1>
+    <p>All compliance deadlines, reviews, and milestones in one view.</p>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#0d6efd;"></div>Tests</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#6f42c1;"></div>Policy Reviews</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fd7e14;"></div>Remediations</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#198754;"></div>Audits</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#6c757d;"></div>Contracts</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#495057;"></div>Documents</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dc3545;"></div>Risk Reviews / Overdue</div>
+</div>
+
+<!-- Month Navigation -->
+<div class="cal-nav">
+    <a href="/calendar?year={{ grid.prev_year }}&month={{ grid.prev_month }}" class="btn-nav">
+        <i class="bi bi-chevron-left"></i> Previous
+    </a>
+    <span class="month-label">{{ grid.month_name }} {{ grid.year }}</span>
+    <a href="/calendar?year={{ grid.next_year }}&month={{ grid.next_month }}" class="btn-nav">
+        Next <i class="bi bi-chevron-right"></i>
+    </a>
+</div>
+
+<!-- Calendar Grid -->
+<table class="cal-grid">
+    <thead>
+        <tr>
+            {% for dh in grid.day_headers %}
+            <th>{{ dh }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for week in grid.weeks %}
+        <tr>
+            {% for day in week %}
+            {% if day == 0 %}
+            <td class="empty"></td>
+            {% else %}
+            {% set current_date_obj = None %}
+            {% set is_today = (day == grid.today.day and grid.month == grid.today.month and grid.year == grid.today.year) %}
+            <td class="{% if is_today %}today{% endif %}">
+                <div class="day-num">{{ day }}</div>
+                {% set day_events = [] %}
+                {% for evt in events %}
+                    {% if evt.date.day == day and evt.date.month == grid.month and evt.date.year == grid.year %}
+                        {% if day_events|length < 3 %}
+                        <a href="{{ evt.link }}" class="event-pill {% if evt.is_overdue %}overdue{% endif %}"
+                           style="{% if not evt.is_overdue %}background:{{ evt.color }};{% endif %}"
+                           title="{{ evt.title }}">
+                            {{ evt.title|truncate(18, True) }}
+                        </a>
+                        {% endif %}
+                        {% if day_events.append(1) %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+                {% if day_events|length > 3 %}
+                <span class="more-events">+{{ day_events|length - 3 }} more</span>
+                {% endif %}
+            </td>
+            {% endif %}
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Upcoming Events (next 30 days) -->
+<div class="card mt-4">
+    <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-clock text-primary"></i>
+        <span>Upcoming Events (Next 30 Days)</span>
+    </div>
+    <div class="card-body p-0">
+        {% set upcoming = [] %}
+        {% for evt in events %}
+            {% if evt.date >= grid.today and evt.date <= upcoming_end %}
+                {% if upcoming.append(evt) %}{% endif %}
+            {% endif %}
+        {% endfor %}
+
+        {% if upcoming|length == 0 %}
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-calendar-check" style="font-size:1.5rem;"></i>
+            <div class="mt-2 small">No upcoming events in the next 30 days.</div>
+        </div>
+        {% else %}
+        {% for evt in upcoming %}
+        <a href="{{ evt.link }}" class="upcoming-item {% if evt.is_overdue %}upcoming-overdue{% endif %}">
+            <div class="upcoming-dot" style="background:{% if evt.is_overdue %}#dc3545{% else %}{{ evt.color }}{% endif %};"></div>
+            <div class="upcoming-date">{{ evt.date.strftime('%b %d') }}</div>
+            <div class="upcoming-title">{{ evt.title }}</div>
+        </a>
+        {% endfor %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

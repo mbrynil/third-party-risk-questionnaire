@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}{{ "Edit Asset" if asset else "New Asset" }}{% endblock %}
+
+{% block breadcrumbs %}
+<li class="breadcrumb-item"><a href="/">Home</a></li>
+<li class="breadcrumb-item"><a href="/assets">Asset Inventory</a></li>
+<li class="breadcrumb-item active">{{ "Edit " + asset.asset_ref if asset else "New Asset" }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-hdd-rack me-2"></i>{{ "Edit Asset" if asset else "New Asset" }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {# Basic Information #}
+                    <h6 class="text-muted text-uppercase mb-3" style="font-size:0.75rem;letter-spacing:0.05em;">Basic Information</h6>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required value="{{ asset.name if asset else '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea name="description" class="form-control" rows="3">{{ asset.description if asset else '' }}</textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Asset Type</label>
+                            <select name="asset_type" class="form-select">
+                                {% for t in VALID_ASSET_TYPES %}
+                                <option value="{{ t }}" {{ 'selected' if asset and asset.asset_type == t }}>{{ ASSET_TYPE_LABELS[t] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Status</label>
+                            <select name="status" class="form-select">
+                                {% for s in VALID_ASSET_STATUSES %}
+                                <option value="{{ s }}" {{ 'selected' if asset and asset.status == s }}>{{ ASSET_STATUS_LABELS[s] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {# Classification #}
+                    <h6 class="text-muted text-uppercase mb-3 mt-2" style="font-size:0.75rem;letter-spacing:0.05em;">Classification</h6>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Data Classification</label>
+                            <select name="data_classification" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for dc in ["Restricted", "Confidential", "Internal", "Public"] %}
+                                <option value="{{ dc }}" {{ 'selected' if asset and asset.data_classification == dc }}>{{ dc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Business Criticality</label>
+                            <select name="business_criticality" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for bc in ["Critical", "High", "Medium", "Low"] %}
+                                <option value="{{ bc }}" {{ 'selected' if asset and asset.business_criticality == bc }}>{{ bc }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Environment</label>
+                            <select name="environment" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for env in ["Production", "Staging", "Development", "Test"] %}
+                                <option value="{{ env }}" {{ 'selected' if asset and asset.environment == env }}>{{ env }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    {# Ownership #}
+                    <h6 class="text-muted text-uppercase mb-3 mt-2" style="font-size:0.75rem;letter-spacing:0.05em;">Ownership</h6>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Owner</label>
+                            <select name="owner_user_id" class="form-select">
+                                <option value="">-- Select --</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}" {{ 'selected' if asset and asset.owner_user_id == u.id }}>{{ u.display_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Department</label>
+                            <input type="text" name="department" class="form-control" value="{{ asset.department if asset and asset.department else '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Location</label>
+                            <input type="text" name="location" class="form-control" value="{{ asset.location if asset and asset.location else '' }}">
+                        </div>
+                    </div>
+
+                    {# Technical Details #}
+                    <h6 class="text-muted text-uppercase mb-3 mt-2" style="font-size:0.75rem;letter-spacing:0.05em;">Technical Details</h6>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label fw-semibold">Hostname</label>
+                            <input type="text" name="hostname" class="form-control" value="{{ asset.hostname if asset and asset.hostname else '' }}">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label fw-semibold">IP Address</label>
+                            <input type="text" name="ip_address" class="form-control" placeholder="e.g. 192.168.1.10" value="{{ asset.ip_address if asset and asset.ip_address else '' }}">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label fw-semibold">Operating System</label>
+                            <input type="text" name="operating_system" class="form-control" placeholder="e.g. Ubuntu 22.04" value="{{ asset.operating_system if asset and asset.operating_system else '' }}">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label fw-semibold">Version</label>
+                            <input type="text" name="version" class="form-control" value="{{ asset.version if asset and asset.version else '' }}">
+                        </div>
+                    </div>
+
+                    {# Provider #}
+                    <h6 class="text-muted text-uppercase mb-3 mt-2" style="font-size:0.75rem;letter-spacing:0.05em;">Provider</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Vendor</label>
+                            <select name="vendor_id" class="form-select">
+                                <option value="">-- None --</option>
+                                {% for v in vendors %}
+                                <option value="{{ v.id }}" {{ 'selected' if asset and asset.vendor_id == v.id }}>{{ v.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Link to a tracked vendor (optional)</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Provider</label>
+                            <input type="text" name="provider" class="form-control" placeholder="e.g. AWS, Azure, on-prem" value="{{ asset.provider if asset and asset.provider else '' }}">
+                            <div class="form-text">Free-text provider name</div>
+                        </div>
+                    </div>
+
+                    {# Lifecycle Dates #}
+                    <h6 class="text-muted text-uppercase mb-3 mt-2" style="font-size:0.75rem;letter-spacing:0.05em;">Lifecycle</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Acquired Date</label>
+                            <input type="date" name="acquired_date" class="form-control" value="{{ asset.acquired_date.strftime('%Y-%m-%d') if asset and asset.acquired_date else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">End of Life Date</label>
+                            <input type="date" name="end_of_life_date" class="form-control" value="{{ asset.end_of_life_date.strftime('%Y-%m-%d') if asset and asset.end_of_life_date else '' }}">
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{{ "Save Changes" if asset else "Create Asset" }}</button>
+                        <a href="{{ '/assets/' ~ asset.id if asset else '/assets' }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
